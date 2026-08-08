@@ -1,0 +1,25 @@
+{
+  "app": {
+    "title": "AI-Forge 桌面工坊",
+    "subtitle": "端侧本地隐私推理平台"
+  },
+  "nav": {
+    "pdfParse": "PDF 智能解析",
+    "asr": "视频字幕翻译",
+    "settings": "系统设置"
+  },
+  "pdf": {
+    "title": "PDF 智能解析工作台",
+    "subtitle": "支持 CPU 矢量轨毫秒提取与 GPU 多模态神经网络版面重构",
+    "dropzone": "拖拽 PDF 文件至此处，或点击浏览选择",
+    "selectedFile": "已选择文件",
+    "startParse": "开始智能解析",
+    "parsing": "正在解析中...",
+    "vramGuard": "端侧显存守卫状态",
+    "vramAvailable": "可用显存",
+    "previewTitle": " Markdown 实时渲染预览",
+    "downloadZip": "打包下载结构包 (.zip)",
+    "noFile": "请先选择 PDF 文件",
+    "success": "解析成功完成！"
+  }
+}

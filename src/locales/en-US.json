@@ -1,0 +1,25 @@
+{
+  "app": {
+    "title": "AI-Forge Studio",
+    "subtitle": "Local Privacy Inference Platform"
+  },
+  "nav": {
+    "pdfParse": "PDF Parse",
+    "asr": "Video Subtitles",
+    "settings": "Settings"
+  },
+  "pdf": {
+    "title": "PDF Smart Parser Workbench",
+    "subtitle": "Supports CPU Vector Track & GPU Multimodal Neural Layout Reconstruction",
+    "dropzone": "Drag & drop PDF here, or click to browse",
+    "selectedFile": "Selected File",
+    "startParse": "Start Smart Parsing",
+    "parsing": "Parsing in progress...",
+    "vramGuard": "VRAM Guard Status",
+    "vramAvailable": "Available VRAM",
+    "previewTitle": "Markdown Live Preview",
+    "downloadZip": "Download Structural Zip Package (.zip)",
+    "noFile": "Please select a PDF file first",
+    "success": "Parsing Completed Successfully!"
+  }
+}

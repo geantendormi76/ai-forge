@@ -1,0 +1,38 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "repomix-output-ui.xml",
+    "style": "xml",
+    "compress": false,
+    "removeComments": false,
+    "showLineNumbers": false,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "includeFullDirectoryStructure": false,
+    "instructionFilePath": "HANDOFF_UI.md"
+  },
+  "include": [
+    "HANDOFF_UI.md",
+    "开发路线图与架构宪法.md",
+    "package.json",
+    "vite.config.ts",
+    "postcss.config.js",
+    "tailwind.config.js",
+    "index.html",
+    "src/**"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "dist/**",
+      "src-tauri/**",
+      "deploy/**",
+      "models/**",
+      "test/**",
+      ".ai-forge/**"
+    ]
+  }
+}
