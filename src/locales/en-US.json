@@ -1,7 +1,8 @@
 {
   "app": {
-    "title": "AI-Forge Studio",
-    "subtitle": "Local Privacy Inference Platform"
+    "title": "Zidian AI Studio",
+    "subtitle": "Local Privacy Inference Platform",
+    "node": "Local Compute Node"
   },
   "nav": {
     "pdfParse": "PDF Parse",
@@ -21,5 +22,41 @@
     "downloadZip": "Download Structural Zip Package (.zip)",
     "noFile": "Please select a PDF file first",
     "success": "Parsing Completed Successfully!"
+  },
+  "subtitle": {
+    "title": "Video Subtitle & Translation Studio",
+    "subtitle": "Powered by MOSS 0.9B ASR & Hy-MT2 1.8B Neural Translation, 100% Local Privacy",
+    "step1Title": "1. Video Selection & Queue",
+    "dropzoneHint": "Drag & drop video here, or click to browse",
+    "supportedFormats": "Supports MP4, MKV, MOV, AVI formats",
+    "step2Title": "2. Zidian AI Custom Options",
+    "targetLang": "Target Language",
+    "displayMode": "Subtitle Display Mode",
+    "modeBilingual": "Zidian Qingshuang Bilingual",
+    "modeTargetOnly": "Target Language Only",
+    "modeSourceOnly": "Source Language Only",
+    "outputMode": "Output Container Mode",
+    "modeSoftMkv": "0.5s Lossless Soft Mount (MKV)",
+    "modeHardMp4Nvenc": "NVENC GPU Hard Burn-in (MP4)",
+    "fontSize": "ASS Font Size Multiplier",
+    "showSpeaker": "Show Speaker Labels [S01/S02]",
+    "hotwords": "MOSS ASR Hotwords (Optional)",
+    "hotwordsPlaceholder": "e.g., ChatGPT, DeepSeek, Rust",
+    "startBtn": "🚀 Start One-Click Subtitle & Translation",
+    "processing": "Processing (MOSS ASR ➔ Hy-MT2 ➔ FFmpeg)...",
+    "perfTitle": "Performance & Export Output",
+    "totalTime": "Total Elapsed",
+    "totalSegments": "Total Segments",
+    "outputVideo": "Output Video File",
+    "copySrt": "📄 Copy SRT Path",
+    "copyAss": "🎨 Copy ASS Path",
+    "previewTitle": "Live Subtitle Segment Cards Flow",
+    "emptyTitle": "No subtitles yet. Upload a video on the left and click start.",
+    "noTranslation": "(No Translation)",
+    "langZH": "🇨🇳 Simplified Chinese",
+    "langEN": "🇺🇸 English",
+    "langJA": "🇯🇵 Japanese",
+    "langZHHant": "🇭🇰 Traditional Chinese",
+    "langKO": "🇰🇷 Korean"
   }
 }

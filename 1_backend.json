@@ -14,16 +14,26 @@
   },
   "include": [
     "HANDOFF_BACKEND.md",
-    "开发路线图与架构宪法.md",
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
     "src-tauri/src/**",
     "src-tauri/crates/core-ipc/**",
+    "src-tauri/crates/services/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/tools/tool-pdf-parse/**"
+    "src-tauri/crates/tools/**",
+    "deploy/cloudflare/auth_worker.js",
+    "AI-Forge 视频字幕工具 UI & 架构全景蓝图.md",
+
+    "package.json",
+    "vite.config.ts",
+    "postcss.config.js",
+    "tailwind.config.js",
+    "index.html",
+    "src/**"
+
   ],
   "ignore": {
     "useGitignore": true,

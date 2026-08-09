@@ -61,7 +61,24 @@ impl IpcChannel {
 }
 
 pub fn resolve_uv_binary() -> PathBuf {
+    let binary_name = if cfg!(windows) { "uv.exe" } else { "uv" };
+
+    if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
+        let p = PathBuf::from(cargo_home).join("bin").join(binary_name);
+        if p.exists() {
+            return p;
+        }
+    }
+
+    if let Ok(user_profile) = std::env::var("USERPROFILE") {
+        let p = PathBuf::from(user_profile).join(".cargo").join("bin").join(binary_name);
+        if p.exists() {
+            return p;
+        }
+    }
+
     let candidates = [
+        PathBuf::from(r"C:\Users\52484\.cargo\bin\uv.exe"),
         PathBuf::from("/home/zhz/.cargo/bin/uv"),
         PathBuf::from("/home/zhz/.local/bin/uv"),
         PathBuf::from("/usr/local/bin/uv"),
@@ -74,7 +91,7 @@ pub fn resolve_uv_binary() -> PathBuf {
         }
     }
 
-    PathBuf::from("uv")
+    PathBuf::from(binary_name)
 }
 
 /// 普通二进制进程拉起
@@ -92,14 +109,17 @@ pub fn spawn_worker(executable_path: &str, script_path: &str) -> Result<(Child, 
     Ok((child, IpcChannel::new(stdin, stdout)))
 }
 
-/// 🛡️ SOTA: 严格遵循 Theorem 1，使用 `--project` 绑定工具专属沙箱并拉起 Worker
+/// 🛡️ SOTA: 严格遵循 Theorem 1 与 Theorem 2，使用 `--no-sync` 与离线沙箱拉起 Worker
 pub fn spawn_uv_worker(project_dir: &Path, script_path: &Path) -> Result<(Child, IpcChannel), IpcError> {
     let uv_binary = resolve_uv_binary();
+    let python_bin = if cfg!(windows) { "python" } else { "python3" };
+
     let mut child = Command::new(&uv_binary)
         .arg("run")
+        .arg("--no-sync") // 🛡️ SOTA 离线隔离：禁止运行时网络/锁校验
         .arg("--project")
         .arg(project_dir)
-        .arg("python3")
+        .arg(python_bin) // 🛡️ Windows Native: 使用 "python" 避开 Microsoft Store 虚假别名
         .arg(script_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

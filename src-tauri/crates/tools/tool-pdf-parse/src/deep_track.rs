@@ -80,9 +80,15 @@ fn map_label_to_sort_tag(label: &str, bbox: &BoundingBox, page_width: f32) -> æŽ
 
 impl DeepTrackEngine {
     fn resolve_project_dir() -> PathBuf {
-        let candidate = PathBuf::from("/home/zhz/ai-forge/src-tauri/crates/tools/tool-pdf-parse");
-        if candidate.exists() {
-            return candidate;
+        let candidates = [
+            PathBuf::from(r"C:\dev\ai-forge\src-tauri\crates\tools\tool-pdf-parse"),
+            PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\crates\tools\tool-pdf-parse"),
+            PathBuf::from("/home/zhz/ai-forge/src-tauri/crates/tools/tool-pdf-parse"),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                return candidate;
+            }
         }
         if let Ok(manifestdir) = std::env::var("CARGO_MANIFEST_DIR") {
             return PathBuf::from(manifestdir);

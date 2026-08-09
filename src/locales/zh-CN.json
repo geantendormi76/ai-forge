@@ -1,11 +1,12 @@
 {
   "app": {
-    "title": "AI-Forge 桌面工坊",
-    "subtitle": "端侧本地隐私推理平台"
+    "title": "紫电 AI 桌面工坊",
+    "subtitle": "端侧本地隐私推理平台",
+    "node": "端侧算力节点"
   },
   "nav": {
     "pdfParse": "PDF 智能解析",
-    "asr": "视频字幕翻译",
+    "asr": "视频双语字幕工坊",
     "settings": "系统设置"
   },
   "pdf": {
@@ -21,5 +22,41 @@
     "downloadZip": "打包下载结构包 (.zip)",
     "noFile": "请先选择 PDF 文件",
     "success": "解析成功完成！"
+  },
+  "subtitle": {
+    "title": "视频一键双语字幕工坊",
+    "subtitle": "基于 MOSS 0.9B ASR 与混元 Hy-MT2 1.8B 神经翻译，端侧 100% 隐私渲染",
+    "step1Title": "1. 视频选择与排队",
+    "dropzoneHint": "拖拽视频文件至此，或点击浏览选择",
+    "supportedFormats": "支持 MP4, MKV, MOV, AVI 格式",
+    "step2Title": "2. 紫电 AI 定制选项",
+    "targetLang": "目标语言",
+    "displayMode": "字幕显示模式",
+    "modeBilingual": "紫电青霜双语对照",
+    "modeTargetOnly": "仅显示译文",
+    "modeSourceOnly": "仅显示原文",
+    "outputMode": "封装输出模式",
+    "modeSoftMkv": "0.5s 无损软挂载 (MKV)",
+    "modeHardMp4Nvenc": "NVENC 显卡硬压 (MP4)",
+    "fontSize": "ASS 字号倍率",
+    "showSpeaker": "显示说话人标记 [S01/S02]",
+    "hotwords": "MOSS ASR 识别热词 (可选)",
+    "hotwordsPlaceholder": "例如: ChatGPT, DeepSeek, Rust",
+    "startBtn": "🚀 开始一键双语转写与压制",
+    "processing": "正在处理中 (MOSS ASR ➔ Hy-MT2 ➔ FFmpeg)...",
+    "perfTitle": "运行性能与产物导出",
+    "totalTime": "总耗时",
+    "totalSegments": "共提炼句数",
+    "outputVideo": "挂载视频文件",
+    "copySrt": "📄 复制 SRT 路径",
+    "copyAss": "🎨 复制 ASS 路径",
+    "previewTitle": "紫电青霜双语字幕实时卡片流",
+    "emptyTitle": "暂无字幕预览，请在左侧上传视频并点击开始转写",
+    "noTranslation": "（无译文）",
+    "langZH": "🇨🇳 简体中文",
+    "langEN": "🇺🇸 英语",
+    "langJA": "🇯🇵 日语",
+    "langZHHant": "🇭🇰 繁体中文",
+    "langKO": "🇰🇷 韩语"
   }
 }

@@ -1,6 +1,6 @@
 <template>
   <div class="flex h-screen bg-slate-50 overflow-hidden font-sans">
-    <!-- 侧边栏 Sidebar (RPA 纯净白风格) -->
+    <!-- 侧边栏 Sidebar (紫电 AI RPA 纯净白风格) -->
     <aside class="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shadow-sm z-10">
       <div>
         <!-- 应用 Logo 标语区 -->
@@ -9,8 +9,8 @@
             ⚡
           </div>
           <div>
-            <h1 class="text-base font-bold text-slate-900 leading-tight">AI-Forge</h1>
-            <p class="text-xs text-slate-400 font-medium">端侧本地隐私平台</p>
+            <h1 class="text-base font-bold text-slate-900 leading-tight">紫电 AI</h1>
+            <p class="text-xs text-slate-400 font-medium">端侧隐私智能工坊</p>
           </div>
         </div>
 
@@ -35,12 +35,11 @@
               'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all',
               activeTab === 'asr' 
                 ? 'bg-blue-50 text-blue-600 border border-blue-100 shadow-sm' 
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 opacity-60'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             ]"
           >
-            <span class="text-base">🎙️</span>
+            <span class="text-base">🎬</span>
             {{ t('nav.asr') }}
-            <span class="ml-auto bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded">阶段四</span>
           </button>
         </nav>
       </div>
@@ -60,10 +59,7 @@
     <!-- 主工作区内容视图 -->
     <main class="flex-1 overflow-y-auto">
       <PdfParseView v-if="activeTab === 'pdf'" />
-      <div v-else class="flex flex-col items-center justify-center h-full text-slate-400">
-        <div class="text-5xl mb-4">🚧</div>
-        <p class="text-sm font-medium">该模块将在阶段四正式解锁</p>
-      </div>
+      <VideoSubtitleView v-else-if="activeTab === 'asr'" />
     </main>
   </div>
 </template>
@@ -72,6 +68,7 @@
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PdfParseView from './views/PdfParseView.vue';
+import VideoSubtitleView from './views/VideoSubtitleView.vue';
 
 const { t } = useI18n();
 const activeTab = ref<'pdf' | 'asr'>('pdf');

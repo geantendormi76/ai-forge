@@ -19,6 +19,10 @@ serde_json = "1.0"
 tracing = "0.1"
 shared-contracts = { path = "crates/shared-contracts" }
 tool-pdf-parse = { path = "crates/tools/tool-pdf-parse" }
+core-security = { path = "crates/core-security" }
+service-asr = { path = "crates/services/service-asr" }
+service-translation = { path = "crates/services/service-translation" }
+tool-video-subtitle = { path = "crates/tools/tool-video-subtitle" }
 
 [workspace]
 members = [
@@ -27,6 +31,9 @@ members = [
     "crates/core-security",
     "crates/core-models-download",
     "crates/shared-contracts",
-    "crates/tools/tool-pdf-parse"
+    "crates/services/service-asr",
+    "crates/services/service-translation",
+    "crates/tools/tool-pdf-parse",
+    "crates/tools/tool-video-subtitle"
 ]
 resolver = "2"

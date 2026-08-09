@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 use tracing::info;
+use core_ipc::resolve_uv_binary;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FastTrackResult {
@@ -14,20 +15,21 @@ pub struct FastTrackResult {
 pub struct FastTrackEngine;
 
 impl FastTrackEngine {
-    fn resolve_uv_binary() -> PathBuf {
+    fn resolve_project_dir() -> PathBuf {
         let candidates = [
-            PathBuf::from("/home/zhz/.local/bin/uv"),
-            PathBuf::from("/usr/local/bin/uv"),
-            PathBuf::from("/usr/bin/uv"),
+            PathBuf::from(r"C:\dev\ai-forge\src-tauri\crates\tools\tool-pdf-parse"),
+            PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\crates\tools\tool-pdf-parse"),
+            PathBuf::from("/home/zhz/ai-forge/src-tauri/crates/tools/tool-pdf-parse"),
         ];
-
-        for candidate in &candidates {
+        for candidate in candidates {
             if candidate.exists() {
-                return candidate.clone();
+                return candidate;
             }
         }
-
-        PathBuf::from("uv")
+        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            return PathBuf::from(manifest_dir);
+        }
+        PathBuf::from("src-tauri/crates/tools/tool-pdf-parse")
     }
 
     pub async fn run_pages(
@@ -35,9 +37,10 @@ impl FastTrackEngine {
         output_dir: &Path,
         pages: Option<&[u32]>,
     ) -> Result<FastTrackResult, String> {
-        let project_dir = PathBuf::from("/home/zhz/ai-toolkit/src-tauri/crates/tools/tool-pdf-parse");
+        let project_dir = Self::resolve_project_dir();
         let script_path = project_dir.join("scripts/pymupdf_worker.py");
-        let uv_binary = Self::resolve_uv_binary();
+        let uv_binary = resolve_uv_binary();
+        let python_bin = if cfg!(windows) { "python" } else { "python3" };
 
         if !pdf_path.exists() {
             return Err(format!("输入物理 PDF 文件不存在: {:?}", pdf_path));
@@ -49,9 +52,10 @@ impl FastTrackEngine {
 
         let output = Command::new(&uv_binary)
             .arg("run")
+            .arg("--no-sync")
             .arg("--project")
-            .arg(&project_dir) // 🛡️ 绑定专属 SOTA 沙箱
-            .arg("python3")
+            .arg(&project_dir)
+            .arg(python_bin)
             .arg(&script_path)
             .arg(pdf_path)
             .arg(output_dir)
@@ -94,8 +98,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_step3_fasttrack_real_execution() {
-        let pdf_path = Path::new("/mnt/c/Users/52484/Pictures/3.pdf");
-        let output_dir = Path::new("/mnt/c/Users/52484/Pictures");
+        let pdf_path = Path::new(r"C:\dev\ai-forge\test\fixtures\tool-pdf-parse-fast.pdf");
+        let output_dir = Path::new(r"C:\dev\ai-forge\test\outs\tool-pdf-parse");
         if !pdf_path.exists() {
             println!("⚠️ [跳过测试] 测试物理 PDF 不存在: {:?}", pdf_path);
             return;

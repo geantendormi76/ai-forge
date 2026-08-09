@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.15",
+    "@tauri-apps/cli": "^2.1.0",
     "@types/node": "^22.7.5",
     "@vitejs/plugin-vue": "^5.1.4",
     "autoprefixer": "^10.4.20",
