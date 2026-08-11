@@ -10,17 +10,11 @@ import torch
 import librosa
 from transformers import AutoModelForCausalLM, AutoProcessor
 
-# ==========================================
-# 🛡️ 工业级防线：SOCKS 代理隔离与脱网离线主权
-# ==========================================
 for k in ["ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"]:
     os.environ.pop(k, None)
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-# ==========================================
-# 🛡️ Windows Native DLL 防线：CUDA 动态库双轨注入
-# ==========================================
 _dll_handles = []
 if sys.platform == "win32":
     search_paths = [p for p in sys.path if os.path.isdir(p)]
@@ -35,9 +29,6 @@ if sys.platform == "win32":
                 if root not in current_path:
                     os.environ["PATH"] = root + os.pathsep + current_path
 
-# ==========================================
-# 🛡️ 工业级防线：OS 级别文件描述符劫持 (FD Hijacking)
-# ==========================================
 def hijack_stdout():
     try:
         real_stdout_fd = os.dup(1)
@@ -73,7 +64,6 @@ def recv_message():
         return None
     return json.loads(data.decode('utf-8'))
 
-# 导入本地字幕句段时间戳解析器
 scripts_dir = os.path.dirname(os.path.abspath(__file__))
 if scripts_dir not in sys.path:
     sys.path.insert(0, scripts_dir)
@@ -82,15 +72,15 @@ from subtitle_engine import parse_transcript
 
 def resolve_model_dir():
     candidates = [
+        r"C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize",
         r"C:\dev\ai-forge\models\tool-ASR\MOSS-Transcribe-Diarize",
+        r"C:\Users\52484\StudioProjects\asr-Android\models\tool-ASR\MOSS-Transcribe-Diarize",
         r"C:\dev\ai-toolkit\models\tool-ASR\MOSS-Transcribe-Diarize",
-        "/home/zhz/ai-forge/models/tool-ASR/MOSS-Transcribe-Diarize",
-        "/home/zhz/ai-toolkit/models/tool-ASR/MOSS-Transcribe-Diarize",
     ]
     for c in candidates:
         if os.path.exists(c):
             return c
-    return r"C:\dev\ai-forge\models\tool-ASR\MOSS-Transcribe-Diarize"
+    return r"C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize"
 
 _model = None
 _processor = None
@@ -116,7 +106,16 @@ def get_asr_model():
 
     return _model, _processor
 
-def run_transcription(audio_path: str, mode: str = "verbatim", lang: str = "auto", hotwords: str = ""):
+OFFICIAL_DEFAULT_PROMPT = "请将音频转写为文本，每一段需以起始时间戳和说话人编号（[S01]、[S02]、[S03]…）开头，正文为对应的语音内容，并在段末标注结束时间戳，以清晰标明该段语音范围。"
+
+def run_transcription(
+    audio_path: str,
+    language: str = "auto",
+    custom_prompt: str = None,
+    hotwords: str = None,
+    max_new_tokens: int = 2048,
+    temperature: float = 0.0
+):
     t0 = time.time()
     if not os.path.exists(audio_path):
         return False, None, "找不到音频文件: " + audio_path
@@ -135,7 +134,7 @@ def run_transcription(audio_path: str, mode: str = "verbatim", lang: str = "auto
 
         temp_dir = os.environ.get("TEMP", "/tmp")
 
-        prompt = "请将音频转写为文本，每一段需以起始时间戳和说话人编号（[S01]、[S02]、[S03]…）开头，正文为对应的语音内容，并在段末标注结束时间戳，以清晰标明该段语音范围。"
+        prompt = custom_prompt if custom_prompt and custom_prompt.strip() else OFFICIAL_DEFAULT_PROMPT
         if hotwords and hotwords.strip():
             prompt += f"热词提示：{hotwords.strip()}。"
 
@@ -157,7 +156,6 @@ def run_transcription(audio_path: str, mode: str = "verbatim", lang: str = "auto
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             if os.path.exists(tmp_chunk_path):
-                # 🛡️ 核心修复：加载音频为 16kHz 浮点数波形数组
                 audio_np, _ = librosa.load(tmp_chunk_path, sr=16000)
 
                 messages = [
@@ -168,8 +166,16 @@ def run_transcription(audio_path: str, mode: str = "verbatim", lang: str = "auto
                 text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
                 inputs = processor(text=text_prompt, audio=[audio_np], return_tensors="pt").to(device=device, dtype=dtype)
 
+                do_sample = temperature > 0.0
+                gen_kwargs = {
+                    "max_new_tokens": max_new_tokens,
+                    "do_sample": do_sample
+                }
+                if do_sample:
+                    gen_kwargs["temperature"] = temperature
+
                 with torch.no_grad():
-                    outputs = model.generate(**inputs, max_new_tokens=2048, do_sample=False)
+                    outputs = model.generate(**inputs, **gen_kwargs)
 
                 raw_text = processor.decode(outputs[0][inputs.input_ids.shape[-1]:], skip_special_tokens=True)
 
@@ -196,8 +202,7 @@ def run_transcription(audio_path: str, mode: str = "verbatim", lang: str = "auto
         result_payload = {
             "audio_file": os.path.basename(audio_path),
             "duration_sec": duration_sec,
-            "mode": mode,
-            "language": lang,
+            "language": language,
             "total_segments": len(all_parsed_segments),
             "segments": all_parsed_segments
         }
@@ -221,11 +226,20 @@ def main():
 
             if method == "transcribe":
                 audio_path = params.get("audio_path", "")
-                mode = params.get("mode", "verbatim")
                 lang = params.get("language", "auto")
-                hotwords = params.get("hotwords", "")
+                prompt = params.get("prompt")
+                hotwords = params.get("hotwords")
+                max_new_tokens = int(params.get("max_new_tokens", 2048))
+                temperature = float(params.get("temperature", 0.0))
 
-                ok, res_payload, err = run_transcription(audio_path, mode, lang, hotwords)
+                ok, res_payload, err = run_transcription(
+                    audio_path,
+                    language=lang,
+                    custom_prompt=prompt,
+                    hotwords=hotwords,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature
+                )
                 if ok:
                     send_message("transcribe_result", {"success": True, "result": res_payload})
                 else:

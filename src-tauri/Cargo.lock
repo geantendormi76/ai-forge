@@ -4296,9 +4296,7 @@ dependencies = [
 name = "service-asr"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "encoding_rs",
- "llama-cpp-2",
+ "core-ipc",
  "serde",
  "serde_json",
  "shared-contracts",
