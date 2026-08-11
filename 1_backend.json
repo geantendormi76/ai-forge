@@ -14,25 +14,18 @@
   },
   "include": [
     "HANDOFF_BACKEND.md",
+    "Rust 原生 C-FFI 绑定与大模型 (GGUF) 端侧极速推理架构.md",
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
     "src-tauri/src/**",
     "src-tauri/crates/core-ipc/**",
-    "src-tauri/crates/services/**",
+    "src-tauri/crates/services/service-asr/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/tools/**",
-    "deploy/cloudflare/auth_worker.js",
-    "AI-Forge 视频字幕工具 UI & 架构全景蓝图.md",
-
-    "package.json",
-    "vite.config.ts",
-    "postcss.config.js",
-    "tailwind.config.js",
-    "index.html",
-    "src/**"
+    "src-tauri/crates/tools/tool-video-subtitle/**",
+    "deploy/cloudflare/auth_worker.js"
 
   ],
   "ignore": {
@@ -45,7 +38,16 @@
       "**/__pycache__/**",
       "models/**",
       "test/fixtures/**",
-      "dist/**"
+      "test/outs/**",
+      "data/**",
+      "**/*.sqlite3*",
+      "dist/**",
+      "package.json",
+      "vite.config.ts",
+      "postcss.config.js",
+      "tailwind.config.js",
+      "index.html",
+      "src/**"
     ]
   }
 }
