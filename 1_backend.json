@@ -14,19 +14,22 @@
   },
   "include": [
     "HANDOFF_BACKEND.md",
-    "纯血 Rust C-FFI 动态库直推.md",
+    "文本大模型推理架构.md",
+    "音频多模态大模型推理架构.md",
+
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
     "src-tauri/src/**",
-    "src-tauri/crates/core-ipc/**",
-    "src-tauri/crates/services/service-asr/**",
-    "src-tauri/crates/core-security/**",
-    "src-tauri/crates/core-models-download/**",
-    "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/tools/tool-video-subtitle/**",
-    "deploy/cloudflare/auth_worker.js"
+    "deploy/cloudflare/auth_worker.js",
 
+    "src-tauri/crates/core-ipc/**",
+    "src-tauri/crates/core-models-download/**",
+    "src-tauri/crates/core-security/**",
+    "src-tauri/crates/shared-contracts/**",
+    "src-tauri/crates/services/**",
+
+    "src-tauri/crates/tools/tool-pdf-parse/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -47,6 +50,7 @@
       "postcss.config.js",
       "tailwind.config.js",
       "index.html",
+      "src-tauri/crates/tools/tool-video-subtitle/**",
       "src/**"
     ]
   }
