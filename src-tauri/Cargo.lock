@@ -1938,6 +1938,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hound"
+version = "3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
+
+[[package]]
 name = "html5ever"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4296,13 +4302,15 @@ dependencies = [
 name = "service-asr"
 version = "0.1.0"
 dependencies = [
- "core-ipc",
+ "anyhow",
+ "hound",
  "serde",
  "serde_json",
  "shared-contracts",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "transcribe-cpp",
 ]
 
 [[package]]
@@ -5361,6 +5369,23 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
+]
+
+[[package]]
+name = "transcribe-cpp"
+version = "0.2.0"
+dependencies = [
+ "log",
+ "thiserror 2.0.20",
+ "transcribe-cpp-sys",
+]
+
+[[package]]
+name = "transcribe-cpp-sys"
+version = "0.2.0"
+dependencies = [
+ "cmake",
+ "serde_json",
 ]
 
 [[package]]

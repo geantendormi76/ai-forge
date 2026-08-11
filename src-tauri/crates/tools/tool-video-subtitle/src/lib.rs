@@ -81,7 +81,6 @@ impl VideoSubtitleTool {
         let candidates = [
             PathBuf::from(r"C:\dev\ai-forge\src-tauri\crates\tools\tool-video-subtitle"),
             PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\crates\tools\tool-video-subtitle"),
-            PathBuf::from("/home/zhz/ai-forge/src-tauri/crates/tools/tool-video-subtitle"),
         ];
         for candidate in candidates {
             if candidate.exists() {
@@ -164,11 +163,14 @@ impl VideoSubtitleTool {
             return Err(format!("FFmpeg 音频提取错误: {err_msg}"));
         }
 
-        // 🛡️ 语种自动识别：传入 "auto" 给 MOSS 0.9B 自由侦测
+        // 🛡️ 调用底层纯净service-asr底座，传入对齐官方规格的AsrOptions
         let asr_opts = AsrOptions {
             audio_path: temp_wav_path.to_string_lossy().to_string(),
-            mode: Some("verbatim".into()),
             language: Some("auto".into()),
+            prompt: None,
+            hotwords: options.hotwords.clone(),
+            max_new_tokens: Some(2048),
+            temperature: Some(0.0),
         };
 
         let asr_res = AsrService::run_asr_pipeline(asr_opts)
@@ -298,7 +300,6 @@ mod tests {
         let candidates = [
             PathBuf::from(r"C:\dev\ai-forge\test\fixtures\tool-video-subtitle.mp4"),
             PathBuf::from(r"C:\dev\ai-toolkit\test\fixtures\tool-video-subtitle.mp4"),
-            PathBuf::from(r"D:\视频\教材\欧美专区\05.adriana chechik.mp4"),
         ];
         for candidate in candidates {
             if candidate.exists() {

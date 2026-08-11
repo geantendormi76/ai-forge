@@ -27,16 +27,15 @@ pub struct TranslationService;
 impl TranslationService {
     fn resolve_model_path() -> PathBuf {
         let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\models\tool-translation\Hy-MT2-1.8B-Q4.gguf"),
-            PathBuf::from(r"C:\dev\ai-toolkit\models\tool-translation\Hy-MT2-1.8B-Q4.gguf"),
-            PathBuf::from(r"C:\dev\mvp_fx_dll\models\Hy-MT2-1.8B-Q4.gguf"),
+            PathBuf::from(r"C:\dev\ai-forge\models\service-translation\Hy-MT2-1.8B-Q4.gguf"),
+            PathBuf::from(r"C:\dev\ai-toolkit\models\service-translation\Hy-MT2-1.8B-Q4.gguf"),
         ];
         for candidate in candidates {
             if candidate.exists() {
                 return candidate;
             }
         }
-        PathBuf::from(r"C:\dev\ai-forge\models\tool-translation\Hy-MT2-1.8B-Q4.gguf")
+        PathBuf::from(r"C:\dev\ai-forge\models\service-translation\Hy-MT2-1.8B-Q4.gguf")
     }
 
     fn translate_single_sentence(

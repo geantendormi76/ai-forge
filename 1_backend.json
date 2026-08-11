@@ -14,7 +14,7 @@
   },
   "include": [
     "HANDOFF_BACKEND.md",
-    "Rust 原生 C-FFI 绑定与大模型 (GGUF) 端侧极速推理架构.md",
+    "纯血 Rust C-FFI 动态库直推.md",
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",

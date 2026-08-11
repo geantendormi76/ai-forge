@@ -1,6 +1,7 @@
-use core_ipc::{spawn_uv_worker, IpcMessage};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
+use transcribe_cpp::{Diarize, Model, ModelOptions, RunOptions, Task, TimestampKind};
 
 /// MOSS 0.9B 官方规范底层参数契约（纯净无领域污染）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,101 +34,156 @@ pub struct AsrResult {
 pub struct AsrService;
 
 impl AsrService {
-    fn resolve_service_dir() -> PathBuf {
+    fn resolve_model_path() -> PathBuf {
         let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\src-tauri\crates\services\service-asr"),
-            PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\crates\services\service-asr"),
+            PathBuf::from(r"C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q5_K_M.gguf"),
+            PathBuf::from(r"C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q4_K_M.gguf"),
+            PathBuf::from(r"C:\dev\ai-forge\models\tool-ASR\MOSS-Transcribe-Diarize-Q5_K_M.gguf"),
         ];
         for candidate in candidates {
             if candidate.exists() {
                 return candidate;
             }
         }
-        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            return PathBuf::from(manifest_dir);
-        }
-        PathBuf::from("src-tauri/crates/services/service-asr")
+        PathBuf::from(r"C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q5_K_M.gguf")
     }
 
-    /// 纯净听写底座管道：单一职责原则，仅输出原子级 RawSegment
+    /// 内存原位音频解码：将任何格式音频 (MP3/WAV/AAC/FLAC/MP4) 高效解码为 16kHz 单声道 f32 浮点采样波形
+    fn load_audio_pcm_16k_mono(audio_path: &Path) -> Result<Vec<f32>, String> {
+        if let Ok(mut reader) = hound::WavReader::open(audio_path) {
+            let spec = reader.spec();
+            if spec.sample_rate == 16000 && spec.channels == 1 {
+                if spec.sample_format == hound::SampleFormat::Int {
+                    let samples: Vec<f32> = reader
+                        .samples::<i16>()
+                        .filter_map(|s| s.ok())
+                        .map(|s| s as f32 / 32768.0)
+                        .collect();
+                    if !samples.is_empty() {
+                        return Ok(samples);
+                    }
+                } else if spec.sample_format == hound::SampleFormat::Float {
+                    let samples: Vec<f32> = reader
+                        .samples::<f32>()
+                        .filter_map(|s| s.ok())
+                        .collect();
+                    if !samples.is_empty() {
+                        return Ok(samples);
+                    }
+                }
+            }
+        }
+
+        let output = std::process::Command::new("ffmpeg")
+            .arg("-y")
+            .arg("-i")
+            .arg(audio_path)
+            .arg("-f")
+            .arg("s16le")
+            .arg("-ar")
+            .arg("16000")
+            .arg("-ac")
+            .arg("1")
+            .arg("pipe:1")
+            .output()
+            .map_err(|e| format!("调起 FFmpeg 解码器失败: {e}"))?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "FFmpeg 音频解码失败: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        let pcm_f32: Vec<f32> = output
+            .stdout
+            .chunks_exact(2)
+            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
+            .collect();
+
+        if pcm_f32.is_empty() {
+            return Err("解码后的 PCM 音频采样数据为空！".into());
+        }
+
+        Ok(pcm_f32)
+    }
+
+    /// 纯血 Rust Native ASR 底座管道：内存原位直连 C++ / CUDA 引擎，零 Python、零进程通信
     pub async fn run_asr_pipeline(
         options: AsrOptions,
     ) -> Result<AsrResult, String> {
-        let audio_path = Path::new(&options.audio_path);
-        if !audio_path.exists() {
+        let audio_path_buf = PathBuf::from(&options.audio_path);
+        if !audio_path_buf.exists() {
             return Err(format!("音频物理文件不存在: {}", options.audio_path));
         }
 
-        let service_dir = Self::resolve_service_dir();
-        let script_path = service_dir.join("scripts/worker.py");
-
-        let (mut child, mut channel) = spawn_uv_worker(&service_dir, &script_path)
-            .map_err(|e| format!("启动 service-asr 进程失败: {e}"))?;
-
-        let ready_msg = channel.recv().await
-            .map_err(|e| format!("接收 ASR Worker 就绪信号失败: {e}"))?;
-            
-        if ready_msg.method != "system.ready" {
-            tracing::warn!("⚠️ 收到非预期就绪信号: {}", ready_msg.method);
+        let model_path = Self::resolve_model_path();
+        if !model_path.exists() {
+            return Err(format!("GGUF ASR 模型物理文件不存在: {:?}", model_path));
         }
 
-        let req_payload = serde_json::json!({
-            "audio_path": options.audio_path,
-            "language": options.language.unwrap_or_else(|| "auto".into()),
-            "prompt": options.prompt,
-            "hotwords": options.hotwords,
-            "max_new_tokens": options.max_new_tokens.unwrap_or(2048),
-            "temperature": options.temperature.unwrap_or(0.0)
-        });
+        let t0 = Instant::now();
 
-        let req_msg = IpcMessage {
-            method: "transcribe".to_string(),
-            params: req_payload,
-        };
+        // 1. 内存原位音频波形解码
+        let pcm_samples = Self::load_audio_pcm_16k_mono(&audio_path_buf)?;
 
-        let t0 = std::time::Instant::now();
-        channel.send(&req_msg).await
-            .map_err(|e| format!("发送 ASR 转写请求失败: {e}"))?;
+        // 2. 线程池安全拉起 C-FFI C++ CUDA 原生推导
+        let result_transcript = tokio::task::spawn_blocking(move || -> Result<transcribe_cpp::Transcript, String> {
+            let model = Model::load_with(&model_path, &ModelOptions::default())
+                .map_err(|e| format!("纯血 C-FFI 载入 GGUF 模型失败: {e}"))?;
 
-        let res_msg = channel.recv().await
-            .map_err(|e| format!("读取 ASR 转写响应失败: {e}"))?;
+            let mut session = model.session()
+                .map_err(|e| format!("创建 transcribe Session 失败: {e}"))?;
 
-        let exit_msg = IpcMessage {
-            method: "exit".to_string(),
-            params: serde_json::json!({}),
-        };
-        let _ = channel.send(&exit_msg).await;
-        let _ = child.wait().await;
+            let mut run_opts = RunOptions::default();
+            run_opts.task = Task::Transcribe;
+            run_opts.timestamps = TimestampKind::Auto;
+            run_opts.diarize = Diarize::On;
 
-        if res_msg.method == "error" {
-            let err_msg = res_msg.params["message"].as_str().unwrap_or("ASR 推理发生错误");
-            return Err(format!("MOSS ASR 转写失败: {err_msg}"));
-        }
+            if let Some(lang) = &options.language {
+                if lang != "auto" && !lang.is_empty() {
+                    run_opts.language = Some(lang.clone());
+                }
+            }
 
-        let elapsed_ms = t0.elapsed().as_millis() as f64;
+            let transcript = session.run(&pcm_samples, &run_opts)
+                .map_err(|e| format!("纯血 C-FFI ASR 推导失败: {e}"))?;
 
-        let result_val = &res_msg.params["result"];
-        let raw_segs: Vec<serde_json::Value> = serde_json::from_value(result_val["segments"].clone())
-            .map_err(|e| format!("解析 segments 失败: {e}"))?;
+            Ok(transcript)
+        })
+        .await
+        .map_err(|e| format!("Tokio 线程调度异常: {e}"))?
+        .map_err(|e| e)?;
 
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        // 3. 将 C++ 极速生成的段落转为强类型 RawSegment
         let mut segments = Vec::new();
-        for (idx, item) in raw_segs.iter().enumerate() {
-            let speaker = item["speaker"].as_str().unwrap_or("S01").to_string();
-            let start_sec = item["start"].as_f64().unwrap_or(0.0);
-            let end_sec = item["end"].as_f64().unwrap_or(0.0);
-            let text = item["text"].as_str().unwrap_or("").to_string();
+        for (idx, seg) in result_transcript.segments.iter().enumerate() {
+            let speaker = if seg.speaker_id > 0 {
+                format!("S{:02}", seg.speaker_id)
+            } else {
+                "S01".to_string()
+            };
 
             segments.push(RawSegment {
                 id: idx + 1,
                 speaker,
-                start_sec,
-                end_sec,
-                text,
+                start_sec: seg.t0_ms as f64 / 1000.0,
+                end_sec: seg.t1_ms as f64 / 1000.0,
+                text: seg.text.clone(),
             });
         }
 
-        let duration_sec = result_val["duration_sec"].as_f64().unwrap_or(0.0);
-        let audio_file = result_val["audio_file"].as_str().unwrap_or("audio").to_string();
+        let audio_file = audio_path_buf
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "audio".to_string());
+
+        let duration_sec = segments
+            .last()
+            .map(|s| s.end_sec)
+            .unwrap_or(0.0);
 
         Ok(AsrResult {
             audio_file,
@@ -158,35 +214,18 @@ mod tests {
         println!("\n✅ [service-asr 底座纯净性测试通过] 纯粹官方 API 契约: {}", json_str);
     }
 
-    fn resolve_fixture_path(filename: &str) -> PathBuf {
-        let candidates = [
-            PathBuf::from(format!(r"C:\dev\ai-forge\test\fixtures\{}", filename)),
-            PathBuf::from(format!(r"C:\dev\ai-toolkit\test\fixtures\{}", filename)),
-        ];
-        for candidate in candidates {
-            if candidate.exists() {
-                return candidate;
-            }
-        }
-        PathBuf::from(format!(r"C:\dev\ai-forge\test\fixtures\{}", filename))
-    }
-
-    fn resolve_outs_dir() -> PathBuf {
-        let candidate = PathBuf::from(r"C:\dev\ai-forge\test\outs\service-asr");
-        let _ = std::fs::create_dir_all(&candidate);
-        candidate
-    }
-
     #[tokio::test]
-    async fn test_service_asr_official_spec() {
-        let fixture_audio = resolve_fixture_path("ASR_英语_餐厅就餐.mp3");
+    async fn test_service_asr_pure_native() {
+        let fixture_audio = PathBuf::from(r"C:\dev\ai-forge\test\fixtures\ASR_英语_餐厅就餐.mp3");
         if !fixture_audio.exists() {
             println!("⚠️ [跳过测试] 英文基准音频不存在: {:?}", fixture_audio);
             return;
         }
 
-        let outs_dir = resolve_outs_dir();
-        println!("\n🚀 [TDD 官方纯净底座测试] 正在测试 service-asr: {:?}", fixture_audio);
+        let outs_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\service-asr");
+        let _ = std::fs::create_dir_all(&outs_dir);
+
+        println!("\n🚀 [TDD 纯血 Rust Native 打靶启动] 正在测试 service-asr: {:?}", fixture_audio);
 
         let opts = AsrOptions {
             audio_path: fixture_audio.to_string_lossy().to_string(),
@@ -199,17 +238,21 @@ mod tests {
 
         let res = AsrService::run_asr_pipeline(opts)
             .await
-            .expect("MOSS 0.9B ASR 官方规范打靶失败");
+            .expect("纯血 Rust Native ASR 打靶失败！");
 
-        println!("\n🎉 ===== [MOSS 0.9B 官方纯净底座 ASR 识别完成] =====");
+        println!("\n🎉 ===== [纯血 Rust Native ASR 英文识别打靶成功] =====");
         println!("  ⏱️ 耗时: {:.2} ms ({:.2} s) | 音频时长: {:.2}s | 句数: {}", res.elapsed_ms, res.elapsed_ms / 1000.0, res.duration_sec, res.segments.len());
 
         assert!(res.segments.len() > 0, "转写台词数不可为 0！");
 
-        let out_json_path = outs_dir.join("asr_english_pure.json");
+        let out_json_path = outs_dir.join("asr_english_pure_native.json");
         let json_data = serde_json::to_string_pretty(&res).unwrap();
         std::fs::write(&out_json_path, &json_data).unwrap();
 
-        println!("  💾 官方纯净底座 JSON 成功落盘: {:?}", out_json_path);
+        println!("  💾 纯血 Native JSON 成功物理落盘: {:?}", out_json_path);
+        println!("  预览前 3 句识别结果:");
+        for seg in res.segments.iter().take(3) {
+            println!("     [{:.2}s -> {:.2}s] [{}]: {}", seg.start_sec, seg.end_sec, seg.speaker, seg.text);
+        }
     }
 }
