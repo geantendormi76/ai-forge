@@ -1,0 +1,2 @@
+pub const DEFAULT_LIMIT_SIDE_LEN: u32 = 960;
+pub const DEFAULT_MAX_SIDE_LIMIT: u32 = 4000;

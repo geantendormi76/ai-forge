@@ -16,7 +16,6 @@
     "HANDOFF_BACKEND.md",
     "文本大模型推理架构.md",
     "音频多模态大模型推理架构.md",
-
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
@@ -27,9 +26,8 @@
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/services/**",
+    "src-tauri/crates/core-onnx-infer/**"
 
-    "src-tauri/crates/tools/tool-pdf-parse/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -39,7 +37,11 @@
       "src-tauri/target/**",
       "**/.venv/**",
       "**/__pycache__/**",
-      "models/**",
+      "**/*.onnx",
+      "**/*.gguf",
+      "**/*.bin",
+      "**/*.pdiparams",
+      "**/*.pdmodel",
       "test/fixtures/**",
       "test/outs/**",
       "data/**",
@@ -50,7 +52,15 @@
       "postcss.config.js",
       "tailwind.config.js",
       "index.html",
+
+      "src-tauri/crates/services/service-asr/**",
+      "src-tauri/crates/services/service-ocr/**",
+      "src-tauri/crates/services/service-translation/**",
+
+
       "src-tauri/crates/tools/tool-video-subtitle/**",
+      "src-tauri/crates/tools/tool-pdf-parse/**",
+
       "src/**"
     ]
   }

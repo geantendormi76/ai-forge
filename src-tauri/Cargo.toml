@@ -22,6 +22,7 @@ tool-pdf-parse = { path = "crates/tools/tool-pdf-parse" }
 core-security = { path = "crates/core-security" }
 service-asr = { path = "crates/services/service-asr" }
 service-translation = { path = "crates/services/service-translation" }
+service-layout = { path = "crates/services/service-layout" }
 tool-video-subtitle = { path = "crates/tools/tool-video-subtitle" }
 
 [workspace]
@@ -31,9 +32,12 @@ members = [
     "crates/core-security",
     "crates/core-models-download",
     "crates/shared-contracts",
+    "crates/core-onnx-infer",
     "crates/services/service-asr",
     "crates/services/service-translation",
+    "crates/services/service-layout",
     "crates/tools/tool-pdf-parse",
-    "crates/tools/tool-video-subtitle"
+    "crates/tools/tool-video-subtitle",
+    "crates/services/service-ocr"
 ]
 resolver = "2"

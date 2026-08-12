@@ -1,0 +1,20 @@
+[package]
+name = "core-onnx-infer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "core_onnx_infer"
+path = "src/lib.rs"
+
+[features]
+default = []
+cuda = ["ort/cuda"]
+directml = ["ort/directml"]
+coreml = ["ort/coreml"]
+
+[dependencies]
+ort = { version = "2.0.0-rc.9", features = ["cuda"] }
+ndarray = "0.15"
+thiserror = "2"
+tracing = "0.1"
