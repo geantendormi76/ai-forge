@@ -14,8 +14,6 @@
   },
   "include": [
     "HANDOFF_BACKEND.md",
-    "文本大模型推理架构.md",
-    "音频多模态大模型推理架构.md",
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
@@ -26,7 +24,9 @@
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/core-onnx-infer/**"
+    "src-tauri/crates/core-onnx-infer/**",
+
+    "src-tauri/crates/services/service-formula/**"
 
   ],
   "ignore": {
@@ -54,8 +54,11 @@
       "index.html",
 
       "src-tauri/crates/services/service-asr/**",
+      "src-tauri/crates/services/service-formula/**",
+      "src-tauri/crates/services/service-layout/**",
       "src-tauri/crates/services/service-ocr/**",
       "src-tauri/crates/services/service-translation/**",
+      
 
 
       "src-tauri/crates/tools/tool-video-subtitle/**",

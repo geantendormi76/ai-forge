@@ -15,6 +15,8 @@ pub struct OrtSessionConfig {
     pub intra_threads: Option<usize>,
     pub inter_threads: Option<usize>,
     pub parallel_execution: Option<bool>,
+    pub optimization_level: Option<GraphOptimizationLevel>,
+    pub enable_memory_pattern: Option<bool>,
 }
 
 impl Default for OrtSessionConfig {
@@ -27,6 +29,8 @@ impl Default for OrtSessionConfig {
             intra_threads: None,
             inter_threads: None,
             parallel_execution: Some(false),
+            optimization_level: Some(GraphOptimizationLevel::Level3),
+            enable_memory_pattern: Some(true),
         }
     }
 }
@@ -74,18 +78,40 @@ pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferErr
 }
 
 impl OrtSessionConfig {
+    /// 🛡️ 为自回归控制流模型 (如 Loop.0 / PP-FormulaNet) 专门定制的安全纯净配置
+    pub fn for_control_flow() -> Self {
+        Self {
+            execution_providers: vec![OrtExecutionProvider::CPU],
+            intra_threads: None,
+            inter_threads: None,
+            parallel_execution: Some(false),
+            optimization_level: Some(GraphOptimizationLevel::Level1),
+            enable_memory_pattern: Some(false),
+        }
+    }
+
     pub fn build_session_builder(&self) -> Result<SessionBuilder, OrtInferError> {
         let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
             path: "ONNX SessionBuilder".into(),
             context: format!("Failed to create builder: {e}"),
         })?;
 
+        let opt_level = self.optimization_level.unwrap_or(GraphOptimizationLevel::Level3);
         builder = builder
-            .with_optimization_level(GraphOptimizationLevel::Level3)
+            .with_optimization_level(opt_level)
             .map_err(|e| OrtInferError::ModelLoad {
                 path: "ONNX SessionBuilder".into(),
-                context: format!("Failed to set Level3 optimization: {e}"),
+                context: format!("Failed to set optimization level: {e}"),
             })?;
+
+        if let Some(enable_mem) = self.enable_memory_pattern {
+            builder = builder
+                .with_memory_pattern(enable_mem)
+                .map_err(|e| OrtInferError::ModelLoad {
+                    path: "ONNX SessionBuilder".into(),
+                    context: format!("Failed to set memory pattern: {e}"),
+                })?;
+        }
 
         if let Some(intra) = self.intra_threads {
             builder = builder.with_intra_threads(intra).map_err(|e| OrtInferError::ModelLoad {

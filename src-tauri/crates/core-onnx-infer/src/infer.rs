@@ -1,6 +1,6 @@
 use crate::config::{parse_device_config, OrtSessionConfig};
 use crate::errors::OrtInferError;
-use ndarray::{Array3, Array4};
+use ndarray::{Array2, Array3, Array4};
 use ort::session::Session;
 use std::path::Path;
 
@@ -17,6 +17,13 @@ impl OrtInfer {
             OrtSessionConfig::default()
         };
 
+        Self::new_with_config(model_path, config)
+    }
+
+    pub fn new_with_config(
+        model_path: &Path,
+        config: OrtSessionConfig,
+    ) -> Result<Self, OrtInferError> {
         let mut builder = config.build_session_builder()?;
         let session = builder
             .commit_from_file(model_path)
@@ -136,6 +143,55 @@ impl OrtInfer {
         } else {
             Err(OrtInferError::InvalidInput(format!(
                 "Expected 3D output from ONNX model, got shape {:?}",
+                shape
+            )))
+        }
+    }
+
+    /// 🛡️ 解构 2D int64 标志位矩阵：专门适配 PP-FormulaNet 等公式 Token 序列输出
+    pub fn infer_array2_i64(&mut self, input: &Array4<f32>) -> Result<Array2<i64>, OrtInferError> {
+        let shape = input.shape().to_vec();
+        let data = if let Some(slice) = input.as_slice() {
+            slice.to_vec()
+        } else {
+            input.iter().copied().collect()
+        };
+
+        let value = ort::value::Tensor::from_array((shape, data)).map_err(|e| OrtInferError::Inference {
+            model_name: "ONNX".to_string(),
+            context: format!("Failed to create input tensor value: {e}"),
+        })?;
+
+        let outputs = self
+            .session
+            .run(ort::inputs![self.input_name.as_str() => &value])
+            .map_err(|e| OrtInferError::Inference {
+                model_name: "ONNX".to_string(),
+                context: format!("Inference run failed: {e}"),
+            })?;
+
+        let output_val = outputs
+            .into_iter()
+            .next()
+            .ok_or_else(|| OrtInferError::Inference {
+                model_name: "ONNX".to_string(),
+                context: "No output tensor returned from ONNX session".to_string(),
+            })?
+            .1;
+
+        let (shape, data) = output_val.try_extract_tensor::<i64>().map_err(|e| OrtInferError::Inference {
+            model_name: "ONNX".to_string(),
+            context: format!("Failed to extract i64 tensor output: {e}"),
+        })?;
+
+        if shape.len() == 2 {
+            let batch = shape[0] as usize;
+            let seq_len = shape[1] as usize;
+            Array2::from_shape_vec((batch, seq_len), data.to_vec())
+                .map_err(|e| OrtInferError::InvalidInput(format!("Output 2D i64 shape mismatch: {e}")))
+        } else {
+            Err(OrtInferError::InvalidInput(format!(
+                "Expected 2D i64 output from ONNX model, got shape {:?}",
                 shape
             )))
         }

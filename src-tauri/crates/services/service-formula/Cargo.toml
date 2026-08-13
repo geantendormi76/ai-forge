@@ -1,0 +1,22 @@
+[package]
+name = "service-formula"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "service_formula"
+path = "src/lib.rs"
+
+[dependencies]
+shared-contracts = { path = "../../shared-contracts" }
+core-onnx-infer = { path = "../../core-onnx-infer" }
+tokenizers = { version = "0.19", default-features = false, features = ["onig"] }
+ndarray = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+tracing = "0.1"
+tokio = { version = "1.38", features = ["full"] }
+anyhow = "1.0"
+image = "0.25"
+regex = "1.10"
