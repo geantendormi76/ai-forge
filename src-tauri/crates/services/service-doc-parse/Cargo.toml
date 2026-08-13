@@ -1,0 +1,19 @@
+[package]
+name = "service-doc-parse"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "service_doc_parse"
+path = "src/lib.rs"
+
+[dependencies]
+service-ocr = { path = "../service-ocr" }
+service-layout = { path = "../service-layout" }
+service-formula = { path = "../service-formula" }
+service-table = { path = "../service-table" }
+image = "0.25"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+tracing = "0.1"

@@ -148,7 +148,68 @@ impl OrtInfer {
         }
     }
 
-    /// 🛡️ 解构 2D int64 标志位矩阵：专门适配 PP-FormulaNet 等公式 Token 序列输出
+    /// 🛡️ SLANet 专有：解构双 3D f32 输出 (bbox_preds [B, S, 8], structure_logits [B, S, V])
+    pub fn infer_dual_array3(
+        &mut self,
+        input: &Array4<f32>,
+    ) -> Result<(Array3<f32>, Array3<f32>), OrtInferError> {
+        let shape = input.shape().to_vec();
+        let data = if let Some(slice) = input.as_slice() {
+            slice.to_vec()
+        } else {
+            input.iter().copied().collect()
+        };
+
+        let value = ort::value::Tensor::from_array((shape, data)).map_err(|e| OrtInferError::Inference {
+            model_name: "SLANet".to_string(),
+            context: format!("Failed to create input tensor value: {e}"),
+        })?;
+
+        let outputs = self
+            .session
+            .run(ort::inputs![self.input_name.as_str() => &value])
+            .map_err(|e| OrtInferError::Inference {
+                model_name: "SLANet".to_string(),
+                context: format!("Inference run failed: {e}"),
+            })?;
+
+        if outputs.len() < 2 {
+            return Err(OrtInferError::Inference {
+                model_name: "SLANet".to_string(),
+                context: format!("Expected at least 2 output tensors for SLANet, got {}", outputs.len()),
+            });
+        }
+
+        let mut iter = outputs.into_iter();
+
+        let out0_val = iter.next().unwrap().1;
+        let (shape0, data0) = out0_val.try_extract_tensor::<f32>().map_err(|e| OrtInferError::Inference {
+            model_name: "SLANet".to_string(),
+            context: format!("Failed to extract first f32 tensor output: {e}"),
+        })?;
+
+        let out1_val = iter.next().unwrap().1;
+        let (shape1, data1) = out1_val.try_extract_tensor::<f32>().map_err(|e| OrtInferError::Inference {
+            model_name: "SLANet".to_string(),
+            context: format!("Failed to extract second f32 tensor output: {e}"),
+        })?;
+
+        if shape0.len() != 3 || shape1.len() != 3 {
+            return Err(OrtInferError::InvalidInput(format!(
+                "Expected two 3D outputs, got shapes {:?} and {:?}",
+                shape0, shape1
+            )));
+        }
+
+        let arr0 = Array3::from_shape_vec((shape0[0] as usize, shape0[1] as usize, shape0[2] as usize), data0.to_vec())
+            .map_err(|e| OrtInferError::InvalidInput(format!("First output 3D shape mismatch: {e}")))?;
+
+        let arr1 = Array3::from_shape_vec((shape1[0] as usize, shape1[1] as usize, shape1[2] as usize), data1.to_vec())
+            .map_err(|e| OrtInferError::InvalidInput(format!("Second output 3D shape mismatch: {e}")))?;
+
+        Ok((arr0, arr1))
+    }
+
     pub fn infer_array2_i64(&mut self, input: &Array4<f32>) -> Result<Array2<i64>, OrtInferError> {
         let shape = input.shape().to_vec();
         let data = if let Some(slice) = input.as_slice() {
@@ -197,11 +258,10 @@ impl OrtInfer {
         }
     }
 
-    /// 🛡️ 多输入 2D 矩阵解构推导：专门适配 PP-DocLayoutV3 的 [300, 7] 格式
     pub fn infer_scale_aware_array2(
         &mut self,
         image_input: &Array4<f32>,
-        orig_shape: (f32, f32), // (orig_w, orig_h)
+        orig_shape: (f32, f32),
     ) -> Result<ndarray::Array2<f32>, OrtInferError> {
         let input_names = self.input_names();
         let img_shape = image_input.shape();

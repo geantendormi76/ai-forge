@@ -41,8 +41,10 @@ dependencies = [
  "serde",
  "serde_json",
  "service-asr",
+ "service-doc-parse",
  "service-formula",
  "service-layout",
+ "service-table",
  "service-translation",
  "shared-contracts",
  "tauri",
@@ -4768,6 +4770,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "service-doc-parse"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "serde",
+ "serde_json",
+ "service-formula",
+ "service-layout",
+ "service-ocr",
+ "service-table",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
 name = "service-formula"
 version = "0.1.0"
 dependencies = [
@@ -4816,6 +4833,19 @@ dependencies = [
  "shared-contracts",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "service-table"
+version = "0.1.0"
+dependencies = [
+ "core-onnx-infer",
+ "image",
+ "ndarray 0.15.6",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
  "tracing",
 ]
 
