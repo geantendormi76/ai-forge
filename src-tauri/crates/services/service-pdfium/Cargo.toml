@@ -1,0 +1,16 @@
+[package]
+name = "service-pdfium"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "service_pdfium"
+path = "src/lib.rs"
+
+[dependencies]
+pdfium-render = { version = "0.9.3", features = ["image_025", "thread_safe"] }
+image = "0.25"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+tracing = "0.1"

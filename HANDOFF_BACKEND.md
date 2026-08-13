@@ -34,32 +34,27 @@
 
 ---
 
-## 📐 2. 2026 纯血 Native 五大解耦原子服务矩阵 (Service Matrix)
+## 📐 2. 纯血 Native 架构图景 (Service Architecture)
 
 ```text
 C:\dev\ai-forge\src-tauri\crates\
 ├── core-onnx-infer\           【2026 通用 ONNX 硬件会话底座】
-│   └── 唯一职责: CUDA/DirectML/CPU 三阶梯降级自愈、单/双 3D/4D Tensor 零拷贝推导
 │
 ├── services\
+│   ├── service-pdfium\        【纯血 PDFium 工业底座 (100% 新建完成 ✅)】
+│   │   ├── 唯一职责: 绑定 pdfium.dll ➔ 300DPI 内存渲染为 DynamicImage ➔ 提取字符 BBox 与文本
+│   │   └── 实测数据: 4 页 PDF 渲染+文本提取+BBox 导出全流程打靶仅需 243.60 ms！
+│   │
 │   ├── service-ocr\           【纯粹文本 OCR 底座 (100% 完成 ✅)】
-│   │   └── 唯一职责: 图像 ➔ 文字行画框 + 文本识别 (`Vec<TextRegion>`)
-│   │
 │   ├── service-layout\        【版面物理分块底座 (100% 完成 ✅)】
-│   │   └── 唯一职责: 图像 ➔ 划定 24 种版面物理区块 (`PP-DocLayoutV3.onnx`)
-│   │
 │   ├── service-formula\       【数学公式识别底座 (100% 完成 ✅)】
-│   │   └── 唯一职责: 图像 ➔ 还原 LaTeX 文本 (`PP-FormulaNet-S.onnx`，常驻响应 ~41 ms)
-│   │
 │   ├── service-table\         【表格结构解析底座 (100% 完成 ✅)】
-│   │   └── 唯一职责: 图像 ➔ 还原 48 单元格网格与 HTML 结构 (`SLANet_plus.onnx`，常驻响应 ~21.69 ms)
 │   │
-│   └── service-doc-parse\     【IDP 智能排版与文档解析总装底座 (100% 攻坚完成 ✅)】
-│       ├── 唯一职责: 调度上述 4 个原子底座 ➔ 空间 IoA 填空 ➔ XY-Cut 阅读顺序排序 ➔ 产出高保真 GFM Markdown 与 JSON
-│       └── 真实打靶: 4 页 PDF 论文全量打靶 100% 成功，完美还原标题、双栏文本、架构图 Caption、蒸馏公式 LaTeX 与对比表格！
+│   └── service-doc-parse\     【IDP 智能排版与文档解析总装底座 (100% 完成 ✅)】
+│       └── 唯一职责: 接收 300DPI 图像 ➔ 调度 4 大 ONNX 底座 ➔ RXYC++ 阅读顺序排序 ➔ 产出高保真 GFM Markdown
 │
-└── tool-pdf-parse / tool-video-subtitle 【Tauri GUI 业务适配器层】
-    └── 组合调度: 响应前端 IPC ➔ 文件拆页/显存锁 (VramTokenGuard) ➔ 推送 UI 进度条事件
+└── tools\
+    └── tool-pdf-parse\        【Tauri 图文解析业务适配器 (接轨重构中)】
 ```
 
 ---

@@ -26,6 +26,7 @@ service-layout = { path = "crates/services/service-layout" }
 service-formula = { path = "crates/services/service-formula" }
 service-table = { path = "crates/services/service-table" }
 service-doc-parse = { path = "crates/services/service-doc-parse" }
+service-pdfium = { path = "crates/services/service-pdfium" }
 tool-video-subtitle = { path = "crates/tools/tool-video-subtitle" }
 
 [workspace]
@@ -42,6 +43,7 @@ members = [
     "crates/services/service-formula",
     "crates/services/service-table",
     "crates/services/service-doc-parse",
+    "crates/services/service-pdfium",
     "crates/tools/tool-pdf-parse",
     "crates/tools/tool-video-subtitle",
     "crates/services/service-ocr"
