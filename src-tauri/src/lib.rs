@@ -1,9 +1,9 @@
 use core_security::{gatekeeper::Gatekeeper, DeviceFingerprint};
+use pdf_parse::service::{PdfParseResult, PdfParseService};
 use shared_contracts::VramTokenGuard;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::State;
-use tool_pdf_parse::service::{PdfParseResult, PdfParseService};
+use tauri::{Emitter, State};
 use tool_video_subtitle::{VideoSubtitleOptions, VideoSubtitleResult, VideoSubtitleTool};
 
 pub struct AppState {
@@ -14,15 +14,33 @@ pub struct AppState {
 #[tauri::command]
 async fn parse_pdf(
     file_path: String,
+    window: tauri::Window,
     state: State<'_, AppState>,
 ) -> Result<PdfParseResult, String> {
-    tracing::info!("🚀 收到前端 PDF 解析请求: {}", file_path);
+    tracing::info!("🚀 收到前端 紫电 AI 本地 PDF 解析请求: {}", file_path);
 
-    // 🛡️ [Gatekeeper 算力收费站]：调起本地 Python 前，必须先通过鉴权与指纹检查！
+    // 🛡️ [Gatekeeper 算力收费站] 鉴权与指纹检查
     Gatekeeper::check_permission("tool-pdf-parse").await?;
 
-    PdfParseService::run_parse(&file_path, &state.output_dir, Some(&state.vram_guard))
-        .await
+    let window_clone = window.clone();
+    let progress_cb = move |current: usize, total: usize, msg: &str| {
+        let _ = window_clone.emit(
+            "pdf-parse-progress",
+            serde_json::json!({
+                "current": current,
+                "total": total,
+                "message": msg
+            }),
+        );
+    };
+
+    PdfParseService::run_parse(
+        &file_path,
+        &state.output_dir,
+        Some(&state.vram_guard),
+        Some(progress_cb),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -32,7 +50,6 @@ async fn run_video_subtitle(
 ) -> Result<VideoSubtitleResult, String> {
     tracing::info!("🚀 收到前端 紫电 AI 视频双语字幕工坊请求: {}", options.video_path);
 
-    // 🛡️ [Gatekeeper 算力收费站]：调起视频字幕工坊前进行额度鉴权核销
     Gatekeeper::check_permission("tool-video-subtitle").await?;
 
     VideoSubtitleTool::run_pipeline(options, Some(&state.vram_guard)).await
@@ -62,7 +79,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(app_state)
-        // 🛡️ 注册全局 Tauri 命令 Handler
         .invoke_handler(tauri::generate_handler![
             parse_pdf,
             run_video_subtitle,

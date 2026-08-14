@@ -26,6 +26,8 @@
     "src-tauri/crates/shared-contracts/**",
     "src-tauri/crates/core-onnx-infer/**",
 
+    "src-tauri/crates/tools/pdf-parse/**",
+
     "src-tauri/crates/services/service-doc-parse/**",
     "src-tauri/crates/services/service-formula/**",
     "src-tauri/crates/services/service-layout/**",

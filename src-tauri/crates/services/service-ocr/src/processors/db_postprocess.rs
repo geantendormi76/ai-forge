@@ -43,6 +43,7 @@ pub struct DBPostProcess {
 }
 
 impl DBPostProcess {
+    /// 🛡️ 1:1 对齐官方 PP-OCRv6_det inference.yml 默认黄金参数
     pub fn new(
         thresh: Option<f32>,
         box_thresh: Option<f32>,
@@ -53,10 +54,10 @@ impl DBPostProcess {
         box_type: Option<BoxType>,
     ) -> Self {
         Self {
-            thresh: thresh.unwrap_or(0.3),
-            box_thresh: box_thresh.unwrap_or(0.6),
-            max_candidates: max_candidates.unwrap_or(1000),
-            unclip_ratio: unclip_ratio.unwrap_or(1.5),
+            thresh: thresh.unwrap_or(0.2),              // 官方标准: 0.2
+            box_thresh: box_thresh.unwrap_or(0.45),      // 官方标准: 0.45
+            max_candidates: max_candidates.unwrap_or(3000), // 官方标准: 3000
+            unclip_ratio: unclip_ratio.unwrap_or(1.4),    // 官方标准: 1.4
             min_size: 3.0,
             score_mode: score_mode.unwrap_or(ScoreMode::Fast),
             box_type: box_type.unwrap_or(BoxType::Quad),

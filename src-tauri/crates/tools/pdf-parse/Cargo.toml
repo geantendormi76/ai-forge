@@ -1,0 +1,28 @@
+[package]
+name = "pdf-parse"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pdf_parse"
+path = "src/lib.rs"
+
+[dependencies]
+service-pdfium = { path = "../../services/service-pdfium" }
+service-doc-parse = { path = "../../services/service-doc-parse" }
+service-layout = { path = "../../services/service-layout" }
+service-ocr = { path = "../../services/service-ocr" }
+service-formula = { path = "../../services/service-formula" }
+service-table = { path = "../../services/service-table" }
+shared-contracts = { path = "../../shared-contracts" }
+image = "0.25"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+tracing = "0.1"
+lopdf = "0.34"
+tokio = { version = "1.38", features = ["full"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+md-5 = "0.10"
+sha2 = "0.10"
+hex = "0.4"

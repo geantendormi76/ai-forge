@@ -38,6 +38,7 @@ name = "ai-forge"
 version = "0.1.0"
 dependencies = [
  "core-security",
+ "pdf-parse",
  "serde",
  "serde_json",
  "service-asr",
@@ -3702,6 +3703,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
+name = "pdf-parse"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "image",
+ "lopdf",
+ "md-5",
+ "serde",
+ "serde_json",
+ "service-doc-parse",
+ "service-formula",
+ "service-layout",
+ "service-ocr",
+ "service-pdfium",
+ "service-table",
+ "sha2",
+ "shared-contracts",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "zip",
+]
+
+[[package]]
 name = "pdfium-render"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4841,6 +4866,7 @@ dependencies = [
  "service-formula",
  "service-layout",
  "service-ocr",
+ "service-pdfium",
  "service-table",
  "thiserror 2.0.20",
  "tracing",
@@ -5944,6 +5970,7 @@ checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 name = "tool-pdf-parse"
 version = "0.1.0"
 dependencies = [
+ "core-ipc",
  "image",
  "lopdf",
  "serde",

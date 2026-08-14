@@ -8,6 +8,7 @@ name = "tool_pdf_parse"
 path = "src/lib.rs"
 
 [dependencies]
+core-ipc = { path = "../../core-ipc" }
 service-doc-parse = { path = "../../services/service-doc-parse" }
 service-pdfium = { path = "../../services/service-pdfium" }
 shared-contracts = { path = "../../shared-contracts" }

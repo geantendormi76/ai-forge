@@ -1,89 +1,95 @@
 use serde::{Deserialize, Serialize};
 
-/// 官方 PP-DocLayoutV3 全量 24 种版面物理区块类别
+/// 官方 PP-DocLayoutV3 全量 25 种版面物理区块类别 (1:1 对齐 inference.yml)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutCategory {
-    Title,
-    Text,
-    Header,
-    Footer,
-    Figure,
-    Table,
-    Formula,
-    List,
-    Caption,
-    Footnote,
-    Catalog,
-    Reference,
-    Code,
-    Abstract,
-    Author,
-    Affiliation,
-    Keyword,
-    Section,
-    EquationNumber,
-    TableCaption,
-    FigureCaption,
-    Seal,
-    Sidebar,
+    Abstract,         // 0
+    Algorithm,        // 1
+    AsideText,        // 2
+    Chart,            // 3
+    Content,          // 4
+    DisplayFormula,   // 5
+    DocTitle,         // 6
+    FigureTitle,      // 7
+    Footer,           // 8
+    FooterImage,      // 9
+    Footnote,         // 10
+    FormulaNumber,    // 11
+    Header,           // 12
+    HeaderImage,      // 13
+    Image,            // 14
+    InlineFormula,    // 15
+    Number,           // 16
+    ParagraphTitle,   // 17
+    Reference,        // 18
+    ReferenceContent, // 19
+    Seal,             // 20
+    Table,            // 21
+    Text,             // 22
+    VerticalText,     // 23
+    VisionFootnote,   // 24
     Other,
 }
 
 impl LayoutCategory {
     pub fn from_id(id: usize) -> Self {
         match id {
-            0 => Self::Title,
-            1 => Self::Text,
-            2 => Self::Header,
-            3 => Self::Footer,
-            4 => Self::Figure,
-            5 => Self::Table,
-            6 => Self::Formula,
-            7 => Self::List,
-            8 => Self::Caption,
-            9 => Self::Footnote,
-            10 => Self::Catalog,
-            11 => Self::Reference,
-            12 => Self::Code,
-            13 => Self::Abstract,
-            14 => Self::Author,
-            15 => Self::Affiliation,
-            16 => Self::Keyword,
-            17 => Self::Section,
-            18 => Self::EquationNumber,
-            19 => Self::TableCaption,
-            20 => Self::FigureCaption,
-            21 => Self::Seal,
-            22 => Self::Sidebar,
+            0 => Self::Abstract,
+            1 => Self::Algorithm,
+            2 => Self::AsideText,
+            3 => Self::Chart,
+            4 => Self::Content,
+            5 => Self::DisplayFormula,
+            6 => Self::DocTitle,
+            7 => Self::FigureTitle,
+            8 => Self::Footer,
+            9 => Self::FooterImage,
+            10 => Self::Footnote,
+            11 => Self::FormulaNumber,
+            12 => Self::Header,
+            13 => Self::HeaderImage,
+            14 => Self::Image,
+            15 => Self::InlineFormula,
+            16 => Self::Number,
+            17 => Self::ParagraphTitle,
+            18 => Self::Reference,
+            19 => Self::ReferenceContent,
+            20 => Self::Seal,
+            21 => Self::Table,
+            22 => Self::Text,
+            23 => Self::VerticalText,
+            24 => Self::VisionFootnote,
             _ => Self::Other,
         }
     }
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Title => "title",
-            Self::Text => "text",
-            Self::Header => "header",
-            Self::Footer => "footer",
-            Self::Figure => "figure",
-            Self::Table => "table",
-            Self::Formula => "formula",
-            Self::List => "list",
-            Self::Caption => "caption",
-            Self::Footnote => "footnote",
-            Self::Catalog => "catalog",
-            Self::Reference => "reference",
-            Self::Code => "code",
             Self::Abstract => "abstract",
-            Self::Author => "author",
-            Self::Affiliation => "affiliation",
-            Self::Keyword => "keyword",
-            Self::Section => "section",
-            Self::EquationNumber => "equation_number",
-            Self::TableCaption => "table_caption",
-            Self::FigureCaption => "figure_caption",
+            Self::Algorithm => "algorithm",
+            Self::AsideText => "aside_text",
+            Self::Chart => "chart",
+            Self::Content => "content",
+            Self::DisplayFormula => "display_formula",
+            Self::DocTitle => "doc_title",
+            Self::FigureTitle => "figure_title",
+            Self::Footer => "footer",
+            Self::FooterImage => "footer_image",
+            Self::Footnote => "footnote",
+            Self::FormulaNumber => "formula_number",
+            Self::Header => "header",
+            Self::HeaderImage => "header_image",
+            Self::Image => "image",
+            Self::InlineFormula => "inline_formula",
+            Self::Number => "number",
+            Self::ParagraphTitle => "paragraph_title",
+            Self::Reference => "reference",
+            Self::ReferenceContent => "reference_content",
             Self::Seal => "seal",
-            Self::Sidebar => "sidebar",
+            Self::Table => "table",
+            Self::Text => "text",
+            Self::VerticalText => "vertical_text",
+            Self::VisionFootnote => "vision_footnote",
             Self::Other => "other",
         }
     }
@@ -159,10 +165,10 @@ pub struct LayoutConfig {
 impl Default for LayoutConfig {
     fn default() -> Self {
         Self {
-            score_threshold: 0.15, // 官方黄金门限：0.15 解构完整版面元素
+            score_threshold: 0.15, // 官方黄金门限：0.15
             nms_threshold: 0.5,
             max_detections: 100,
-            num_classes: 24,
+            num_classes: 25,
         }
     }
 }
