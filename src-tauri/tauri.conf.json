@@ -14,7 +14,12 @@
       {
         "title": "紫电 AI 桌面工坊",
         "width": 1280,
-        "height": 800
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "decorations": false,
+        "shadow": true,
+        "center": true
       }
     ],
     "security": {

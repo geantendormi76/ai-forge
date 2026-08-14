@@ -7,8 +7,23 @@
     "core:default",
     "core:path:default",
     "core:event:default",
-    "core:window:default",
     "core:app:default",
-    "opener:default"
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-is-maximized",
+    "core:window:allow-is-minimized",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-show",
+    "core:window:allow-is-always-on-top",
+    "opener:default",
+    "dialog:default"
   ]
 }
