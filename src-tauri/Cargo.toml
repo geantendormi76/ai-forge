@@ -28,6 +28,8 @@ service-formula = { path = "crates/services/service-formula" }
 service-table = { path = "crates/services/service-table" }
 service-doc-parse = { path = "crates/services/service-doc-parse" }
 service-pdfium = { path = "crates/services/service-pdfium" }
+service-converter = { path = "crates/services/service-converter" }
+format-converter = { path = "crates/tools/format-converter" }
 tool-video-subtitle = { path = "crates/tools/tool-video-subtitle" }
 
 [workspace]
@@ -45,8 +47,10 @@ members = [
     "crates/services/service-table",
     "crates/services/service-doc-parse",
     "crates/services/service-pdfium",
+    "crates/services/service-converter",
     "crates/tools/tool-pdf-parse",
     "crates/tools/pdf-parse",
+    "crates/tools/format-converter",
     "crates/tools/tool-video-subtitle",
     "crates/services/service-ocr"
 ]

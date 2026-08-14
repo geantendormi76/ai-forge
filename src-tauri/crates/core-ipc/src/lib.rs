@@ -94,7 +94,6 @@ pub fn resolve_uv_binary() -> PathBuf {
     PathBuf::from(binary_name)
 }
 
-/// 普通二进制进程拉起
 pub fn spawn_worker(executable_path: &str, script_path: &str) -> Result<(Child, IpcChannel), IpcError> {
     let mut child = Command::new(executable_path)
         .arg(script_path)
@@ -109,17 +108,16 @@ pub fn spawn_worker(executable_path: &str, script_path: &str) -> Result<(Child, 
     Ok((child, IpcChannel::new(stdin, stdout)))
 }
 
-/// 🛡️ SOTA: 严格遵循 Theorem 1 与 Theorem 2，使用 `--no-sync` 与离线沙箱拉起 Worker
 pub fn spawn_uv_worker(project_dir: &Path, script_path: &Path) -> Result<(Child, IpcChannel), IpcError> {
     let uv_binary = resolve_uv_binary();
     let python_bin = if cfg!(windows) { "python" } else { "python3" };
 
     let mut child = Command::new(&uv_binary)
         .arg("run")
-        .arg("--no-sync") // 🛡️ SOTA 离线隔离：禁止运行时网络/锁校验
+        .arg("--no-sync")
         .arg("--project")
         .arg(project_dir)
-        .arg(python_bin) // 🛡️ Windows Native: 使用 "python" 避开 Microsoft Store 虚假别名
+        .arg(python_bin)
         .arg(script_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -5,9 +5,22 @@
     "node": "Local Compute Node"
   },
   "nav": {
+    "formatConverter": "Format Converter",
     "pdfParse": "PDF Parse",
     "asr": "Video Subtitles",
     "settings": "Settings"
+  },
+  "format": {
+    "title": "Universal Format Converter Studio",
+    "subtitle": "Pure Rust Memory In-stream | 0 VRAM Overhead | Fully Offline & Private | Audio Unlocking, Tables, Ebooks & Icons",
+    "dropzone": "Click to browse, or drag & drop files here directly",
+    "queueTitle": "Pending Tasks Queue",
+    "startBatch": "🚀 Start Batch Convert",
+    "converting": "Converting in progress...",
+    "clearQueue": "Clear Queue",
+    "outputTitle": "Delivered Artifacts",
+    "copyPath": "Copy Path",
+    "openFolder": "Open Containing Folder"
   },
   "pdf": {
     "title": "PDF Smart Parser Workbench",

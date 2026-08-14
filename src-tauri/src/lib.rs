@@ -1,4 +1,5 @@
 use core_security::{gatekeeper::Gatekeeper, DeviceFingerprint};
+use format_converter::{service::FormatConvertService, FormatConvertResult, FormatConvertTask};
 use pdf_parse::service::{PdfParseResult, PdfParseService};
 use shared_contracts::VramTokenGuard;
 use std::path::PathBuf;
@@ -66,6 +67,17 @@ fn get_hardware_fingerprint() -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn run_format_convert(
+    task: FormatConvertTask,
+    window: tauri::Window,
+) -> Result<FormatConvertResult, String> {
+    tracing::info!("🚀 收到前端 紫电 AI 全能格式转换请求: {:?}", task);
+    let res = FormatConvertService::convert(&task);
+    let _ = window.emit("format-convert-finished", &res);
+    Ok(res)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let output_dir = std::env::temp_dir().join("ai_forge_outputs");
@@ -82,7 +94,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             parse_pdf,
             run_video_subtitle,
-            get_hardware_fingerprint
+            get_hardware_fingerprint,
+            run_format_convert
         ])
         .run(tauri::generate_context!())
         .expect("🚨 启动 紫电 AI 桌面端失败");

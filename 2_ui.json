@@ -1,7 +1,7 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
   "output": {
-    "filePath": "repomix-output-ui.xml",
+    "filePath": "repomix-output.xml",
     "style": "xml",
     "compress": false,
     "removeComments": false,
@@ -9,30 +9,65 @@
     "fileSummary": true,
     "directoryStructure": true,
     "files": true,
-    "includeFullDirectoryStructure": false,
-    "instructionFilePath": "HANDOFF_UI.md"
+    "includeFullDirectoryStructure": false
   },
   "include": [
-    "HANDOFF_UI.md",
-    "开发路线图与架构宪法.md",
+    "src-tauri/Cargo.toml",
+    "src-tauri/tauri.conf.json",
+    "src-tauri/capabilities/**",
+    "src-tauri/src/**",
+    "deploy/cloudflare/auth_worker.js",
+
+    "src-tauri/crates/core-models-download/**",
+    "src-tauri/crates/core-security/**",
+    "src-tauri/crates/shared-contracts/**",
+    "src-tauri/crates/core-onnx-infer/**",
+
     "package.json",
     "vite.config.ts",
     "postcss.config.js",
     "tailwind.config.js",
     "index.html",
-    "src/**"
+    "src/**",
+
+    "src-tauri/crates/services/service-converter/**",
+    "src-tauri/crates/tools/format-converter/**"
+
   ],
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
     "customPatterns": [
       "**/node_modules/**",
+      "src-tauri/target/**",
+      "**/.venv/**",
+      "**/__pycache__/**",
+      "**/*.onnx",
+      "**/*.gguf",
+      "**/*.bin",
+      "**/*.pdiparams",
+      "**/*.pdmodel",
+      "test/fixtures/**",
+      "test/outs/**",
+      "data/**",
+      "**/*.sqlite3*",
       "dist/**",
-      "src-tauri/**",
-      "deploy/**",
-      "models/**",
-      "test/**",
-      ".ai-forge/**"
+
+
+      "src-tauri/crates/services/service-asr/**",
+      "src-tauri/crates/services/service-translation/**",
+      "src-tauri/crates/tools/tool-video-subtitle/**",
+
+      "src-tauri/crates/tools/tool-pdf-parse/**",
+    
+      "src-tauri/crates/tools/pdf-parse/**",
+      "src-tauri/crates/services/service-pdfium/**",
+      "src-tauri/crates/services/service-doc-parse/**",
+      "src-tauri/crates/services/service-formula/**",
+      "src-tauri/crates/services/service-layout/**",
+      "src-tauri/crates/services/service-ocr/**",
+      "src-tauri/crates/services/service-table/**"
+
     ]
   }
 }

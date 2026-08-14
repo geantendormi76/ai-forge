@@ -5,9 +5,22 @@
     "node": "端侧算力节点"
   },
   "nav": {
+    "formatConverter": "全能格式转换",
     "pdfParse": "PDF 智能解析",
     "asr": "视频双语字幕工坊",
     "settings": "系统设置"
+  },
+  "format": {
+    "title": "全能格式转换工坊",
+    "subtitle": "纯血 Rust 内存直推 ｜ 零显存占用 ｜ 全离线隐私安全 ｜ 涵盖音频母带、表格数据、电子书与原生图标",
+    "dropzone": "点击浏览选择，或将文件直接拖拽至此处",
+    "queueTitle": "待转换任务队列",
+    "startBatch": "🚀 开始全部转换",
+    "converting": "正在转换中...",
+    "clearQueue": "清空列表",
+    "outputTitle": "转换产物交付",
+    "copyPath": "复制路径",
+    "openFolder": "打开所在目录"
   },
   "pdf": {
     "title": "PDF 智能解析工作台",
