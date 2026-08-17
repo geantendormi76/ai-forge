@@ -23,7 +23,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-screen w-full flex overflow-hidden font-sans select-none bg-[#060607] text-[#f5f5f3] relative">
+  <div class="h-screen w-full flex overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
     
     <!-- 悬浮侧边栏展开按钮 (当侧边栏收起时显现) -->
     <div
@@ -33,12 +33,12 @@ onMounted(() => {
     >
       <button
         @click="ui.切换侧边栏"
-        class="h-9 w-9 rounded-xl bg-[#0e0e10]/85 backdrop-blur-xl border border-white/10 text-[#8b8b87] hover:text-white hover:bg-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
+        class="h-9 w-9 rounded-xl bg-[#182022]/85 backdrop-blur-xl border border-white/10 text-[#8b999b] hover:text-white hover:bg-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
         title="展开侧边栏"
       >
         <PanelLeftOpen :size="16" class="stroke-[2]" />
       </button>
-      <div class="absolute top-11 left-1/2 -translate-x-1/2 bg-[#0e0e10]/95 backdrop-blur-xl border border-white/15 rounded-xl px-3 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.8)] flex items-center justify-center pointer-events-none opacity-0 scale-95 group-hover/expand:opacity-100 group-hover/expand:scale-100 transition-all duration-200 select-none z-50">
+      <div class="absolute top-11 left-1/2 -translate-x-1/2 bg-[#182022]/95 backdrop-blur-xl border border-white/15 rounded-xl px-3 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.8)] flex items-center justify-center pointer-events-none opacity-0 scale-95 group-hover/expand:opacity-100 group-hover/expand:scale-100 transition-all duration-200 select-none z-50">
         <span class="text-[11px] font-bold text-[#f2f2ef] whitespace-nowrap">展开侧边栏</span>
       </div>
     </div>
@@ -55,14 +55,14 @@ onMounted(() => {
         <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
           <button
             @click="触发最小化"
-            class="h-7 w-9 flex items-center justify-center text-[#8b8b87] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
             title="最小化"
           >
             <Minus :size="13" class="stroke-[2.5]" />
           </button>
           <button
             @click="触发最大化还原"
-            class="h-7 w-9 flex items-center justify-center text-[#8b8b87] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
             :title="是否已最大化 ? '向下还原' : '最大化'"
           >
             <Square v-if="!是否已最大化" :size="11" class="stroke-[2.5]" />
@@ -70,7 +70,7 @@ onMounted(() => {
           </button>
           <button
             @click="触发关闭"
-            class="h-7 w-9 flex items-center justify-center text-[#8b8b87] hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer"
+            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer"
             title="关闭"
           >
             <X :size="14" class="stroke-[2.5]" />
@@ -78,7 +78,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 视图路由分发区 (带顶部 48px 留白避开拖拽轨) -->
+      <!-- 视图路由分发区 -->
       <div class="flex-1 w-full h-full overflow-hidden relative z-10 pt-12">
         <HomeView v-if="ui.currentView === 'home'" />
         <FormatConverterView v-else-if="ui.currentView === 'format'" />
@@ -98,7 +98,7 @@ onMounted(() => {
         leave-from-class="opacity-100 scale-100 translate-y-0"
         leave-to-class="opacity-0 scale-95 translate-y-2"
       >
-        <div class="px-5 py-3 rounded-2xl bg-[#0e0e10]/95 backdrop-blur-2xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center gap-3 select-none pointer-events-auto max-w-[420px]">
+        <div class="px-5 py-3 rounded-2xl bg-[#182022]/95 backdrop-blur-2xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center gap-3 select-none pointer-events-auto max-w-[420px]">
           <div
             class="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
             :class="[

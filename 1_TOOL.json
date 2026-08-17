@@ -47,7 +47,6 @@
     "src-tauri/crates/shared-contracts/**",
     "src-tauri/crates/core-onnx-infer/**",
     
-    "src-tauri/crates/services/service-ocr/**",
     "src-tauri/crates/services/service-asr/**",
     "src-tauri/crates/services/service-translation/**",
     "src-tauri/crates/tools/video-subtitle/**"
@@ -80,6 +79,7 @@
       "src-tauri/crates/services/service-formula/**",
       "src-tauri/crates/services/service-layout/**",
       "src-tauri/crates/services/service-table/**",
+      "src-tauri/crates/services/service-ocr/**",
       "src-tauri/crates/services/service-converter/**"
     ]
   }

@@ -111,12 +111,10 @@ const toolMatrix: ToolItem[] = [
   }
 ]
 
-// 我的收藏（精选前 6 大算子）
 const favoriteTools = computed(() => {
   return toolMatrix.slice(0, 6)
 })
 
-// 分类筛选列表
 const categoryList = [
   { id: 'all', label: '全部工具', icon: Sparkles },
   { id: 'core', label: '核心中台', icon: Zap },
@@ -124,7 +122,6 @@ const categoryList = [
   { id: 'media', label: '音视频矩阵', icon: Film },
 ]
 
-// 搜索与分类过滤
 const filteredTools = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   return toolMatrix.filter(tool => {
@@ -160,15 +157,15 @@ const scrollToExplorer = () => {
 </script>
 
 <template>
-  <div class="relative w-full h-full overflow-hidden bg-[#060607] text-[#f5f5f3] select-none font-sans">
+  <div class="relative w-full h-full overflow-hidden bg-[#20292b] text-[#f5f5f3] select-none font-sans">
     
     <!-- 背景层 1：全息极光光子云层 (Aurora) -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <Aurora
         :speed="0.8"
         :amplitude="1.2"
-        :color-stops="['#03140e', '#00ffa9', '#00d2ff']"
-        class="absolute inset-0 opacity-75"
+        :color-stops="['#101e21', '#00ffa9', '#00d2ff']"
+        class="absolute inset-0 opacity-60"
       />
     </div>
 
@@ -182,7 +179,7 @@ const scrollToExplorer = () => {
         gradient-from="rgba(0, 255, 169, 0.45)"
         gradient-to="rgba(0, 210, 255, 0.35)"
         glow-color="#00ffa9"
-        class="absolute inset-0 opacity-80"
+        class="absolute inset-0 opacity-70"
       />
     </div>
 
@@ -194,15 +191,13 @@ const scrollToExplorer = () => {
     >
       <div class="max-w-[1380px] mx-auto space-y-14 pt-2">
 
-        <!-- ========================================== -->
-        <!-- 1. HERO 标杆展示区 (1:1 对齐图一/图二) -->
-        <!-- ========================================== -->
+        <!-- 1. HERO 标杆展示区 -->
         <section class="space-y-6 pt-6 max-w-4xl">
           
           <!-- 胶囊状态徽章 -->
           <div
             @click="scrollToExplorer"
-            class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-xs font-mono text-slate-300 hover:border-[#00ffa9]/50 transition-colors shadow-lg backdrop-blur-md group w-fit cursor-pointer"
+            class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#182022]/80 border border-white/10 text-xs font-mono text-slate-300 hover:border-[#00ffa9]/50 transition-colors shadow-lg backdrop-blur-md group w-fit cursor-pointer"
           >
             <span class="px-2 py-0.5 rounded-full bg-[#00ffa9] text-slate-950 font-extrabold text-[11px] tracking-wide">
               SOTA 2026
@@ -223,13 +218,13 @@ const scrollToExplorer = () => {
             />
           </div>
 
-          <!-- 钱学森工程思维哲学标语 -->
+          <!-- 标语 -->
           <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl font-sans space-y-1">
             <span class="block">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
             <span class="block text-slate-100">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
           </p>
 
-          <!-- 1:1 双渐变行动按钮 -->
+          <!-- 行动按钮 -->
           <div class="flex flex-wrap items-center gap-4 pt-2">
             <button
               @click="scrollToExplorer"
@@ -241,7 +236,7 @@ const scrollToExplorer = () => {
 
             <button
               @click="ui.currentView = 'pdf'"
-              class="px-6 py-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm transition-all flex items-center gap-2 backdrop-blur-md active:scale-95 cursor-pointer hover:border-[#ffb74d]/50"
+              class="px-6 py-3.5 rounded-2xl bg-[#182022]/90 hover:bg-[#182022] text-slate-200 border border-white/10 font-semibold text-sm transition-all flex items-center gap-2 backdrop-blur-md active:scale-95 cursor-pointer hover:border-[#ffb74d]/50"
             >
               <Sparkles class="w-4 h-4 text-[#ffb74d]" />
               <span>体验 PDF 解析</span>
@@ -249,7 +244,7 @@ const scrollToExplorer = () => {
           </div>
 
           <!-- 底层算力标签 -->
-          <div class="flex items-center gap-6 pt-3 text-[11px] font-mono text-[#8b8b87] uppercase">
+          <div class="flex items-center gap-6 pt-3 text-[11px] font-mono text-[#8b999b] uppercase">
             <span class="flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
               MSVC Native x64
@@ -265,16 +260,14 @@ const scrollToExplorer = () => {
           </div>
         </section>
 
-        <!-- ========================================== -->
-        <!-- 2. 我的收藏（01 / YOUR WORKBENCH） -->
-        <!-- ========================================== -->
+        <!-- 2. 我的收藏 -->
         <section class="space-y-4 pt-2">
           <div class="flex items-end justify-between border-b border-white/[0.08] pb-3">
             <div>
-              <span class="text-[11px] font-mono text-[#8b8b87] uppercase tracking-wider">01 / YOUR WORKBENCH</span>
+              <span class="text-[11px] font-mono text-[#8b999b] uppercase tracking-wider">01 / YOUR WORKBENCH</span>
               <h2 class="text-xl font-bold text-white mt-0.5">我的收藏算子</h2>
             </div>
-            <span class="text-xs text-[#8b8b87] font-mono">Pinned Tools</span>
+            <span class="text-xs text-[#8b999b] font-mono">Pinned Tools</span>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -282,13 +275,13 @@ const scrollToExplorer = () => {
               v-for="tool in favoriteTools"
               :key="tool.id"
               @click="handleToolClick(tool)"
-              class="group p-5 rounded-2xl border border-white/[0.08] bg-black/40 hover:bg-black/60 hover:border-white/20 backdrop-blur-md transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[140px] relative shadow-lg"
+              class="group p-5 rounded-2xl border border-white/[0.08] bg-[#182022]/60 hover:bg-[#182022]/90 hover:border-white/20 backdrop-blur-md transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[140px] relative shadow-lg"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="w-10 h-10 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center text-white group-hover:text-[#00ffa9] group-hover:border-[#00ffa9]/40 transition-colors">
                   <component :is="tool.icon" :size="18" class="stroke-[2]" />
                 </div>
-                <div class="flex items-center gap-1 text-[#8b8b87] group-hover:text-white transition-colors">
+                <div class="flex items-center gap-1 text-[#8b999b] group-hover:text-white transition-colors">
                   <span class="text-[10px] font-mono tracking-wider uppercase">{{ tool.tag }}</span>
                   <ArrowUpRight :size="14" />
                 </div>
@@ -296,30 +289,28 @@ const scrollToExplorer = () => {
 
               <div class="mt-4">
                 <h4 class="text-sm font-bold text-[#f2f2ef] group-hover:text-white transition-colors">{{ tool.name }}</h4>
-                <p class="text-xs text-[#8b8b87] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
+                <p class="text-xs text-[#8b999b] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- ========================================== -->
-        <!-- 3. 搜索与全库矩阵（02 / TOOL EXPLORER） -->
-        <!-- ========================================== -->
+        <!-- 3. 搜索与全库矩阵 -->
         <section id="tool-explorer-section" class="space-y-6 pt-2">
           <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
             <div>
-              <span class="text-[11px] font-mono text-[#8b8b87] uppercase tracking-wider">02 / TOOL EXPLORER</span>
+              <span class="text-[11px] font-mono text-[#8b999b] uppercase tracking-wider">02 / TOOL EXPLORER</span>
               <h2 class="text-xl font-bold text-white mt-0.5">搜索与探索全部工具</h2>
             </div>
 
             <!-- 搜索框 -->
             <div class="relative w-full md:w-[360px]">
-              <Search :size="15" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8b8b87]" />
+              <Search :size="15" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8b999b]" />
               <input
                 v-model="searchQuery"
                 type="text"
                 placeholder="搜索格式转换、PDF、字幕、超分、表格..."
-                class="w-full h-10 pl-9 pr-4 bg-black/40 border border-white/10 hover:border-white/20 focus:border-[#00ffa9]/50 rounded-xl text-xs text-[#f2f2ef] outline-none transition-all placeholder-[#5b5b58] backdrop-blur-md"
+                class="w-full h-10 pl-9 pr-4 bg-[#182022]/60 border border-white/10 hover:border-white/20 focus:border-[#00ffa9]/50 rounded-xl text-xs text-[#f2f2ef] outline-none transition-all placeholder-[#5b696b] backdrop-blur-md"
               />
             </div>
           </div>
@@ -331,7 +322,7 @@ const scrollToExplorer = () => {
               :key="cat.id"
               @click="activeCategory = cat.id"
               class="h-8 px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer"
-              :class="activeCategory === cat.id ? 'bg-[#f2f2ef] text-[#0a0a0a] font-bold shadow-sm' : 'bg-black/30 border border-white/[0.08] text-[#8b8b87] hover:text-white hover:bg-white/[0.06]'"
+              :class="activeCategory === cat.id ? 'bg-[#f2f2ef] text-[#0a0a0a] font-bold shadow-sm' : 'bg-[#182022]/50 border border-white/[0.08] text-[#8b999b] hover:text-white hover:bg-white/[0.06]'"
             >
               <component :is="cat.icon" :size="13" />
               <span>{{ cat.label }}</span>
@@ -344,13 +335,13 @@ const scrollToExplorer = () => {
               v-for="tool in filteredTools"
               :key="tool.id"
               @click="handleToolClick(tool)"
-              class="p-5 rounded-2xl border border-white/[0.06] bg-black/30 hover:bg-black/50 hover:border-white/20 backdrop-blur-md transition-all duration-150 cursor-pointer flex flex-col justify-between min-h-[130px] group shadow-md"
+              class="p-5 rounded-2xl border border-white/[0.06] bg-[#182022]/50 hover:bg-[#182022]/80 hover:border-white/20 backdrop-blur-md transition-all duration-150 cursor-pointer flex flex-col justify-between min-h-[130px] group shadow-md"
             >
               <div class="flex items-center justify-between">
-                <div class="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.02] flex items-center justify-center text-[#8b8b87] group-hover:text-white group-hover:border-white/25 transition-colors">
+                <div class="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.02] flex items-center justify-center text-[#8b999b] group-hover:text-white group-hover:border-white/25 transition-colors">
                   <component :is="tool.icon" :size="15" />
                 </div>
-                <span class="text-[9px] font-mono uppercase text-[#5b5b58] tracking-wider">{{ tool.tag }}</span>
+                <span class="text-[9px] font-mono uppercase text-[#5b696b] tracking-wider">{{ tool.tag }}</span>
               </div>
 
               <div class="mt-3">
@@ -360,19 +351,19 @@ const scrollToExplorer = () => {
                     {{ tool.badge }}
                   </span>
                 </div>
-                <p class="text-[11px] text-[#8b8b87] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
+                <p class="text-[11px] text-[#8b999b] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
               </div>
             </div>
           </div>
 
-          <!-- 空搜索结果状态 -->
-          <div v-else class="py-16 text-center text-[#8b8b87] border border-white/[0.04] rounded-2xl bg-black/20">
+          <!-- 空搜索结果 -->
+          <div v-else class="py-16 text-center text-[#8b999b] border border-white/[0.04] rounded-2xl bg-[#182022]/30">
             <p class="text-xs">未找到与 "{{ searchQuery }}" 匹配的工具算子</p>
           </div>
         </section>
 
         <!-- 底部落款 -->
-        <footer class="flex justify-between items-center text-[11px] font-mono text-[#5b5b58] border-t border-white/[0.06] pt-8 pb-4">
+        <footer class="flex justify-between items-center text-[11px] font-mono text-[#5b696b] border-t border-white/[0.06] pt-8 pb-4">
           <span>ZIDIAN AI DESKTOP 2026 / HIGH PERFORMANCE WORKBENCH</span>
           <span>ALL COMPUTATION STAYS ON YOUR DEVICE</span>
         </footer>

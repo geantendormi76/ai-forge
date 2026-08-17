@@ -34,7 +34,7 @@ const switchView = (id: string) => {
 
 <template>
   <aside
-    class="h-[calc(100vh-32px)] my-4 bg-[#0e0e10]/80 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.5)] flex flex-col pt-6 pb-4 flex-shrink-0 z-20 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
+    class="h-[calc(100vh-32px)] my-4 bg-[#182022]/85 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.4)] flex flex-col pt-6 pb-4 flex-shrink-0 z-20 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
     :class="ui.侧边栏收起 ? 'w-0 opacity-0 ml-0 mr-0 my-0 py-0 px-0 overflow-hidden pointer-events-none' : 'w-[220px] ml-4'"
     style="-webkit-app-region: drag;"
   >
@@ -60,7 +60,7 @@ const switchView = (id: string) => {
 
       <button
         @click="ui.切换侧边栏"
-        class="w-7 h-7 rounded-lg text-[#8b8b87] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
+        class="w-7 h-7 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
         title="收起侧边栏"
       >
         <PanelLeftClose :size="15" class="stroke-[2]" />
@@ -79,20 +79,20 @@ const switchView = (id: string) => {
         :class="[
           ui.currentView === item.id
             ? 'bg-white/[0.08] border-white/15 text-white font-bold shadow-[0_4px_16px_rgba(0,0,0,0.3)]'
-            : 'border-transparent text-[#8b8b87] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
+            : 'border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
         ]"
       >
         <component
           :is="item.icon"
           :size="16"
-          :class="ui.currentView === item.id ? 'text-[#DCA54C] stroke-[2.5]' : 'text-[#8b8b87] stroke-[2]'"
+          :class="ui.currentView === item.id ? 'text-[#DCA54C] stroke-[2.5]' : 'text-[#8b999b] stroke-[2]'"
         />
         <span class="text-[13px] tracking-wide">{{ item.label }}</span>
       </div>
 
       <!-- 分组标头 -->
       <div class="pt-5 pb-1.5 px-3">
-        <span class="text-[10px] font-mono font-bold text-[#5b5b58] uppercase tracking-wider">本地算力扩展</span>
+        <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
       </div>
 
       <!-- 扩展算子组 -->
@@ -100,10 +100,10 @@ const switchView = (id: string) => {
         v-for="item in menuGroup2"
         :key="item.id"
         @click="switchView(item.id)"
-        class="flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-colors border border-transparent text-[#8b8b87] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium"
+        class="flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-colors border border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium"
       >
         <div class="flex items-center gap-3">
-          <component :is="item.icon" :size="16" class="text-[#5b5b58] stroke-[2]" />
+          <component :is="item.icon" :size="16" class="text-[#5b696b] stroke-[2]" />
           <span class="text-[13px] tracking-wide">{{ item.label }}</span>
         </div>
       </div>
@@ -111,7 +111,7 @@ const switchView = (id: string) => {
     </div>
 
     <!-- 底部状态指示灯 -->
-    <div class="px-5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-[#5b5b58] pointer-events-auto" style="-webkit-app-region: no-drag;">
+    <div class="px-5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-[#5b696b] pointer-events-auto" style="-webkit-app-region: no-drag;">
       <span class="flex items-center gap-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
         RTX 3060 Ready

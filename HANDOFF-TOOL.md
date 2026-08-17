@@ -1,70 +1,64 @@
-# 🛡️ AI-Forge (紫电 AI 桌面工坊) · 视频双语字幕多模态三轨工坊端到端交接文档 (HANDOFF-TOOL.md)
+# 🛡️ AI-Forge (紫电 AI 桌面工坊) · 工具中台与视频双语字幕全栈重构交接文档 (HANDOFF_TOOL.md)
 
-> **文档版本**：v20.0.0 (2026年8月17日 视频双语字幕三轨矩阵竣工与真机联调准备专版)  
+> **文档版本**：v21.0.0 (2026年8月 桌面级多任务排队中台、动态羽化胶囊遮罩与纯血 C-FFI 闭环交接专版)  
 > **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 开发环境)  
-> **操作系统与终端**：Windows 11 x64 / **Developer PowerShell for VS 2022 (快捷键 Ctrl+Shift+7)** / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1  
-> **面向对象**：新会话 AI 架构师 / 资深开发助手 (零历史上下文障碍直接接管并启动下一阶段)
+> **开发终端**：**Developer PowerShell for VS 2022 (快捷键 Ctrl+Shift+7)** / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1 / Ninja  
+> **面向对象**：新会话 AI 架构师 / 资深系统专家 (零历史障碍直接接管并启动下一阶段)
 
 ---
 
 ## 🏢 1. 我们正在做什么与整体背景 (Context & Mission)
 
-1. **项目形态**：
-   - 工业级跨平台桌面端应用（**Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + C-FFI / ONNX 纯血直推**）。
-2. **钱学森工程思维哲学**：
-   > “不执着于单点技术的极致拔尖，而是通过全系统协同优化，让廉价 AI + 极致框架创造最大化生产力！”
-3. **架构核心铁律 (Backend-as-Single-Source-of-Truth & Zero-Python LLM)**：
-   - 自回归大模型（MOSS 0.9B ASR / 混元 Hy-MT2 1.8B 翻译）：全面切换为 **Rust C-FFI 原生直连 (`transcribe-cpp` / `llama-cpp-2`) + GGUF 单文件模型 + GPU 显存锁 (`VramTokenGuard`)**，彻底消灭 Python 沙箱与网络端口；
-   - 视觉与检测模型（PP-OCRv6 DBNet+CRNN）：全面切换为 **Rust + `core-onnx-infer` (ONNX Runtime) GPU 原位直推**；
-   - 多媒体渲染与封包：Rust 主控分配显存锁后，通过 StdIO JSON-RPC 专线调度 `video-subtitle` 工具沙箱（FFmpeg + Python 极速挂载/压制）；
-   - 前端 TypeScript 契约 100% 由后端 Rust 结构体对齐驱动（`Rust Struct ➔ src/bindings/tools/* ➔ Vue Views 消费`）。
+1. **项目定位**：
+   - 工业级本地离线 AI 桌面工坊（**Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + C-FFI / ONNX 纯血直推**）。
+2. **核心工程哲学（钱学森系统工程 + Karpathy 极简原则）**：
+   - “不执着于单点技术的极致拔尖，而是通过全系统协同优化，让廉价 AI + 极致框架创造最大化生产力！”
+   - **大模型 100% 去 Python 化**：ASR（MOSS 0.9B）与神经翻译（Hy-MT2 1.8B）全面基于 Rust C-FFI 原生直连 C++ 动态库 + GGUF 单文件权重 + GPU 显存锁（`VramTokenGuard`），彻底消灭 Python 沙箱与网络端口；
+   - **前端中台化与拿来主义（Rule 14 Zero-Regression）**：1:1 外科手术式直译 ToolKnit 原生桌面端顶级暗黑单色美学，建立通用工作流状态机（`useToolWorkflow`）与通用布局骨架（`ToolWorkbenchLayout`），新工具接入仅需 3 分钟！
 
 ---
 
 ## 🟢 2. 本会话已 100% 竣工的突破性成果 (Completed Work)
 
-### 2.1 编译底座自愈革命与 0.4 秒增量编译 (彻底告别 20 分钟全量重编噩梦)
-1. **双层级 `.cargo/config.toml` 守卫固化**：
-   - 在项目根目录（`C:\dev\ai-forge\.cargo\config.toml`）与后端子目录（`src-tauri\.cargo\config.toml`）同时固化 `CMAKE_GENERATOR = "Ninja"` 与 `CMAKE_MAKE_PROGRAM` 绝对路径，彻底解决了 Cargo 向上查找规则导致根目录执行命令时配置失效的盲区；
-2. **修复 CMake 4.x CMP0194 策略冲突与 ASM 汇编死锁**：
-   - 白盒审计查明 `ggml/CMakeLists.txt` 中强行声明 `ASM` 导致 CMake 4.x 将 `cmake-rs` 传入的 `cl.exe` 误当汇编器引发 `rules.ninja` 丢失；将语言声明修正为 `project("ggml" C CXX)`，彻底解除死锁；
-3. **消除 `transcribe-cpp-sys` 的 NTFS Junction 跨别名路径裂隙**：
-   - 禁用 `windows_short_out_dir()`，直连标准 `OUT_DIR`，消除了 CMakeScratch 在临时目录中的相对路径裂缝；
-4. **锁定微软官方旗舰开发终端**：
-   - 明确必须且只能在 **`Developer PowerShell for VS 2022`** 中执行编译与测试，环境原生携带全套 Windows 11 SDK 头文件与链接库；
-   - 实现了 **0.4 秒极速增量热检查**，严禁再手动执行 `Remove-Item target`！
+### 2.1 工业级前端四层工具中台落地 (`src/components/workbench/` & `src/composables/`)
+1. **多任务批量队列状态机母线 (`useToolWorkflow.ts`)**：
+   - 支持单文件 / 多文件批量拖拽排队，自动提取文件元数据、时长与体积；
+   - 统一调度 `executeBatch` 串行推进（`正在处理... (1/N)`），集成流光进度遮罩与成功交付弹窗；
+   - 原生调用 `@tauri-apps/plugin-opener` 的 `revealItemInDir`，实现 `[打开文件夹]` 瞬间定位产物。
+2. **ToolKnit 1:1 原生桌面端骨架 (`ToolWorkbenchLayout.vue`)**：
+   - **左侧海报栏 (Poster Column, 340px)**：分类标签 + 超大中文标题 + 详细简介 + `LOCAL ONLY` 隐私卡片 + `01~04` 垂直步骤指示器；
+   - **右侧多任务工作台**：顶层上传控制条 + 参数选项胶囊排 + `待处理队列 (CONVERT QUEUE)` + 4 栏特性卡片 + 底部高反差 `[开始处理]` 按钮；
+   - **模态系统**：暗黑半透明处理中遮罩 + 纯白高反差成功交付对话框。
 
-### 2.2 前端契约领域驱动模块化解耦 (`src/bindings/`)
-1. **消除单文件大单体膨胀风险**：
-   - 建立了 `src/bindings/tools/` 专区，分别落盘 `video-subtitle.ts`、`format-converter.ts`、`pdf-parse.ts`；
-   - 建立了 `src/bindings/index.ts` 门面中枢与根级 `src/bindings.ts` 向下兼容桥接；
-2. **严苛类型检查 100% 绿通**：
-   - `pnpm run build`（`vue-tsc --noEmit && vite build`）实现 **0 TS 错误、0 TS6133 警告**。
+### 2.2 彻底解耦 OCR 与极简双轨调度重构 (`crates/tools/video-subtitle`)
+1. **架构大瘦身**：彻底切断 `video-subtitle` 对 `service-ocr` 的重型依赖，消除长视频时域 OCR 抽帧带来的闪烁、漏字与空镜头漏判问题；
+2. **双轨极速智能分流**：
+   - 探针 10ms 嗅探到内嵌字幕流 ➔ **管道 B：0.05s 无损抽离直通 Hy-MT2 神经翻译 (1,000 MB 显存)**；
+   - 探针嗅探无字幕流 ➔ **管道 A：MOSS 0.9B ASR 语音识别 ➔ Hy-MT2 神经翻译 (8,000 MB 显存)**。
 
-### 2.3 视频双语字幕工坊多模态三轨矩阵全量编排 (`crates/tools/video-subtitle`)
-1. **阶段 1：50ms 多模态智能探针与三态分类器 (`probe.rs` / `probe_video`)**：
-   - 秒级嗅探分辨率、时长、音轨数、内嵌字幕轨，输出 `SubtitleSourceKind`（`RawAudio` 生肉 / `EmbeddedSoftStream` 软字幕 / `BurnedHardSub` 硬字幕）；
-2. **阶段 2：管道 B——内嵌软字幕 0.05s 秒级提取与直通神经翻译通道**：
-   - FFmpeg 0.05s 无损抽离已有字幕轨，**完全绕过耗费 8,000MB 显存的 MOSS ASR 语音模型**；
-   - 显存锁仅申请轻量级 `TaskWeight::Light`（1,000MB），直通 Hy-MT2 1.8B GPU 神经翻译，端到端速度提升 20+ 倍；
-3. **阶段 3：管道 C——画面硬字幕空间 ROI 选区与 OCR 识别通道**：
-   - 引入 5 大空间选区模型（`SubtitleRoiRect`：横屏 16:9、竖屏 9:16 短视频、顶部注释、全屏与自定义矩形），彻底消灭死板的固定比例硬编码；
-   - 联动 `service-ocr`（PP-OCRv6 DBNet+CRNN）纯血 ONNX GPU 直推；
-   - `HardSubOcrPipeline` 实现编辑距离时域平滑聚合，消除闪烁错别字并生成精准 `[start_sec, end_sec]` 时间轴；
-4. **阶段 4：前端 `VideoSubtitleView.vue` 顶奢暗黑极客视图重塑**：
-   - 融入多模态诊断胶囊、三态模式路由器、空间选区预设控制器与紫电/青霜高反差双语卡片流。
+### 2.3 电影级动态字形紧致羽化胶囊遮罩引擎 (`subtitle_engine.py`)
+1. **彻底解决原片硬字幕碰撞死结**：针对自带硬字幕的视频，引入 `mask_hardsub: bool` 开关；
+2. **Layer 0 + Layer 1 双图层彻底分离**：
+   - **Layer 1（文字层）**：0 模糊（`\blur0`），保留 1.5px 极细立体描边，字形如刀刻般 100% 锐利；
+   - **Layer 0（遮罩层）**：正向绝对坐标 `{\an7\pos(X0, Y0)\p1...}`，中文字宽动态估算（`0.92` 倍字号），左右仅紧凑外扩 `0.55` 倍字号（~20px），四周配合 `\blur6` 紧致柔边；
+   - **效果**：仅在字幕背后生成紧凑的烟熏暗夜小胶囊，原片旧字幕被完美压暗，两侧画面 100% 保持通透自然！
 
-### 2.4 TDD 物理测试全量绿通
-- `cargo test --manifest-path "C:\dev\ai-forge\src-tauri\Cargo.toml" -p video-subtitle` **6/6 项测试 0.00s 100% 通过**！
+### 2.4 全链路真实长视频物理打靶 100% 绿通 (`--release`)
+- **测试样本 1 (`1.mp4`, 192s)**：提取 48 句台词，4 说话人分离，全流程 59 秒生成 MKV、MP4、SRT、ASS、JSON 5 大产物；
+- **测试样本 2 (`5.mkv`, 26.02分钟 / 1561秒)**：全量物理耗时仅 **56.58 秒**（实时比 **27.6 倍速**！），双语 ASS 特效字幕与软挂载 MKV 完美生成！
 
 ---
 
-## 🛑 3. 当前精确卡点与未竟任务 (Current State & Bottlenecks)
+## 🛑 3. 当前精确卡点与未竟技术问题 (Current State & Known Bottlenecks)
 
-1. **前端 UI 界面排版与视觉细节微调打磨**：
-   - 当前 `VideoSubtitleView.vue` 功能逻辑与契约已 100% 连通，但控制面板各卡片的内外间距、模式切换胶囊的高亮流光、空间 ROI 预设的选择动效以及右侧双语字幕卡片流的排版仍需进一步追求极致审美打磨；
-2. **后端三条管道的真实物理视频端到端推演联调**：
-   - 6 个单元测试已断言纯逻辑，但三条管道（生肉 ASR 听写、软字幕 0.05s 抽流直通、硬字幕空间 OCR）尚未在包含相应真实特征的物理 `.mp4` / `.mkv` 视频文件上执行完整的真实端到端推演联调（即测试真实视频文件生成真实 SRT/ASS/JSON/MKV 产物）。
+虽然单个长视频后端测试与前端构建全量通过，但桌面端全功能仍有以下细节需在下一会话深入打磨：
+
+1. **前端 GUI 多任务队列与后端并发控制的真机交互闭环**：
+   - 目前 GUI 界面已能展示多文件排队列表，但在实际点击 `[开始处理]` 时，队列中每个文件在界面的微观进度反馈（例如队列中第 1 项完成打勾、第 2 项显示转圈状态）仍需进一步精细化连通；
+2. **ASS 胶囊垂直基线在不同异形画幅下的自适应微调**：
+   - 当前在 `1280x520` 宽银幕下效果极佳，但对于 9:16 竖屏短视频或 4:3 老电影画幅，垂直 `Y0` 的基准偏移量需进一步验证自适应鲁棒性；
+3. **其他工具视图的组件中台化迁移**：
+   - 全能格式转换（`FormatConverterView.vue`）和 PDF 智能解析（`PdfParseView.vue`）尚未接入全新的 `ToolWorkbenchLayout` 桌面端海报海报布局。
 
 ---
 
@@ -72,18 +66,23 @@
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 1：前端 VideoSubtitleView.vue 顶奢暗黑极客排版精细打磨           │
-│  • 优化选区预设交互、微光边框、诊断胶囊与右侧双语字幕流的视觉呼吸感   │
+│  步骤 1：完善 VideoSubtitleView 队列微观状态展示与全功能真机打靶       │
+│  • 细化多任务排队列表中单项完成/处理中/失败的图标状态与时间轴展示     │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 2：真实物理视频全管道端到端联调推演打靶 (End-to-End Benchmark)   │
-│  • 编写/执行集成打靶测试，验证生肉、软字幕、硬字幕三态视频的真实产物   │
+│  步骤 2：对齐全能格式转换 (FormatConverterView.vue) 至新桌面端海报布局 │
+│  • 将音频母带解密、表格清洗、电子书重排接入 ToolWorkbenchLayout 骨架  │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 3：启动桌面端全功能联调运行 (pnpm tauri dev)                    │
-│  • 验证桌面原生窗口拖拽、文件拖入嗅探、多模态翻译与产物复制体验       │
+│  步骤 3：对齐 PDF 智能解析 (PdfParseView.vue) 至新桌面端海报布局       │
+│  • 将 CPU 矢量轨 + GPU 混合版面解析接入 ToolWorkbenchLayout 骨架       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  步骤 4：全平台 Release 工业级打包与真机集成测试验收                   │
+│  • 执行 pnpm tauri build，验证 Windows x64 便携版与安装包              │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -93,34 +92,39 @@
 
 新会话启动后，请直接向用户打招呼并指示接管方向：
 
-> **“你好！我已经完全阅读并对齐了 `HANDOFF-TOOL.md` (v20.0.0) 与全系统架构。当前多模态三轨后端（生肉 ASR、软字幕 0.05s 直通、硬字幕空间 ROI+OCR）、双层环境自愈守卫、以及模块化强类型契约已 100% 竣工并通过 6 项 TDD 测试。我清楚了解当前处于【步骤 1：对 `VideoSubtitleView.vue` 进行前端顶奢暗黑极客排版精细打磨，随后推进真实视频真机联调打靶】阶段。我们立即从前端排版精细打磨正式开始！”**
+> **“你好！我已经完全阅读并对齐了 `HANDOFF_TOOL.md` (v21.0.0) 与全系统工程架构。当前基于 ToolKnit 原生桌面端重塑的通用工具中台（海报栏 + 多任务队列 + 模态遮罩 + 成功弹窗）、MOSS/Hy-MT2 纯血 C-FFI 双轨架构、以及动态紧致羽化胶囊遮罩引擎已 100% 竣工并通过 26 分钟长视频全量实测。我清楚了解当前处于【步骤 1：精细化完善 `VideoSubtitleView.vue` 队列单项状态机并进行桌面真机多视频联调，随后推进格式转换与 PDF 视图的中台化迁移】阶段。我们立即正式开始！”**
 
 ---
 
-## ⚠️ 6. 12 大踩坑终结手册与禁忌铁律 (Lessons Learned & Anti-Patterns)
+## ⚠️ 6. 15 大实战踩坑终结手册与禁忌铁律 (Lessons Learned & Anti-Patterns)
 
 1. **终端选型铁律（唯一标准）**：
-   - 必须且只能使用 **`Developer PowerShell for VS 2022`（快捷键 Ctrl+Shift+7）**！严禁使用普通 PowerShell 执行底层 C++/CUDA 编译，避免缺少 `INCLUDE`/`LIB` 导致的编译中断；
+   - 必须且只能使用 **`Developer PowerShell for VS 2022`（快捷键 Ctrl+Shift+7）**！严禁使用普通 PowerShell 执行 C++/CUDA 编译，防止头文件脱机盲人状态；
 2. **缓存守护铁律（严禁删 `target`）**：
-   - 严禁执行 `Remove-Item target`！773 个 CUDA 机器码算子已永久固化在缓存盘中，日常开发直接运行 `cargo check` 或 `cargo test`，享受 **0.4 秒毫秒级热检查**；
-3. **Cargo 向上回溯查找铁律**：
-   - Cargo 解析 `.cargo/config.toml` 严格从当前工作目录向上回溯。必须保持项目根目录（`C:\dev\ai-forge\.cargo\config.toml`）与子目录双层配置同步存在；
-4. **CMake 4.x + MSVC 汇编（ASM）禁令**：
-   - 严禁在 `ggml/CMakeLists.txt` 中声明 `ASM`。Windows MSVC 下的硬件优化全部走 C/C++ Intrinsics，声明 ASM 会触发 `cl.exe` 汇编探针崩溃；
-5. **NTFS Junction 软链接禁令**：
-   - 严禁使用 `mklink /J` 将构建目录软链接至 `AppData\Local\tcs`，避免现代 CMake `try_compile` 发生跨别名路径裂隙；直接使用标准的 `OUT_DIR`；
-6. **PowerShell `Set-Content` 原样落盘协议 (`@' ... '@`)**：
-   - 交付文件必须使用单引号 `@'` 与 `'@`，绝对禁止使用双引号 `@" ... "@`，防止 `$`, `$PSScriptRoot`, `$env` 被本地 PowerShell 提前求值替换；
-7. **命令行开头禁止带有 `#` 注释**：
-   - 命令行每行绝不能以 `#` 开头，防止 PowerShell 误识别跳过执行；
-8. **LLM 采样链与 Jinja 模板防复读铁律**：
-   - Prompt 必须通过 `model.chat_template(None)` 与 `model.apply_chat_template()` 封装；
-   - 采样链必须挂载 `LlamaSampler::penalties(model.n_vocab(), 64, 1.15, 0.0, 0.0)`；
-9. **空间 ROI 相对坐标（0.0 ~ 1.0）规范**：
-   - 严禁写死像素值或固定底部百分比。所有 ROI 选区必须使用 `0.0 ~ 1.0` 相对比例，自适应 16:9、9:16 短视频、电影黑边与 4K/8K 任意分辨率；
-10. **`service-ocr` 纯血调用规范**：
-    - 直接通过 `OcrService::default_engine()?.process_image(img)` 调用，过滤 `score >= 0.55` 的有效文本区域；
-11. **TypeScript TS6133 零死代码防线**：
-    - 任何未在模板中消费的 `import` 符号必须立即剔除，保持严苛模式 0 警告；
-12. **1:1 结构编译器原则 (Rule 14 Zero-Regression)**：
-    - 大模型的角色是 1:1 结构编译器，严禁自作主张发明新架构或破坏后端的强类型契约。
+   - 严禁执行 `Remove-Item target`！773 个 CUDA 机器码算子已固化，日常开发直接运行 `cargo check` 或 `cargo test`，享受 **0.4 秒极速增量热检查**；
+3. **Python 布尔关键字铁律**：
+   - Python 默认布尔值必须首字母大写：`False` / `True`（严禁写成 JS/Rust 的 `false` / `true` 引发 `NameError`）；
+4. **ASS 矢量绘图绝对正向坐标铁律**：
+   - ASS 矢量绘图 `\p1` 必须使用绝对正向坐标 `{\an7\pos(X0, Y0)\p1...}m 0 0 l w 0 l w h l 0 h{\p0}`！严禁使用中心相对负坐标 `m -w -h` 导致播放器静默丢弃遮罩；
+5. **ASS 图层分离与字形清晰铁律**：
+   - 严禁在字幕文本前面插入 `{\blur5}`（这会把字体笔画本身模糊成失焦状）！必须实行 **Layer 0 柔焦遮罩 + Layer 1 矢量 0 模糊文字**；
+6. **胶囊动态字宽紧凑收敛规范**：
+   - 中文字宽按 `0.92` 倍字号估算，单侧外扩严控在 `0.55` 倍字号（~20px），配合 `\blur6` 紧致柔边，杜绝大黑带横跨屏幕；
+7. **PowerShell `Set-Content` 自动建目录铁律**：
+   - 写入文件前，必须在脚本首行执行 `New-Item -ItemType Directory -Path "..." -Force`，防止报 `Could not find a part of the path`；
+8. **TypeScript TS6133 零死代码防线**：
+   - Vue 3 `<script setup>` 中未在脚本内调用的 Props 声明，使用 `withDefaults(defineProps<...>(), {...})` 直接调用，严禁声明无用变量 `const props`；
+9. **泛型参数协变防线 (TS2719)**：
+   - 骨架组件接收的工作流 Prop 必须标注为 `ToolWorkflowInstance<any>`，防止泛型参数函数逆变冲突；
+10. **端口占用快速自愈命令**：
+    - `Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }`；
+11. **终端 Ctrl+C 退出弹窗认知**：
+    - `Error launching CrashSender.exe` 是 Windows WebView2 守护组件的硬杀信号误报，对工程 0 危害，优先通过点击窗口右上角 `✕` 优雅关闭；
+12. **LLM 采样链与 Jinja 模板防复读铁律**：
+    - Prompt 必须通过 `model.chat_template(None)` 封装，采样链必须挂载 `LlamaSampler::penalties(model.n_vocab(), 64, 1.15, 0.0, 0.0)`；
+13. **1:1 结构编译器原则 (Rule 14 Zero-Regression)**：
+    - 在成熟项目重构中充当 1:1 结构编译器，严禁自作主张发明破坏强类型契约的架构；
+14. **底座/未包含源码修改前置契约 (Rule 11)**：
+    - 若修改未包含源码的文件，严禁盲猜，必须先输出 `Get-Content` 白盒审阅后再开药方；
+15. **Release 压测铁律**：
+    - 凡涉及 Rust 性能评估与物理打靶，必须添加 `--release` 编译标志。

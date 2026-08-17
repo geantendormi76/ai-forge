@@ -1,8 +1,13 @@
+pub mod engine;
 pub mod probe;
 
+pub use engine::{
+    burn_hard_subtitles_nvenc, clean_acoustic_noise, estimate_text_width, extract_audio_from_video,
+    extract_subtitle_stream, generate_ass, generate_srt, mux_soft_subtitles, parse_srt_content,
+    smart_wrap_line, EngineSegment, ParsedSrtSegment,
+};
 pub use probe::{SubtitleSourceKind, SubtitleTrackInfo, VideoProbeResult, VideoProbeService};
 
-use core_ipc::{spawn_uv_worker, IpcMessage};
 use serde::{Deserialize, Serialize};
 use service_asr::{AsrOptions, AsrService};
 use service_translation::{PureTranslationRequest, TranslationService};
@@ -88,23 +93,7 @@ pub struct VideoSubtitleResult {
 pub struct VideoSubtitleTool;
 
 impl VideoSubtitleTool {
-    fn resolve_tool_dir() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\src-tauri\crates\tools\video-subtitle"),
-            PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\crates\tools\video-subtitle"),
-        ];
-        for candidate in candidates {
-            if candidate.exists() {
-                return candidate;
-            }
-        }
-        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            return PathBuf::from(manifest_dir);
-        }
-        PathBuf::from("src-tauri/crates/tools/video-subtitle")
-    }
-
-    /// 极简双轨调度：软字幕直通 / 生肉纯音频听写
+    /// 极简双轨调度：软字幕直通 / 生肉纯音频听写 (100% 纯血 Rust 架构)
     pub async fn run_pipeline(
         options: VideoSubtitleOptions,
         vram_guard: Option<&VramTokenGuard>,
@@ -137,11 +126,11 @@ impl VideoSubtitleTool {
 
         match resolved_mode {
             SubtitleSourceKind::EmbeddedSoftStream => {
-                tracing::info!("⚡ [双轨调度] 命中内嵌软字幕流，启动 0.05s 直通神经翻译通道");
+                tracing::info!("⚡ [双轨调度] 命中内嵌软字幕流，启动 0.05s 直通纯血 Rust 神经翻译通道");
                 Self::run_soft_stream_pipeline(options, vram_guard).await
             }
             SubtitleSourceKind::RawAudio => {
-                tracing::info!("🎙️ [双轨调度] 启动 MOSS 0.9B ASR 纯语音听写与翻译通道");
+                tracing::info!("🎙️ [双轨调度] 启动 MOSS 0.9B ASR 纯语音听写与翻译通道 (纯血 Rust)");
                 Self::run_raw_audio_pipeline(options, vram_guard).await
             }
         }
@@ -160,15 +149,25 @@ impl VideoSubtitleTool {
         };
         let _ = tokio::fs::create_dir_all(&output_dir).await;
 
+        let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
+            VideoProbeResult {
+                video_path: options.video_path.clone(),
+                duration_sec: 0.0,
+                width: 1920,
+                height: 1080,
+                has_audio: true,
+                audio_streams_count: 1,
+                soft_tracks: Vec::new(),
+                recommended_mode: SubtitleSourceKind::EmbeddedSoftStream,
+                elapsed_ms: 0.0,
+            }
+        });
+
         let stream_idx = if let Some(idx) = options.subtitle_stream_index {
             idx
         } else {
-            let probe_res = VideoProbeService::probe(video_path).await?;
             probe_res.soft_tracks.first().map(|t| t.stream_index).unwrap_or(2)
         };
-
-        let tool_dir = Self::resolve_tool_dir();
-        let script_path = tool_dir.join("scripts/worker.py");
 
         let timestamp_now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -176,55 +175,11 @@ impl VideoSubtitleTool {
             .as_millis();
         let temp_srt_path = output_dir.join(format!("temp_extracted_{}.srt", timestamp_now));
 
-        let (mut child, mut channel) = spawn_uv_worker(&tool_dir, &script_path)
-            .map_err(|e| format!("启动 video-subtitle Worker 失败: {e}"))?;
+        let raw_segments = engine::extract_subtitle_stream(video_path, stream_idx, &temp_srt_path).await?;
+        let _ = tokio::fs::remove_file(&temp_srt_path).await;
 
-        let _ready_msg = channel.recv().await
-            .map_err(|e| format!("接收 Worker 就绪信号失败: {e}"))?;
-
-        let extract_req = IpcMessage {
-            method: "extract_subtitle_stream".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "stream_index": stream_idx,
-                "out_srt_path": temp_srt_path.to_string_lossy()
-            }),
-        };
-
-        channel.send(&extract_req).await
-            .map_err(|e| format!("发送字幕流提取请求失败: {e}"))?;
-
-        let extract_res = channel.recv().await
-            .map_err(|e| format!("接收字幕流提取响应失败: {e}"))?;
-
-        let res_params = &extract_res.params;
-        if res_params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = res_params.get("error").and_then(|v| v.as_str()).unwrap_or("抽离内嵌字幕流失败");
-            let _ = child.kill().await;
-            return Err(format!("FFmpeg 抽流错误: {err_msg}"));
-        }
-
-        let raw_segments_val = res_params.get("segments").and_then(|v| v.as_array())
-            .ok_or_else(|| "Worker 未能返回有效的台词数组".to_string())?;
-
-        if raw_segments_val.is_empty() {
-            let _ = child.kill().await;
-            let _ = tokio::fs::remove_file(&temp_srt_path).await;
+        if raw_segments.is_empty() {
             return Err("抽离出的字幕轨道没有任何有效文本！".into());
-        }
-
-        let mut parsed_segments = Vec::new();
-        let mut source_texts = Vec::new();
-
-        for item in raw_segments_val {
-            let id = item["id"].as_u64().unwrap_or(0) as usize;
-            let speaker = item["speaker"].as_str().unwrap_or("S01").to_string();
-            let start_sec = item["start_sec"].as_f64().unwrap_or(0.0);
-            let end_sec = item["end_sec"].as_f64().unwrap_or(0.0);
-            let text = item["text"].as_str().unwrap_or("").to_string();
-
-            source_texts.push(text.clone());
-            parsed_segments.push((id, speaker, start_sec, end_sec, text));
         }
 
         let _vram_permit = if let Some(guard) = vram_guard {
@@ -236,6 +191,7 @@ impl VideoSubtitleTool {
             None
         };
 
+        let source_texts: Vec<String> = raw_segments.iter().map(|s| s.text.clone()).collect();
         let mut prepared_texts = Vec::new();
         if let Some(terms) = &options.glossary {
             if !terms.is_empty() {
@@ -262,15 +218,25 @@ impl VideoSubtitleTool {
             .await
             .map_err(|e| format!("Hy-MT2 神经翻译失败: {e}"))?;
 
+        let mut engine_segments = Vec::new();
         let mut result_segments = Vec::new();
-        for (idx, (id, speaker, start_sec, end_sec, source_text)) in parsed_segments.into_iter().enumerate() {
+
+        for (idx, seg) in raw_segments.into_iter().enumerate() {
             let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
+            engine_segments.push(EngineSegment {
+                id: seg.id,
+                speaker: seg.speaker.clone(),
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text.clone(),
+                target_text: target_text.clone(),
+            });
             result_segments.push(SubtitleSegmentResult {
-                id,
-                speaker,
-                start_sec,
-                end_sec,
-                source_text,
+                id: seg.id,
+                speaker: seg.speaker,
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text,
                 target_text,
             });
         }
@@ -281,59 +247,55 @@ impl VideoSubtitleTool {
             DisplayMode::SourceOnly => "source_only",
         };
 
-        let output_mode_str = match options.output_mode {
-            OutputMode::SoftMkv => "soft_mkv",
-            OutputMode::HardMp4Nvenc => "hard_mp4_nvenc",
+        let base_name = video_path.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+        let srt_path = output_dir.join(format!("{}_subtitle.srt", base_name));
+        let srt_content = engine::generate_srt(&engine_segments, display_mode_str, options.show_speaker);
+        tokio::fs::write(&srt_path, srt_content).await
+            .map_err(|e| format!("写入 SRT 字幕失败: {e}"))?;
+
+        let ass_path = output_dir.join(format!("{}_subtitle.ass", base_name));
+        let ass_content = engine::generate_ass(
+            &engine_segments,
+            display_mode_str,
+            options.show_speaker,
+            options.font_size_multiplier,
+            probe_res.width,
+            probe_res.height,
+            options.mask_hardsub,
+        );
+        tokio::fs::write(&ass_path, ass_content).await
+            .map_err(|e| format!("写入 ASS 字幕失败: {e}"))?;
+
+        let json_path = output_dir.join(format!("{}_bilingual.json", base_name));
+        let json_payload = serde_json::json!({
+            "video_path": options.video_path,
+            "total_segments": result_segments.len(),
+            "segments": result_segments
+        });
+        tokio::fs::write(&json_path, serde_json::to_string_pretty(&json_payload).unwrap()).await
+            .map_err(|e| format!("写入 JSON 失败: {e}"))?;
+
+        let output_video_path = match options.output_mode {
+            OutputMode::HardMp4Nvenc => {
+                let out_mp4 = output_dir.join(format!("{}_zidian_burned.mp4", base_name));
+                engine::burn_hard_subtitles_nvenc(video_path, &ass_path, &out_mp4).await?;
+                out_mp4.to_string_lossy().to_string()
+            }
+            OutputMode::SoftMkv => {
+                let out_mkv = output_dir.join(format!("{}_zidian_muxed.mkv", base_name));
+                engine::mux_soft_subtitles(video_path, &ass_path, &out_mkv).await?;
+                out_mkv.to_string_lossy().to_string()
+            }
         };
-
-        let render_req = IpcMessage {
-            method: "render_and_mux".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "output_dir": output_dir.to_string_lossy(),
-                "segments": result_segments,
-                "display_mode": display_mode_str,
-                "show_speaker": options.show_speaker,
-                "font_size_multiplier": options.font_size_multiplier,
-                "output_mode": output_mode_str,
-                "mask_hardsub": options.mask_hardsub
-            }),
-        };
-
-        channel.send(&render_req).await
-            .map_err(|e| format!("发送渲染挂载请求失败: {e}"))?;
-
-        let render_res = channel.recv().await
-            .map_err(|e| format!("接收渲染挂载响应失败: {e}"))?;
-
-        let exit_msg = IpcMessage {
-            method: "exit".to_string(),
-            params: serde_json::json!({}),
-        };
-        let _ = channel.send(&exit_msg).await;
-        let _ = child.wait().await;
-
-        let _ = tokio::fs::remove_file(&temp_srt_path).await;
-
-        let res_params = &render_res.params;
-        if res_params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = res_params.get("error").and_then(|v| v.as_str()).unwrap_or("视频渲染压制失败");
-            return Err(format!("字幕渲染压制错误: {err_msg}"));
-        }
-
-        let srt_path = res_params.get("srt_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let ass_path = res_params.get("ass_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let json_path = res_params.get("json_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let output_video_path = res_params.get("output_video_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
         let elapsed_ms = t0.elapsed().as_millis() as f64;
 
         Ok(VideoSubtitleResult {
             success: true,
             output_video_path,
-            srt_path,
-            ass_path,
-            json_path,
+            srt_path: srt_path.to_string_lossy().to_string(),
+            ass_path: ass_path.to_string_lossy().to_string(),
+            json_path: json_path.to_string_lossy().to_string(),
             total_segments: result_segments.len(),
             segments: result_segments,
             elapsed_ms,
@@ -354,8 +316,19 @@ impl VideoSubtitleTool {
         };
         let _ = tokio::fs::create_dir_all(&output_dir).await;
 
-        let tool_dir = Self::resolve_tool_dir();
-        let script_path = tool_dir.join("scripts/worker.py");
+        let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
+            VideoProbeResult {
+                video_path: options.video_path.clone(),
+                duration_sec: 0.0,
+                width: 1920,
+                height: 1080,
+                has_audio: true,
+                audio_streams_count: 1,
+                soft_tracks: Vec::new(),
+                recommended_mode: SubtitleSourceKind::RawAudio,
+                elapsed_ms: 0.0,
+            }
+        });
 
         let _vram_permit = if let Some(guard) = vram_guard {
             match guard.acquire(TaskWeight::Heavy).await {
@@ -371,32 +344,11 @@ impl VideoSubtitleTool {
             .unwrap_or_default()
             .as_millis();
         let temp_wav_path = output_dir.join(format!("temp_zidian_{}.wav", timestamp_now));
-        
-        let (mut child, mut channel) = spawn_uv_worker(&tool_dir, &script_path)
-            .map_err(|e| format!("启动 video-subtitle Worker 失败: {e}"))?;
 
-        let _ready_msg = channel.recv().await
-            .map_err(|e| format!("接收 Worker 就绪信号失败: {e}"))?;
+        // 1. 纯血 Rust 调起原生 FFmpeg 提取 16k mono 音频
+        engine::extract_audio_from_video(video_path, &temp_wav_path).await?;
 
-        let extract_req = IpcMessage {
-            method: "extract_audio".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "out_wav_path": temp_wav_path.to_string_lossy()
-            }),
-        };
-
-        channel.send(&extract_req).await
-            .map_err(|e| format!("发送音频提取请求失败: {e}"))?;
-
-        let extract_res = channel.recv().await
-            .map_err(|e| format!("接收音频提取响应失败: {e}"))?;
-
-        if extract_res.params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = extract_res.params.get("error").and_then(|v| v.as_str()).unwrap_or("提取音频失败");
-            return Err(format!("FFmpeg 音频提取错误: {err_msg}"));
-        }
-
+        // 2. MOSS 0.9B ASR 原位听写
         let asr_opts = AsrOptions {
             audio_path: temp_wav_path.to_string_lossy().to_string(),
             language: Some("auto".into()),
@@ -410,16 +362,13 @@ impl VideoSubtitleTool {
             .await
             .map_err(|e| format!("MOSS 0.9B ASR 听写流水线失败: {e}"))?;
 
+        let _ = tokio::fs::remove_file(&temp_wav_path).await;
+
         if asr_res.segments.is_empty() {
-            let _ = tokio::fs::remove_file(&temp_wav_path).await;
             return Err("视频中未识别出任何语音台词！".into());
         }
 
-        let mut source_texts = Vec::new();
-        for seg in &asr_res.segments {
-            source_texts.push(seg.text.clone());
-        }
-
+        let source_texts: Vec<String> = asr_res.segments.iter().map(|s| s.text.clone()).collect();
         let mut prepared_texts = Vec::new();
         if let Some(terms) = &options.glossary {
             if !terms.is_empty() {
@@ -437,6 +386,7 @@ impl VideoSubtitleTool {
             prepared_texts = source_texts.clone();
         }
 
+        // 3. Hy-MT2 1.8B 神经翻译
         let trans_req = PureTranslationRequest {
             texts: prepared_texts,
             target_lang: Some(options.target_lang.clone()),
@@ -446,9 +396,19 @@ impl VideoSubtitleTool {
             .await
             .map_err(|e| format!("Hy-MT2 1.8B 神经翻译流水线失败: {e}"))?;
 
+        let mut engine_segments = Vec::new();
         let mut result_segments = Vec::new();
+
         for (idx, seg) in asr_res.segments.iter().enumerate() {
             let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
+            engine_segments.push(EngineSegment {
+                id: seg.id,
+                speaker: seg.speaker.clone(),
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text.clone(),
+                target_text: target_text.clone(),
+            });
             result_segments.push(SubtitleSegmentResult {
                 id: seg.id,
                 speaker: seg.speaker.clone(),
@@ -465,59 +425,55 @@ impl VideoSubtitleTool {
             DisplayMode::SourceOnly => "source_only",
         };
 
-        let output_mode_str = match options.output_mode {
-            OutputMode::SoftMkv => "soft_mkv",
-            OutputMode::HardMp4Nvenc => "hard_mp4_nvenc",
+        let base_name = video_path.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+        let srt_path = output_dir.join(format!("{}_subtitle.srt", base_name));
+        let srt_content = engine::generate_srt(&engine_segments, display_mode_str, options.show_speaker);
+        tokio::fs::write(&srt_path, srt_content).await
+            .map_err(|e| format!("写入 SRT 字幕失败: {e}"))?;
+
+        let ass_path = output_dir.join(format!("{}_subtitle.ass", base_name));
+        let ass_content = engine::generate_ass(
+            &engine_segments,
+            display_mode_str,
+            options.show_speaker,
+            options.font_size_multiplier,
+            probe_res.width,
+            probe_res.height,
+            options.mask_hardsub,
+        );
+        tokio::fs::write(&ass_path, ass_content).await
+            .map_err(|e| format!("写入 ASS 字幕失败: {e}"))?;
+
+        let json_path = output_dir.join(format!("{}_bilingual.json", base_name));
+        let json_payload = serde_json::json!({
+            "video_path": options.video_path,
+            "total_segments": result_segments.len(),
+            "segments": result_segments
+        });
+        tokio::fs::write(&json_path, serde_json::to_string_pretty(&json_payload).unwrap()).await
+            .map_err(|e| format!("写入 JSON 失败: {e}"))?;
+
+        let output_video_path = match options.output_mode {
+            OutputMode::HardMp4Nvenc => {
+                let out_mp4 = output_dir.join(format!("{}_zidian_burned.mp4", base_name));
+                engine::burn_hard_subtitles_nvenc(video_path, &ass_path, &out_mp4).await?;
+                out_mp4.to_string_lossy().to_string()
+            }
+            OutputMode::SoftMkv => {
+                let out_mkv = output_dir.join(format!("{}_zidian_muxed.mkv", base_name));
+                engine::mux_soft_subtitles(video_path, &ass_path, &out_mkv).await?;
+                out_mkv.to_string_lossy().to_string()
+            }
         };
-
-        let render_req = IpcMessage {
-            method: "render_and_mux".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "output_dir": output_dir.to_string_lossy(),
-                "segments": result_segments,
-                "display_mode": display_mode_str,
-                "show_speaker": options.show_speaker,
-                "font_size_multiplier": options.font_size_multiplier,
-                "output_mode": output_mode_str,
-                "mask_hardsub": options.mask_hardsub
-            }),
-        };
-
-        channel.send(&render_req).await
-            .map_err(|e| format!("发送渲染挂载请求失败: {e}"))?;
-
-        let render_res = channel.recv().await
-            .map_err(|e| format!("接收渲染挂载响应失败: {e}"))?;
-
-        let exit_msg = IpcMessage {
-            method: "exit".to_string(),
-            params: serde_json::json!({}),
-        };
-        let _ = channel.send(&exit_msg).await;
-        let _ = child.wait().await;
-
-        let _ = tokio::fs::remove_file(&temp_wav_path).await;
-
-        let res_params = &render_res.params;
-        if res_params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = res_params.get("error").and_then(|v| v.as_str()).unwrap_or("视频渲染压制失败");
-            return Err(format!("字幕渲染压制错误: {err_msg}"));
-        }
-
-        let srt_path = res_params.get("srt_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let ass_path = res_params.get("ass_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let json_path = res_params.get("json_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let output_video_path = res_params.get("output_video_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
         let elapsed_ms = t0.elapsed().as_millis() as f64;
 
         Ok(VideoSubtitleResult {
             success: true,
             output_video_path,
-            srt_path,
-            ass_path,
-            json_path,
+            srt_path: srt_path.to_string_lossy().to_string(),
+            ass_path: ass_path.to_string_lossy().to_string(),
+            json_path: json_path.to_string_lossy().to_string(),
             total_segments: result_segments.len(),
             segments: result_segments,
             elapsed_ms,
@@ -531,8 +487,8 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_real_physical_5_mkv_e2e() {
-        let input_path = PathBuf::from(r"C:\dev\ai-forge\test\input\video-subtitle\5.mkv");
+    async fn test_real_physical_1_mp4_e2e() {
+        let input_path = PathBuf::from(r"C:\dev\ai-forge\test\input\video-subtitle\1.mp4");
         let output_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\video-subtitle");
         let _ = tokio::fs::create_dir_all(&output_dir).await;
 
@@ -541,9 +497,10 @@ mod tests {
             return;
         }
 
-        println!("\n🎬 ===== [5.mkv 26分钟长视频真机全流程转写与压制打靶] =====");
+        println!("\n🎬 ===== [1.mp4 3分钟生肉视频纯血 Rust 全流程转写与压制打靶] =====");
         println!("  输入视频: {:?}", input_path);
         println!("  输出目录: {:?}", output_dir);
+        println!("  架构模式: 100% 纯血 Rust (零 Python, 零 IPC)");
         println!("  遮罩模式: 电影级柔和羽化渐晕 (mask_hardsub = true)");
 
         let t0 = std::time::Instant::now();
@@ -558,17 +515,17 @@ mod tests {
             output_mode: OutputMode::SoftMkv,
             hotwords: None,
             glossary: None,
-            source_kind: None, // 探针自动判定 RawAudio 听写
+            source_kind: None,
             subtitle_stream_index: None,
             mask_hardsub: true,
         };
 
         let res = VideoSubtitleTool::run_pipeline(opts, None).await
-            .expect("5.mkv 双语字幕流水线执行失败");
+            .expect("1.mp4 双语字幕流水线执行失败");
 
         let total_elapsed = t0.elapsed().as_secs_f64();
 
-        println!("\n🎉 ===== [5.mkv 26分钟长视频双语转写全量成功] =====");
+        println!("\n🎉 ===== [1.mp4 纯血 Rust 双语转写全量打靶成功] =====");
         println!("  ⏱️ 全量物理耗时: {:.2} s ({:.2} 分钟) | 共生成 {} 句双语字幕", total_elapsed, total_elapsed / 60.0, res.total_segments);
         println!("  💾 1. 软字幕视频: {:?}", res.output_video_path);
         println!("  💾 2. SRT 字幕:   {:?}", res.srt_path);

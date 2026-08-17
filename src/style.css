@@ -5,17 +5,17 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --bg: #060607;
-    --panel: rgba(14, 14, 16, 0.72);
-    --panel-card: rgba(255, 255, 255, 0.02);
-    --panel-card-hover: rgba(255, 255, 255, 0.045);
+    --bg: #20292b;
+    --panel: rgba(24, 32, 34, 0.78);
+    --panel-card: rgba(255, 255, 255, 0.03);
+    --panel-card-hover: rgba(255, 255, 255, 0.06);
     --ink: #f5f5f3;
-    --muted: #8b8b87;
-    --quiet: #5b5b58;
-    --line: rgba(255, 255, 255, 0.06);
-    --line-strong: rgba(255, 255, 255, 0.16);
+    --muted: #8b999b;
+    --quiet: #5b696b;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.18);
     --white: #f2f2ef;
-    --black: #0a0a0a;
+    --black: #141b1c;
     --zidian-gold: #DCA54C;
     --zidian-purple: #bc05ff;
     --aegis-nav-height: 45px;
@@ -46,7 +46,7 @@
   background-color: var(--bg);
 }
 
-/* 滚动条深空暗黑微调 */
+/* 滚动条深空青碳微调 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -57,12 +57,12 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #343431;
+  background: #2f3b3e;
   border-radius: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #4a4a45;
+  background: #415054;
 }
 
 .scrollbar-hide::-webkit-scrollbar {
@@ -148,7 +148,7 @@
     margin-right: 0.2em !important;
   }
   .markdown-content pre {
-    background-color: #0d0d10 !important;
+    background-color: #141b1c !important;
     border: 1px solid var(--line) !important;
     border-radius: 0.75rem !important;
     padding: 1rem !important;
