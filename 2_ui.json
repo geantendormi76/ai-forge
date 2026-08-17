@@ -1,7 +1,7 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
   "output": {
-    "filePath": "repomix-output.xml",
+    "filePath": "repomix-output-UI.xml",
     "style": "xml",
     "compress": false,
     "removeComments": false,
@@ -12,6 +12,7 @@
     "includeFullDirectoryStructure": false
   },
   "include": [
+    "HANDOFF_UI.md",
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
@@ -28,10 +29,7 @@
     "postcss.config.js",
     "tailwind.config.js",
     "index.html",
-    "src/**",
-
-    "src-tauri/crates/services/service-converter/**",
-    "src-tauri/crates/tools/format-converter/**"
+    "src/**"
 
   ],
   "ignore": {
@@ -66,7 +64,10 @@
       "src-tauri/crates/services/service-formula/**",
       "src-tauri/crates/services/service-layout/**",
       "src-tauri/crates/services/service-ocr/**",
-      "src-tauri/crates/services/service-table/**"
+      "src-tauri/crates/services/service-table/**",
+  
+      "src-tauri/crates/services/service-converter/**",
+      "src-tauri/crates/tools/format-converter/**"
 
     ]
   }
