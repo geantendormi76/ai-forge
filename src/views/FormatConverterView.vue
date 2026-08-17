@@ -1,14 +1,5 @@
 <template>
   <div class="min-h-screen bg-slate-50 text-slate-800 p-8 font-sans relative overflow-hidden">
-    <!-- 原生隐藏文件选择框 -->
-    <input
-      type="file"
-      ref="fileInputRef"
-      multiple
-      class="hidden"
-      @change="handleFileInputChange"
-    />
-
     <!-- 顶部标语与算力指示区 -->
     <div class="max-w-6xl mx-auto mb-8 border-b border-slate-200 pb-6 flex justify-between items-end relative z-10">
       <div>
@@ -31,9 +22,9 @@
 
     <!-- 主工作区卡片栅格 -->
     <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-      <!-- 左侧：拖拽上传与任务排队 (7 栏) -->
+      <!-- 左侧：双轨拖拽上传与任务排队 (7 栏) -->
       <div class="lg:col-span-7 space-y-6">
-        <!-- 拖拽上传区 -->
+        <!-- 拖拽上传与弹窗挑选区 -->
         <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <h2 class="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <span class="w-1.5 h-4 bg-[#DCA54C] rounded-full"></span>
@@ -41,15 +32,23 @@
           </h2>
 
           <div
-            @click="triggerSelectFiles"
-            @dragover.prevent
-            @drop.prevent="handleFileDrop"
-            class="border-2 border-dashed border-slate-200 hover:border-[#DCA54C] bg-slate-50/50 hover:bg-amber-50/20 transition-all rounded-xl p-8 text-center cursor-pointer group select-none"
+            @click="triggerNativeFilePicker"
+            class="border-2 border-dashed transition-all rounded-xl p-8 text-center cursor-pointer group select-none relative overflow-hidden"
+            :class="[
+              isDraggingOver
+                ? 'border-[#bc05ff] bg-purple-50/40 ring-4 ring-[#bc05ff]/15 scale-[1.01]'
+                : 'border-slate-200 hover:border-[#DCA54C] bg-slate-50/50 hover:bg-amber-50/20'
+            ]"
           >
-            <div class="w-12 h-12 bg-white border border-slate-200 text-[#DCA54C] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm group-hover:scale-110 transition-transform text-xl">
+            <div
+              class="w-12 h-12 bg-white border border-slate-200 text-[#DCA54C] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm group-hover:scale-110 transition-transform text-xl"
+              :class="isDraggingOver ? 'text-[#bc05ff] border-purple-200 animate-bounce' : ''"
+            >
               📂
             </div>
-            <p class="text-sm font-medium text-slate-700">点击浏览选择，或将文件直接拖拽至此处</p>
+            <p class="text-sm font-medium text-slate-700">
+              {{ isDraggingOver ? '松开鼠标立即投送至转换队列' : '点击打开系统选择器，或直接将文件拖拽至此处' }}
+            </p>
             <p class="text-xs text-slate-400 mt-1">
               支持 NCM / QMC / KGMA / KWM / CSV / TSV / JSON / XML / MD / TXT / MOBI / ICO / PNG / BMP / ZIP 等
             </p>
@@ -70,7 +69,7 @@
                 v-if="taskQueue.length > 0"
                 @click="clearAllTasks"
                 :disabled="isConverting"
-                class="text-xs text-slate-400 hover:text-rose-600 px-2 py-1 transition-colors disabled:opacity-40"
+                class="text-xs text-slate-400 hover:text-rose-600 px-2 py-1 transition-colors disabled:opacity-40 cursor-pointer"
               >
                 清空列表
               </button>
@@ -98,9 +97,8 @@
                   <p class="text-xs font-bold text-slate-800 truncate" :title="item.filePath">
                     {{ item.fileName }}
                   </p>
-                  <p class="text-[11px] text-slate-400 font-mono mt-0.5">
-                    源格式: .{{ item.ext }} ➔ 目标:
-                    <strong class="text-slate-700">.{{ item.targetFormat }}</strong>
+                  <p class="text-[11px] text-slate-400 font-mono mt-0.5 truncate" :title="item.filePath">
+                    {{ item.filePath }}
                   </p>
                 </div>
               </div>
@@ -110,7 +108,7 @@
                 <select
                   v-if="item.status === 'idle'"
                   v-model="item.targetFormat"
-                  class="bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg px-2 py-1 outline-none focus:border-[#DCA54C]"
+                  class="bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg px-2 py-1 outline-none focus:border-[#DCA54C] cursor-pointer"
                 >
                   <option
                     v-for="opt in getAvailableTargetFormats(item.ext)"
@@ -146,14 +144,14 @@
                   class="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md"
                   :title="item.errorMessage"
                 >
-                  失败
+                  失败: {{ item.errorMessage }}
                 </span>
 
                 <!-- 删除按钮 -->
                 <button
                   v-if="!isConverting"
                   @click="removeTask(index)"
-                  class="text-slate-400 hover:text-rose-500 p-1 transition-colors"
+                  class="text-slate-400 hover:text-rose-500 p-1 transition-colors cursor-pointer"
                   title="移除任务"
                 >
                   ✕
@@ -165,7 +163,7 @@
           <!-- 空任务提示 -->
           <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-400 py-16">
             <div class="text-4xl mb-2">⚡</div>
-            <p class="text-xs">暂无待转换任务，请在上方添加文件</p>
+            <p class="text-xs">暂无待转换任务，请在上方选择或拖入文件</p>
           </div>
         </div>
       </div>
@@ -201,14 +199,14 @@
               <div class="flex justify-end gap-2 pt-1">
                 <button
                   @click="copyToClipboard(task.outputPath)"
-                  class="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition-all"
+                  class="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                 >
                   复制路径
                 </button>
                 <button
                   v-if="task.outputPath"
                   @click="openOutputFolder(task.outputPath)"
-                  class="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-all"
+                  class="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                 >
                   打开所在目录
                 </button>
@@ -246,9 +244,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { commands, type FormatConvertTask, type FormatConvertResult } from '../bindings';
+import { open } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 interface ConvertQueueItem {
   filePath: string;
@@ -262,9 +262,10 @@ interface ConvertQueueItem {
   elapsedMs?: number;
 }
 
-const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef');
 const taskQueue = ref<ConvertQueueItem[]>([]);
 const isConverting = ref(false);
+const isDraggingOver = ref(false);
+let unlisteners: UnlistenFn[] = [];
 
 const FORMAT_OPTIONS_MAP: Record<string, Array<{ label: string; value: string }>> = {
   ncm: [{ label: '自动音频解密 (FLAC/MP3)', value: 'auto' }],
@@ -323,22 +324,21 @@ const completedTasks = computed(() => {
   return taskQueue.value.filter(t => t.status === 'success' && t.outputPath);
 });
 
-const triggerSelectFiles = () => {
-  fileInputRef.value?.click();
-};
+// 🛡️ 核心：双轨单点汇聚中台 (处理真物理路径)
+const addFilesToQueue = (paths: string[]) => {
+  for (const rawPath of paths) {
+    if (!rawPath || typeof rawPath !== 'string') continue;
+    if (taskQueue.value.some(t => t.filePath === rawPath && t.status === 'idle')) continue;
 
-const addFilesToQueue = (files: FileList | File[]) => {
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const fullPath = (file as any).path || file.name;
-    const name = file.name;
-    const ext = name.split('.').pop() || '';
+    const normalized = rawPath.replace(/\\/g, '/');
+    const fileName = normalized.split('/').pop() || rawPath;
+    const ext = fileName.includes('.') ? fileName.split('.').pop() || '' : '';
     const available = getAvailableTargetFormats(ext);
     const defaultTarget = available.length > 0 ? available[0].value : 'default';
 
     taskQueue.value.push({
-      filePath: fullPath,
-      fileName: name,
+      filePath: rawPath,
+      fileName,
       ext: ext.toLowerCase(),
       targetFormat: defaultTarget,
       status: 'idle',
@@ -346,19 +346,47 @@ const addFilesToQueue = (files: FileList | File[]) => {
   }
 };
 
-const handleFileInputChange = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  if (target.files && target.files.length > 0) {
-    addFilesToQueue(target.files);
+// 轨道一：原生系统级文件选择对话框
+const triggerNativeFilePicker = async () => {
+  try {
+    const selected = await open({
+      multiple: true,
+      title: '选择待转换文件'
+    });
+    if (selected) {
+      const paths = Array.isArray(selected) ? selected : [selected];
+      addFilesToQueue(paths);
+    }
+  } catch (err) {
+    console.error('打开原生文件选择器失败:', err);
   }
 };
 
-const handleFileDrop = (e: DragEvent) => {
-  const files = e.dataTransfer?.files;
-  if (files && files.length > 0) {
-    addFilesToQueue(files);
+// 轨道二：系统级拖拽雷达监听
+onMounted(async () => {
+  try {
+    const u1 = await listen('tauri://drag-enter', () => {
+      isDraggingOver.value = true;
+    });
+    const u2 = await listen('tauri://drag-leave', () => {
+      isDraggingOver.value = false;
+    });
+    const u3 = await listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
+      isDraggingOver.value = false;
+      if (event.payload.paths && event.payload.paths.length > 0) {
+        addFilesToQueue(event.payload.paths);
+      }
+    });
+    unlisteners = [u1, u2, u3];
+  } catch (e) {
+    console.error('挂载拖拽雷达失败:', e);
   }
-};
+});
+
+onUnmounted(() => {
+  unlisteners.forEach(fn => fn());
+  unlisteners = [];
+});
 
 const removeTask = (index: number) => {
   taskQueue.value.splice(index, 1);
