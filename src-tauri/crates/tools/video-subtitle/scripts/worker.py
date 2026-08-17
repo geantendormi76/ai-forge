@@ -76,6 +76,31 @@ def handle_extract_audio(params: dict) -> dict:
     else:
         return {"success": False, "error": "FFmpeg 从视频提取音频 WAV 失败"}
 
+def handle_extract_subtitle_stream(params: dict) -> dict:
+    video_path = params.get("video_path", "")
+    stream_index = int(params.get("stream_index", 0))
+    out_srt_path = params.get("out_srt_path", "")
+
+    if not os.path.exists(video_path):
+        return {"success": False, "error": f"物理视频文件不存在: {video_path}"}
+
+    ok = subtitle_engine.extract_subtitle_stream(video_path, stream_index, out_srt_path)
+    if not ok or not os.path.exists(out_srt_path):
+        return {"success": False, "error": f"FFmpeg 抽离字幕流 (index {stream_index}) 失败"}
+
+    try:
+        with open(out_srt_path, "r", encoding="utf-8", errors="ignore") as f:
+            srt_content = f.read()
+        segments = subtitle_engine.parse_srt_content(srt_content)
+        return {
+            "success": True,
+            "srt_path": out_srt_path,
+            "total_segments": len(segments),
+            "segments": segments
+        }
+    except Exception as e:
+        return {"success": False, "error": f"解析提取的 SRT 字幕失败: {str(e)}"}
+
 def handle_render_and_mux(params: dict) -> dict:
     t0 = time.time()
     video_path = params.get("video_path", "")
@@ -85,6 +110,9 @@ def handle_render_and_mux(params: dict) -> dict:
     show_speaker = params.get("show_speaker", False)
     font_size_multiplier = float(params.get("font_size_multiplier", 1.8))
     output_mode = params.get("output_mode", "soft_mkv")
+    mask_hardsub = bool(params.get("mask_hardsub", False))
+    video_width = int(params.get("video_width", 1920))
+    video_height = int(params.get("video_height", 1080))
 
     if not os.path.exists(video_path):
         return {"success": False, "error": f"物理视频文件不存在: {video_path}"}
@@ -92,24 +120,24 @@ def handle_render_and_mux(params: dict) -> dict:
     os.makedirs(output_dir, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(video_path))[0]
 
-    # 1. 导出 SRT 字幕
     srt_content = subtitle_engine.generate_srt(segments, display_mode, show_speaker)
     srt_path = os.path.join(output_dir, f"{base_name}_subtitle.srt")
     with open(srt_path, "w", encoding="utf-8") as f:
         f.write(srt_content)
 
-    # 2. 导出 ASS 字幕
     ass_content = subtitle_engine.generate_ass(
         segments,
         display_mode=display_mode,
         show_speaker=show_speaker,
-        font_size_multiplier=font_size_multiplier
+        font_size_multiplier=font_size_multiplier,
+        video_width=video_width,
+        video_height=video_height,
+        mask_hardsub=mask_hardsub
     )
     ass_path = os.path.join(output_dir, f"{base_name}_subtitle.ass")
     with open(ass_path, "w", encoding="utf-8") as f:
         f.write(ass_content)
 
-    # 3. 🛡️ 物理新增：导出结构化 JSON 产物
     json_path = os.path.join(output_dir, f"{base_name}_bilingual.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
@@ -118,7 +146,6 @@ def handle_render_and_mux(params: dict) -> dict:
             "segments": segments
         }, f, ensure_ascii=False, indent=2)
 
-    # 4. 封装/压制视频
     output_video_path = ""
     if output_mode == "hard_mp4_nvenc":
         out_mp4 = os.path.join(output_dir, f"{base_name}_zidian_burned.mp4")
@@ -160,6 +187,10 @@ def main():
             if method == "extract_audio":
                 res = handle_extract_audio(params)
                 send_message("extract_audio_result", res)
+
+            elif method == "extract_subtitle_stream":
+                res = handle_extract_subtitle_stream(params)
+                send_message("extract_subtitle_stream_result", res)
 
             elif method == "render_and_mux":
                 res = handle_render_and_mux(params)

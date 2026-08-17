@@ -1,2 +1,6 @@
 [build]
 rustflags = ["-C", "target-feature=-crt-static"]
+
+[env]
+CMAKE_GENERATOR = { value = "Ninja", force = true }
+CMAKE_MAKE_PROGRAM = { value = "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe", force = true }

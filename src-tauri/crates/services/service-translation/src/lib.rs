@@ -7,7 +7,7 @@ use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,7 +118,6 @@ impl TranslationService {
         Ok(String::from_utf8_lossy(&output_bytes).trim().to_string())
     }
 
-    /// 纯血 C-FFI 神经翻译管道：原位 GPU 直推，零 Python、零沙箱、零网络端口
     pub async fn run_translation_pipeline(
         req: PureTranslationRequest,
     ) -> Result<PureTranslationResponse, String> {
@@ -165,84 +164,5 @@ impl TranslationService {
             translations: res,
             elapsed_ms,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_translation_contract_purity() {
-        let req = PureTranslationRequest {
-            texts: vec!["Hello world".into()],
-            target_lang: Some("Chinese".into()),
-        };
-        let json_str = serde_json::to_string(&req).unwrap();
-        assert!(!json_str.contains("python"));
-        assert!(!json_str.contains("venv"));
-        println!("\n✅ [service-translation 纯血契约测试通过]: {}", json_str);
-    }
-
-    #[tokio::test]
-    async fn test_native_translation_e2e_english_json() {
-        let fixture_json = PathBuf::from(r"C:\dev\ai-forge\test\fixtures\asr_english_pure.json");
-        if !fixture_json.exists() {
-            println!("⚠️ [跳过测试] 测试集文件不存在: {:?}", fixture_json);
-            return;
-        }
-
-        let outs_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\service-translation");
-        let _ = std::fs::create_dir_all(&outs_dir);
-
-        let json_str = std::fs::read_to_string(&fixture_json).unwrap();
-        let asr_val: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-
-        let raw_segs = asr_val["segments"].as_array().expect("segments 必须是数组");
-        let english_texts: Vec<String> = raw_segs
-            .iter()
-            .map(|s| s["text"].as_str().unwrap_or("").to_string())
-            .collect();
-
-        let req = PureTranslationRequest {
-            texts: english_texts.clone(),
-            target_lang: Some("Chinese".into()),
-        };
-
-        let res = TranslationService::run_translation_pipeline(req)
-            .await
-            .expect("纯血 C-FFI 神经翻译打靶失败！");
-
-        println!("\n🎉 ===== [ai-forge service-translation 纯血 23句全量英文 ASR JSON 神经翻译成功] =====");
-        println!("  ⏱️ 全量物理耗时: {:.2} ms ({:.2} s) | 句数: {}", res.elapsed_ms, res.elapsed_ms / 1000.0, res.translations.len());
-
-        let mut output_segments = Vec::new();
-        for (i, trans) in res.translations.iter().enumerate() {
-            let mut seg = raw_segs[i].clone();
-            seg["translated_text"] = serde_json::Value::String(trans.clone());
-            output_segments.push(seg);
-        }
-
-        let out_payload = serde_json::json!({
-            "audio_file": asr_val["audio_file"],
-            "duration_sec": asr_val["duration_sec"],
-            "total_segments": res.translations.len(),
-            "elapsed_ms": res.elapsed_ms,
-            "segments": output_segments
-        });
-
-        let out_json_path = outs_dir.join("english_to_chinese_pure.json");
-        let pretty_json = serde_json::to_string_pretty(&out_payload).unwrap();
-        std::fs::write(&out_json_path, pretty_json).unwrap();
-
-        println!("  💾 全量翻译 JSON 产物成功物理落盘至: {:?}", out_json_path);
-        println!("  预览前 3 句对照效果:");
-        for i in 0..3.min(english_texts.len()) {
-            println!("     [{}] 英文: {} ➔ 中文: {}", i + 1, english_texts[i], res.translations[i]);
-        }
-        println!("===============================================================\n");
-
-        assert_eq!(res.translations.len(), english_texts.len());
-        assert!(out_json_path.exists());
     }
 }

@@ -1,5 +1,5 @@
 [project]
-name = "tool-video-subtitle"
+name = "video-subtitle"
 version = "0.1.0"
 description = "AI-Forge - Video Subtitle & Translation Tool Sandbox"
 requires-python = ">=3.10,<3.13"

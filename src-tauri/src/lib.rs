@@ -5,7 +5,10 @@ use shared_contracts::VramTokenGuard;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{Emitter, State};
-use tool_video_subtitle::{VideoSubtitleOptions, VideoSubtitleResult, VideoSubtitleTool};
+use video_subtitle::{
+    VideoProbeResult, VideoProbeService, VideoSubtitleOptions, VideoSubtitleResult,
+    VideoSubtitleTool,
+};
 
 pub struct AppState {
     pub vram_guard: Arc<VramTokenGuard>,
@@ -20,7 +23,6 @@ async fn parse_pdf(
 ) -> Result<PdfParseResult, String> {
     tracing::info!("🚀 收到前端 紫电 AI 本地 PDF 解析请求: {}", file_path);
 
-    // 🛡️ [Gatekeeper 算力收费站] 鉴权与指纹检查
     Gatekeeper::check_permission("tool-pdf-parse").await?;
 
     let window_clone = window.clone();
@@ -45,13 +47,20 @@ async fn parse_pdf(
 }
 
 #[tauri::command]
+async fn probe_video(video_path: String) -> Result<VideoProbeResult, String> {
+    tracing::info!("🔍 [VideoProbe] 收到视频探针探测请求: {}", video_path);
+    let path = std::path::Path::new(&video_path);
+    VideoProbeService::probe(path).await
+}
+
+#[tauri::command]
 async fn run_video_subtitle(
     options: VideoSubtitleOptions,
     state: State<'_, AppState>,
 ) -> Result<VideoSubtitleResult, String> {
     tracing::info!("🚀 收到前端 紫电 AI 视频双语字幕工坊请求: {}", options.video_path);
 
-    Gatekeeper::check_permission("tool-video-subtitle").await?;
+    Gatekeeper::check_permission("video-subtitle").await?;
 
     VideoSubtitleTool::run_pipeline(options, Some(&state.vram_guard)).await
 }
@@ -94,6 +103,7 @@ pub fn run() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             parse_pdf,
+            probe_video,
             run_video_subtitle,
             get_hardware_fingerprint,
             run_format_convert

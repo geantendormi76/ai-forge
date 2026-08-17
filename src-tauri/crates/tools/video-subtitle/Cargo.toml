@@ -1,10 +1,10 @@
 [package]
-name = "tool-video-subtitle"
+name = "video-subtitle"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "tool_video_subtitle"
+name = "video_subtitle"
 path = "src/lib.rs"
 
 [dependencies]

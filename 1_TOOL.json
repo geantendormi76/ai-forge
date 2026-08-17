@@ -1,7 +1,7 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
   "output": {
-    "filePath": "repomix-output.xml",
+    "filePath": "repomix-output-TOOL.xml",
     "style": "xml",
     "compress": false,
     "removeComments": false,
@@ -12,23 +12,45 @@
     "includeFullDirectoryStructure": false
   },
   "include": [
-    "HANDOFF.md",
+    "HANDOFF-TOOL.md",
+    ".cargo/**",
+    "src-tauri/.cargo/**",
     "src-tauri/Cargo.toml",
     "src-tauri/tauri.conf.json",
     "src-tauri/capabilities/**",
     "src-tauri/src/**",
     "deploy/cloudflare/auth_worker.js",
     "src/bindings.ts",
+    "src/bindings/**",
 
+    "package.json",
+    "vite.config.ts",
+    "postcss.config.js",
+    "tailwind.config.js",
+    "index.html",
+
+    "src/App.vue",
+    "src/main.ts",
+    "src/style.css",
+    "src/vite-env.d.ts",
+    "src/composables/useTauriWindow.ts",
+    "src/store/uiStore.ts",
+    "src/locales/**",
+    "src/components/layout/Sidebar.vue",
+    "src/components/effects/**",
+    "src/components/ui/**",
+    "src/views/HomeView.vue",
+    "src/views/VideoSubtitleView.vue",
+    
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
     "src-tauri/crates/core-onnx-infer/**",
     
+    "src-tauri/crates/services/service-ocr/**",
     "src-tauri/crates/services/service-asr/**",
     "src-tauri/crates/services/service-translation/**",
-    "src-tauri/crates/tools/tool-video-subtitle/**"
-
+    "src-tauri/crates/tools/video-subtitle/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -48,26 +70,17 @@
       "data/**",
       "**/*.sqlite3*",
       "dist/**",
-    
-      "package.json",
-      "vite.config.ts",
-      "postcss.config.js",
-      "tailwind.config.js",
-      "index.html",
-      "src/**",
-      
 
       "src-tauri/crates/tools/tool-pdf-parse/**",
-
       "src-tauri/crates/tools/pdf-parse/**",
+      "src-tauri/crates/tools/format-converter/**",
       
       "src-tauri/crates/services/service-pdfium/**",
       "src-tauri/crates/services/service-doc-parse/**",
       "src-tauri/crates/services/service-formula/**",
       "src-tauri/crates/services/service-layout/**",
-      "src-tauri/crates/services/service-ocr/**",
-      "src-tauri/crates/services/service-table/**"
-
+      "src-tauri/crates/services/service-table/**",
+      "src-tauri/crates/services/service-converter/**"
     ]
   }
 }
