@@ -91,11 +91,11 @@ const toggleLanguage = () => {
           </div>
         </header>
 
-        <!-- 2. 左右双翼拓扑 (items-stretch 纵向等高对齐) -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <!-- 🌟 2. 左右双翼 5 : 7 黄金栅格严格锁定 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch w-full">
 
-          <!-- 左侧配置指南栏 (自然纵向展开) -->
-          <aside class="lg:col-span-5 bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 space-y-5 shadow-xl backdrop-blur-xl flex flex-col justify-between">
+          <!-- 🌟 左侧配置指南栏 (精准锁定 5 列 / 41.7%) -->
+          <aside class="lg:col-span-5 w-full min-w-0 bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 space-y-5 shadow-xl backdrop-blur-xl flex flex-col justify-between">
             <div class="space-y-4">
               <!-- 标头 -->
               <div class="flex items-center justify-between pb-2.5 border-b border-white/[0.04]">
@@ -125,7 +125,7 @@ const toggleLanguage = () => {
               </div>
             </div>
 
-            <!-- 🌟 精简 3 步流程胶囊行 (3 等分平铺，字号加大) -->
+            <!-- 精简 3 步流程胶囊行 -->
             <div v-if="steps && steps.length > 0" class="pt-2">
               <div class="grid grid-cols-3 gap-2.5">
                 <div
@@ -142,10 +142,10 @@ const toggleLanguage = () => {
             </div>
           </aside>
 
-          <!-- 右侧多任务工作台 (顶部大号输入 ➔ 中部选项 ➔ 底部行动栏) -->
-          <main class="lg:col-span-7 flex flex-col justify-between space-y-4 min-h-full">
+          <!-- 🌟 右侧多任务工作台 (精准锁定 7 列 / 58.3%) -->
+          <main class="lg:col-span-7 w-full min-w-0 flex flex-col justify-between space-y-4 min-h-full">
 
-            <!-- 🌟 卡片 1 (置顶)：大号拖拽上传与待转写队列一体化核心卡片 -->
+            <!-- 卡片 1 (置顶)：大号拖拽上传与待转写队列一体化卡片 -->
             <div
               class="flex-1 flex flex-col justify-between bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 shadow-lg backdrop-blur-xl space-y-4 min-h-[220px] transition-all"
               :class="workflow.isDragging.value ? 'border-[#02c3b4]/60 bg-[#02c3b4]/5' : ''"
@@ -208,7 +208,7 @@ const toggleLanguage = () => {
                 </div>
               </div>
 
-              <!-- 🌟 队列为空时：大号气派居中拖拽区域 + 大号海青绿发光按钮 -->
+              <!-- 队列为空时：大号气派居中拖拽区域 + 大号海青绿发光按钮 -->
               <div
                 v-else
                 @click="workflow.triggerFileSelect"
@@ -223,7 +223,6 @@ const toggleLanguage = () => {
                   </p>
                 </div>
 
-                <!-- 🌟 大号海青绿发光「选择视频」按钮 (图一居中呈现) -->
                 <button
                   type="button"
                   class="px-8 py-3.5 rounded-2xl bg-[#02c3b4]/15 hover:bg-[#02c3b4]/25 border border-[#02c3b4]/50 text-[#02c3b4] font-bold text-sm shadow-[0_0_24px_rgba(2,195,180,0.2)] transition-all active:scale-95 flex items-center gap-2 cursor-pointer pointer-events-none group-hover:scale-105"
@@ -234,18 +233,17 @@ const toggleLanguage = () => {
               </div>
             </div>
 
-            <!-- 🌟 卡片 2 (居中)：6 大参数定制选项 -->
+            <!-- 卡片 2 (居中)：6 大参数定制选项 -->
             <div v-if="$slots.options" class="bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 shadow-lg backdrop-blur-xl space-y-4 shrink-0">
               <slot name="options" />
             </div>
 
-            <!-- 🌟 卡片 3 (底部)：独立行动栏 (位于定制选项正下方) -->
+            <!-- 卡片 3 (底部)：独立行动栏 -->
             <div class="p-5 rounded-3xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-4 shadow-xl backdrop-blur-xl shrink-0">
               <span class="text-xs text-[#8b999b] font-medium">
                 纯血 Rust 端侧离线推理 · 零数据上传 · 隐私安全
               </span>
 
-              <!-- 开始转写 CTA 发光大胶囊 -->
               <button
                 type="button"
                 :disabled="workflow.queue.value.length === 0 || workflow.state.value === 'running'"
