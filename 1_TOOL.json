@@ -34,6 +34,8 @@
     "src/style.css",
     "src/vite-env.d.ts",
     "src/composables/useTauriWindow.ts",
+    "src/composables/useToolWorkflow.ts",
+    "src/components/layout/ToolWorkbenchLayout.vue",
     "src/store/uiStore.ts",
     "src/locales/**",
     "src/components/layout/Sidebar.vue",

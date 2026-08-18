@@ -60,6 +60,7 @@ pub fn escape_ass_text(text: &str) -> String {
     text.replace('{', "(").replace('}', ")").replace('\n', "\\N")
 }
 
+/// 🛡️ 2026 SOTA 贪心自然标点折行算法：严格限制单行 CJK <= 18 汉字 / 英文 <= 38 字符
 pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
     let char_count = text.chars().count();
     if text.is_empty() || char_count <= max_chars {
@@ -67,48 +68,166 @@ pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
     }
 
     let puncts = ['，', '；', '：', '。', '？', '！', ',', ';', ':', '?', '!'];
-    let mid = char_count / 2;
-    let mut best_split: Option<usize> = None;
-    let mut min_diff = char_count;
+    let mut lines: Vec<String> = Vec::new();
+    let mut current_line = String::new();
 
-    for (idx, ch) in text.chars().enumerate() {
-        if puncts.contains(&ch) && idx >= 8 && idx + 8 <= char_count {
-            let diff = (idx as isize - mid as isize).unsigned_abs();
-            if diff < min_diff {
-                min_diff = diff;
-                best_split = Some(idx + 1);
+    // 针对空格分词语言（如英文）
+    if text.contains(' ') && !text.chars().any(|c| (c as u32) > 0x2E80) {
+        let words: Vec<&str> = text.split_whitespace().collect();
+        for word in words {
+            let candidate_len = if current_line.is_empty() {
+                word.len()
+            } else {
+                current_line.len() + 1 + word.len()
+            };
+
+            if candidate_len <= max_chars {
+                if !current_line.is_empty() {
+                    current_line.push(' ');
+                }
+                current_line.push_str(word);
+            } else {
+                if !current_line.is_empty() {
+                    lines.push(current_line.clone());
+                }
+                current_line = word.to_string();
             }
         }
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
+        return lines.join("\\N");
     }
 
-    if let Some(split_idx) = best_split {
-        let left: String = text.chars().take(split_idx).collect();
-        let right: String = text.chars().skip(split_idx).collect();
-        return format!("{}\\N{}", left.trim(), right.trim());
-    }
+    // 针对 CJK 中文无空格语系：基于标点与字数的贪心切分
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let remaining = chars.len() - i;
+        if remaining <= max_chars {
+            let line: String = chars[i..].iter().collect();
+            lines.push(line);
+            break;
+        }
 
-    if text.contains(' ') {
-        let words: Vec<&str> = text.split(' ').collect();
-        let half_len = text.len() / 2;
-        let mut curr_len = 0;
-        let mut split_word_idx = 0;
-        for (i, w) in words.iter().enumerate() {
-            curr_len += w.len() + 1;
-            if curr_len >= half_len {
-                split_word_idx = i + 1;
+        // 在 [max_chars - 6, max_chars] 区间内向前寻找最佳标点断点
+        let window_end = (i + max_chars).min(chars.len());
+        let window_start = (i + max_chars.saturating_sub(6)).max(i);
+        let mut split_point = window_end;
+
+        for p_idx in (window_start..window_end).rev() {
+            if puncts.contains(&chars[p_idx]) {
+                split_point = p_idx + 1; // 包含该标点
                 break;
             }
         }
-        if split_word_idx > 0 && split_word_idx < words.len() {
-            let line1 = words[..split_word_idx].join(" ");
-            let line2 = words[split_word_idx..].join(" ");
-            return format!("{}\\N{}", line1, line2);
-        }
+
+        let line: String = chars[i..split_point].iter().collect();
+        lines.push(line);
+        i = split_point;
     }
 
-    let left: String = text.chars().take(mid).collect();
-    let right: String = text.chars().skip(mid).collect();
-    format!("{}\\N{}", left, right)
+    lines.join("\\N")
+}
+
+/// 🛡️ 2026 SOTA 时域等比分句引擎：将超过 26 汉字且时长 > 2.5 秒的超长语流，沿标点等比切分为自然连贯的短句
+pub fn split_long_segments_if_needed(segments: &[EngineSegment]) -> Vec<EngineSegment> {
+    let mut new_segments = Vec::new();
+    let mut current_id = 1;
+
+    for seg in segments {
+        let tgt_clean = clean_acoustic_noise(&seg.target_text);
+        let src_clean = clean_acoustic_noise(&seg.source_text);
+        let duration = seg.end_sec - seg.start_sec;
+        let tgt_chars = tgt_clean.chars().count();
+
+        // 当译文字数 > 26 且时长充足时触发等比拆分
+        if tgt_chars > 26 && duration >= 2.5 {
+            let sentence_puncts = ['。', '！', '？', '；', '!', '?', ';'];
+            let mut clauses: Vec<String> = Vec::new();
+            let mut buf = String::new();
+
+            for ch in tgt_clean.chars() {
+                buf.push(ch);
+                if sentence_puncts.contains(&ch) {
+                    if buf.chars().count() >= 12 {
+                        clauses.push(buf.trim().to_string());
+                        buf.clear();
+                    }
+                }
+            }
+
+            if !buf.trim().is_empty() {
+                if let Some(last) = clauses.last_mut() {
+                    if buf.chars().count() < 8 {
+                        last.push_str(&buf);
+                    } else {
+                        clauses.push(buf.trim().to_string());
+                    }
+                } else {
+                    clauses.push(buf.trim().to_string());
+                }
+            }
+
+            // 若句号拆不出，退化为按逗号拆分
+            if clauses.len() <= 1 && tgt_chars > 32 {
+                clauses.clear();
+                let sub_puncts = ['，', ','];
+                let mut sub_buf = String::new();
+                for ch in tgt_clean.chars() {
+                    sub_buf.push(ch);
+                    if sub_puncts.contains(&ch) && sub_buf.chars().count() >= 14 {
+                        clauses.push(sub_buf.trim().to_string());
+                        sub_buf.clear();
+                    }
+                }
+                if !sub_buf.trim().is_empty() {
+                    clauses.push(sub_buf.trim().to_string());
+                }
+            }
+
+            if clauses.len() > 1 {
+                let total_chars: usize = clauses.iter().map(|c| c.chars().count()).sum();
+                let mut accumulated_t = seg.start_sec;
+
+                for (c_idx, clause) in clauses.iter().enumerate() {
+                    let c_len = clause.chars().count();
+                    let sub_dur = duration * (c_len as f64 / total_chars as f64);
+                    let sub_start = accumulated_t;
+                    let sub_end = if c_idx == clauses.len() - 1 {
+                        seg.end_sec
+                    } else {
+                        (accumulated_t + sub_dur).min(seg.end_sec)
+                    };
+                    accumulated_t = sub_end;
+
+                    new_segments.push(EngineSegment {
+                        id: current_id,
+                        speaker: seg.speaker.clone(),
+                        start_sec: (sub_start * 100.0).round() / 100.0,
+                        end_sec: (sub_end * 100.0).round() / 100.0,
+                        source_text: if c_idx == 0 { src_clean.clone() } else { String::new() },
+                        target_text: clause.clone(),
+                    });
+                    current_id += 1;
+                }
+                continue;
+            }
+        }
+
+        // 常规短句保留原样
+        new_segments.push(EngineSegment {
+            id: current_id,
+            speaker: seg.speaker.clone(),
+            start_sec: seg.start_sec,
+            end_sec: seg.end_sec,
+            source_text: src_clean,
+            target_text: tgt_clean,
+        });
+        current_id += 1;
+    }
+
+    new_segments
 }
 
 pub fn estimate_text_width(text: &str, font_size: f64) -> f64 {
@@ -227,10 +346,11 @@ pub fn generate_srt(
     display_mode: &str,
     show_speaker: bool,
 ) -> String {
+    let fine_segments = split_long_segments_if_needed(segments);
     let mut blocks = Vec::new();
     let mut valid_idx = 1;
 
-    for seg in segments {
+    for seg in &fine_segments {
         let src = clean_acoustic_noise(&seg.source_text);
         let tgt = clean_acoustic_noise(&seg.target_text);
         let spk = if show_speaker && !seg.speaker.is_empty() {
@@ -247,27 +367,27 @@ pub fn generate_srt(
         match display_mode {
             "bilingual" => {
                 if !tgt.is_empty() {
-                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 24)));
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 18)));
                 }
                 if !src.is_empty() {
-                    lines.push(smart_wrap_line(&src, 42));
+                    lines.push(smart_wrap_line(&src, 36));
                 }
             }
             "target_only" => {
                 if !tgt.is_empty() {
-                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 24)));
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 18)));
                 } else if !src.is_empty() {
-                    lines.push(format!("{}{}", spk, smart_wrap_line(&src, 42)));
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&src, 36)));
                 }
             }
             "source_only" => {
                 if !src.is_empty() {
-                    lines.push(format!("{}{}", spk, smart_wrap_line(&src, 42)));
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&src, 36)));
                 }
             }
             _ => {
                 if !tgt.is_empty() {
-                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 24)));
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 18)));
                 }
             }
         }
@@ -295,15 +415,18 @@ pub fn generate_ass(
     video_height: u32,
     mask_hardsub: bool,
 ) -> String {
-    let base_font_size = (video_height as f32 * 0.045 * font_size_multiplier).round().max(20.0) as u32;
-    let sec_font_size = (video_height as f32 * 0.028 * font_size_multiplier).round().max(15.0) as u32;
+    let fine_segments = split_long_segments_if_needed(segments);
 
-    let margin_l = (video_width as f32 * 0.03).round().max(20.0) as u32;
+    // 🛡️ 字号按 1080p 标准电影视距黄金配比校准
+    let base_font_size = (video_height as f32 * 0.038 * font_size_multiplier).round().clamp(24.0, 62.0) as u32;
+    let sec_font_size = (video_height as f32 * 0.024 * font_size_multiplier).round().clamp(16.0, 44.0) as u32;
+
+    let margin_l = (video_width as f32 * 0.04).round().max(30.0) as u32;
     let margin_r = margin_l;
-    let margin_v = (video_height as f32 * 0.03).round().max(12.0) as u32;
+    let margin_v = (video_height as f32 * 0.035).round().max(20.0) as u32;
 
     let mut speakers = std::collections::BTreeSet::new();
-    for seg in segments {
+    for seg in &fine_segments {
         if !seg.speaker.is_empty() {
             speakers.insert(seg.speaker.clone());
         }
@@ -331,7 +454,7 @@ pub fn generate_ass(
 
     let mut dialogue_lines = Vec::new();
 
-    for seg in segments {
+    for seg in &fine_segments {
         let raw_src = clean_acoustic_noise(&seg.source_text);
         let raw_tgt = clean_acoustic_noise(&seg.target_text);
         let spk = &seg.speaker;
@@ -340,8 +463,9 @@ pub fn generate_ass(
             continue;
         }
 
-        let wrapped_src = smart_wrap_line(&raw_src, 40);
-        let wrapped_tgt = smart_wrap_line(&raw_tgt, 24);
+        // CJK 译文单行严格限制在 18 字内，原文单行 36 字符内
+        let wrapped_src = smart_wrap_line(&raw_src, 36);
+        let wrapped_tgt = smart_wrap_line(&raw_tgt, 18);
 
         let src = escape_ass_text(&wrapped_src);
         let tgt = escape_ass_text(&wrapped_tgt);
@@ -375,7 +499,7 @@ pub fn generate_ass(
             let max_text_w = w_tgt.max(w_src);
 
             let pad_x = (base_font_size as f64 * 0.55).round().max(18.0) as i64;
-            let box_w = ((video_width as f64 * 0.80).round() as i64).min(100.max((max_text_w + (pad_x * 2) as f64).round() as i64));
+            let box_w = ((video_width as f64 * 0.85).round() as i64).min(100.max((max_text_w + (pad_x * 2) as f64).round() as i64));
 
             let has_two_lines = !tgt.is_empty() && !src.is_empty() && display_mode == "bilingual";
             let box_h = if has_two_lines {
@@ -599,6 +723,26 @@ mod tests {
     }
 
     #[test]
+    fn test_split_long_segments_and_greedy_wrap() {
+        let long_seg = EngineSegment {
+            id: 42,
+            speaker: "S03".to_string(),
+            start_sec: 163.35,
+            end_sec: 177.31,
+            source_text: "いや、俺は料理人じゃなくてただの係長なんだが。とはいえ、これをそのまま出すのはやっぱ気が引けるし、そもそも一人分しかないからな。".to_string(),
+            target_text: "不，我并非厨师，只是个主管而已。不过，直接把这个拿出来还是觉得不太合适，而且本来也只够一个人吃而已。得加些东西来做出新的食物才行。".to_string(),
+        };
+
+        let splits = split_long_segments_if_needed(&[long_seg]);
+        assert!(splits.len() >= 2, "超长 71 字台词应在时域上自然拆分为多句");
+        println!("\n🎉 成功将 71 字超长句拆分为 {} 个时域自适应片段:", splits.len());
+        for s in &splits {
+            println!("  [{:.2}s -> {:.2}s] {}", s.start_sec, s.end_sec, s.target_text);
+            assert!(s.target_text.chars().count() <= 38, "拆分后单句不可超长");
+        }
+    }
+
+    #[test]
     fn test_generate_ass_with_mask() {
         let segs = vec![
             EngineSegment {
@@ -610,7 +754,7 @@ mod tests {
                 target_text: "你好世界".to_string(),
             }
         ];
-        let ass = generate_ass(&segs, "bilingual", true, 1.8, 1920, 1080, true);
+        let ass = generate_ass(&segs, "bilingual", true, 1.35, 1920, 1080, true);
         assert!(ass.contains("Style: CapsuleMask"));
         assert!(ass.contains("Dialogue: 0,0:00:01.00,0:00:03.00,CapsuleMask"));
         assert!(ass.contains("Dialogue: 1,0:00:01.00,0:00:03.00,Speaker_S01"));

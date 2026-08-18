@@ -1,9 +1,11 @@
 // 🛡️ 紫电 AI 桌面工坊 - 工业级批量多任务工作流状态机母线 (useToolWorkflow.ts)
-// 1:1 外科手术式对齐 ToolKnit 原生桌面端批量队列、模态遮罩与成功交付体系
+// 100% 对齐 Tauri v2 原生文件系统交互契约 (plugin-dialog + webviewWindow drag-drop)
 
-import { ref, shallowRef } from 'vue';
+import { ref, shallowRef, onMounted, onUnmounted } from 'vue';
 import { useUIStore } from '../store/uiStore';
 import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 export type WorkflowState =
   | 'idle'      // 空闲：等待添加文件
@@ -71,59 +73,105 @@ export function useToolWorkflow<TResult = any>() {
   const latestResults = shallowRef<TResult[]>([]);
   const fileInputRef = ref<HTMLInputElement | null>(null);
 
-  const triggerFileSelect = () => {
-    fileInputRef.value?.click();
-  };
+  let unlistenDragDrop: (() => void) | null = null;
 
-  /** 批量追加文件到队列 */
-  const addFiles = async (files: FileList | File[] | { name: string; path?: string; size?: number }[]) => {
-    const rawList = Array.isArray(files) ? files : Array.from(files);
-    if (rawList.length === 0) return;
-
+  /** 直接注入 OS 物理绝对路径列表 */
+  const addPaths = (paths: string[]) => {
+    if (!paths || paths.length === 0) return;
     const newItems: ToolFileMetadata[] = [];
 
-    for (const f of rawList) {
-      const path = (f as any).path || f.name;
-      const name = f.name;
-      const sizeBytes = f.size || 0;
+    for (const rawPath of paths) {
+      if (!rawPath || typeof rawPath !== 'string') continue;
+      const cleanPath = rawPath.trim();
+      if (!cleanPath) continue;
 
-      // 查重：避免重复添加相同物理文件
-      if (queue.value.some(q => q.path === path || (q.name === name && q.sizeBytes === sizeBytes))) {
+      const name = cleanPath.split(/[/\\]/).pop() || cleanPath;
+
+      // 查重：避免重复添加相同物理路径文件
+      if (queue.value.some((q) => q.path === cleanPath)) {
         continue;
       }
 
       const item: ToolFileMetadata = {
         id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name,
+        path: cleanPath,
+        sizeBytes: 0,
+        sizeFormatted: '物理文件',
+      };
+
+      newItems.push(item);
+    }
+
+    if (newItems.length > 0) {
+      queue.value.push(...newItems);
+      state.value = 'queued';
+    }
+  };
+
+  /** 调起 Tauri v2 原生文件选取窗口（确保 100% 捕获完整绝对路径） */
+  const triggerFileSelect = async () => {
+    try {
+      const selected = await openDialog({
+        multiple: true,
+        title: '选择待处理视频文件',
+        filters: [
+          {
+            name: '视频文件',
+            extensions: ['mp4', 'mkv', 'mov', 'avi', 'flv', 'wmv', 'webm', 'm4v'],
+          },
+          {
+            name: '全部文件',
+            extensions: ['*'],
+          },
+        ],
+      });
+
+      if (selected) {
+        const pathList = Array.isArray(selected) ? selected : [selected];
+        addPaths(pathList);
+      }
+    } catch (err) {
+      console.warn('⚠️ 原生文件选择器调起异常，尝试备用方案:', err);
+      fileInputRef.value?.click();
+    }
+  };
+
+  /** 批量追加文件到队列（兼顾 DOM File 回退） */
+  const addFiles = async (files: FileList | File[] | { name: string; path?: string; size?: number }[]) => {
+    const rawList = Array.isArray(files) ? files : Array.from(files);
+    if (rawList.length === 0) return;
+
+    const paths: string[] = [];
+    for (const f of rawList) {
+      const p = (f as any).path;
+      if (p && typeof p === 'string' && p.length > 0) {
+        paths.push(p);
+      }
+    }
+
+    if (paths.length > 0) {
+      addPaths(paths);
+      return;
+    }
+
+    const newItems: ToolFileMetadata[] = [];
+    for (const f of rawList) {
+      const path = (f as any).path || f.name;
+      const name = f.name;
+      const sizeBytes = f.size || 0;
+
+      if (queue.value.some((q) => q.path === path)) {
+        continue;
+      }
+
+      newItems.push({
+        id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name,
         path,
         sizeBytes,
         sizeFormatted: formatBytes(sizeBytes),
-      };
-
-      if (f instanceof File && (f.type.startsWith('video/') || f.type.startsWith('audio/'))) {
-        try {
-          const url = URL.createObjectURL(f);
-          const media = document.createElement(f.type.startsWith('video/') ? 'video' : 'audio');
-          media.preload = 'metadata';
-          media.src = url;
-          await new Promise<void>((resolve) => {
-            media.onloadedmetadata = () => {
-              item.durationSec = media.duration;
-              item.durationFormatted = formatDuration(media.duration);
-              URL.revokeObjectURL(url);
-              resolve();
-            };
-            media.onerror = () => {
-              URL.revokeObjectURL(url);
-              resolve();
-            };
-          });
-        } catch {
-          // 忽略 DOM 嗅探异常
-        }
-      }
-
-      newItems.push(item);
+      });
     }
 
     if (newItems.length > 0) {
@@ -176,6 +224,34 @@ export function useToolWorkflow<TResult = any>() {
       addFiles(e.dataTransfer.files);
     }
   };
+
+  /** 挂载原生桌面拖拽监听 */
+  onMounted(async () => {
+    try {
+      const appWindow = getCurrentWebviewWindow();
+      unlistenDragDrop = await appWindow.onDragDropEvent((event) => {
+        if (event.payload.type === 'over' || event.payload.type === 'enter') {
+          isDragging.value = true;
+        } else if (event.payload.type === 'leave') {
+          isDragging.value = false;
+        } else if (event.payload.type === 'drop') {
+          isDragging.value = false;
+          if (event.payload.paths && event.payload.paths.length > 0) {
+            addPaths(event.payload.paths);
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('⚠️ 物理窗口原生拖拽监听未激活 (Web 预览环境):', e);
+    }
+  });
+
+  onUnmounted(() => {
+    if (unlistenDragDrop) {
+      unlistenDragDrop();
+      unlistenDragDrop = null;
+    }
+  });
 
   /** 取消当前批处理 */
   const cancelProcessing = () => {
@@ -294,6 +370,7 @@ export function useToolWorkflow<TResult = any>() {
     fileInputRef,
     triggerFileSelect,
     addFiles,
+    addPaths,
     removeFile,
     clearQueue,
     handleFileChange,

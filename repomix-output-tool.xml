@@ -172,15 +172,12 @@ src-tauri/
       Cargo.toml
     tools/
       video-subtitle/
-        scripts/
-          subtitle_engine.py
-          worker.py
         src/
+          engine.rs
           lib.rs
           ocr_pipeline.rs
           probe.rs
         Cargo.toml
-        pyproject.toml
   src/
     lib.rs
     main.rs
@@ -2996,681 +2993,23 @@ tokio = { version = "1.38", features = ["sync"] }
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread"] }
 </file>
 
-<file path="src-tauri/crates/tools/video-subtitle/scripts/subtitle_engine.py">
-import os
-import sys
-import json
-import re
-import subprocess
+<file path="src-tauri/crates/tools/video-subtitle/src/engine.rs">
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 
-COLOR_ZIDIAN_PRIMARY = "&H00F8B4D8"      # 紫电主色 #D8B4F8 (上行译文)
-COLOR_QINGSHUANG_SECONDARY = "&H00FCF3A5" # 青霜副色 #A5F3FC (下行原文)
+pub const COLOR_ZIDIAN_PRIMARY: &str = "&H00F8B4D8";      // 紫电主色 #D8B4F8 (上行译文)
+pub const COLOR_QINGSHUANG_SECONDARY: &str = "&H00FCF3A5"; // 青霜副色 #A5F3FC (下行原文)
+pub const BG_COLOR_SOFT_VIGNETTE: &str = "&H380A0A0A";
 
-# 动态烟熏半透明底色 (78% Opacity Frosted Alpha: &H380A0A0A)
-BG_COLOR_SOFT_VIGNETTE = "&H380A0A0A"
-
-SPEAKER_COLORS = [
+pub const SPEAKER_COLORS: &[&str] = &[
     "&H00F8B4D8", "&H00FCF3A5", "&H00FFB56B", "&H008FF286",
     "&H0000D7FF", "&H00DB8EFF", "&H00FFE75B", "&H00D8D8D8",
-]
-
-def resolve_ffmpeg_bin() -> str:
-    candidates = [
-        r"C:\dev\ai-forge\src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe",
-        r"C:\dev\ai-forge\src-tauri\bin\ffmpeg.exe",
-        r"C:\dev\ai-toolkit\src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe",
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return "ffmpeg"
-
-def clean_acoustic_noise(text: str) -> str:
-    if not text:
-        return ""
-    cleaned = re.sub(r'\[(laughter|music|applause|singing|cough|snicker|sigh|groan)\]', '', text, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\((laughter|music|applause|singing|cough|snicker|sigh|groan)\)', '', cleaned, flags=re.IGNORECASE)
-    return cleaned.strip()
-
-def escape_ass_text(text: str) -> str:
-    if not text:
-        return ""
-    return text.replace("{", "(").replace("}", ")").replace("\n", "\\N")
-
-def smart_wrap_line(text: str, max_chars: int = 24) -> str:
-    if not text or len(text) <= max_chars:
-        return text
-
-    puncts = ['，', '；', '：', '。', '？', '！', ',', ';', ':', '?', '!']
-    mid = len(text) // 2
-    best_split = -1
-    min_diff = len(text)
-
-    for idx, ch in enumerate(text):
-        if ch in puncts and 8 <= idx <= len(text) - 8:
-            diff = abs(idx - mid)
-            if diff < min_diff:
-                min_diff = diff
-                best_split = idx + 1
-
-    if best_split != -1:
-        return text[:best_split].strip() + "\\N" + text[best_split:].strip()
-
-    if ' ' in text:
-        words = text.split(' ')
-        half_len = len(text) / 2
-        curr_len = 0
-        split_idx = 0
-        for i, w in enumerate(words):
-            curr_len += len(w) + 1
-            if curr_len >= half_len:
-                split_idx = i + 1
-                break
-        if split_idx > 0 and split_idx < len(words):
-            line1 = " ".join(words[:split_idx])
-            line2 = " ".join(words[split_idx:])
-            return f"{line1}\\N{line2}"
-
-    return f"{text[:mid]}\\N{text[mid:]}"
-
-def estimate_text_width(text: str, font_size: float) -> float:
-    """高精度字宽测算算法 (收紧比例，防止估算膨胀)"""
-    if not text:
-        return 0.0
-    lines = text.split("\\N")
-    max_w = 0.0
-    for line in lines:
-        w = 0.0
-        for ch in line:
-            if ord(ch) > 127:
-                w += font_size * 0.92  # 精确 CJK 中日韩全角字符
-            elif ch in ".,'!;: ":
-                w += font_size * 0.25  # 窄标点与空格
-            elif ch.isupper() or ch in "MW@#%":
-                w += font_size * 0.62  # 大写/宽字母
-            else:
-                w += font_size * 0.46  # 标准外文小写
-        if w > max_w:
-            max_w = w
-    return max_w
-
-def format_srt_time(seconds: float) -> str:
-    ms = max(0, round(float(seconds) * 1000))
-    hrs, rem = divmod(ms, 3600000)
-    mins, rem = divmod(rem, 60000)
-    secs, millis = divmod(rem, 1000)
-    return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
-
-def format_ass_time(seconds: float) -> str:
-    cs = max(0, round(float(seconds) * 100))
-    hrs, rem = divmod(cs, 360000)
-    mins, rem = divmod(rem, 6000)
-    secs, centis = divmod(rem, 100)
-    return f"{hrs:d}:{mins:02d}:{secs:02d}.{centis:02d}"
-
-def parse_srt_content(srt_text: str) -> list:
-    segments = []
-    blocks = re.split(r'\n\s*\n', srt_text.strip().replace('\r\n', '\n'))
-    time_pattern = re.compile(r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})')
-    
-    seg_id = 1
-    for block in blocks:
-        lines = [l.strip() for l in block.strip().split('\n') if l.strip()]
-        if not lines:
-            continue
-        
-        time_line_idx = -1
-        for idx, line in enumerate(lines):
-            if '-->' in line:
-                time_line_idx = idx
-                break
-        
-        if time_line_idx == -1:
-            continue
-        
-        match = time_pattern.search(lines[time_line_idx])
-        if not match:
-            continue
-        
-        h1, m1, s1, ms1, h2, m2, s2, ms2 = map(int, match.groups())
-        start_sec = h1 * 3600 + m1 * 60 + s1 + ms1 / 1000.0
-        end_sec = h2 * 3600 + m2 * 60 + s2 + ms2 / 1000.0
-        
-        text_lines = lines[time_line_idx + 1:]
-        text = " ".join(text_lines).strip()
-        text = re.sub(r'<[^>]+>', '', text).strip()
-        
-        if text:
-            segments.append({
-                "id": seg_id,
-                "speaker": "S01",
-                "start_sec": round(start_sec, 3),
-                "end_sec": round(end_sec, 3),
-                "text": text
-            })
-            seg_id += 1
-    return segments
-
-def extract_subtitle_stream(video_path: str, stream_index: int, out_sub_path: str) -> bool:
-    ffmpeg_bin = resolve_ffmpeg_bin()
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-i", video_path,
-        "-map", f"0:{stream_index}",
-        out_sub_path
-    ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return res.returncode == 0 and os.path.exists(out_sub_path) and os.path.getsize(out_sub_path) > 0
-
-def extract_audio_from_video(video_path: str, out_wav_path: str) -> bool:
-    ffmpeg_bin = resolve_ffmpeg_bin()
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-i", video_path,
-        "-vn", "-acodec", "pcm_s16le",
-        "-ar", "16000", "-ac", "1",
-        out_wav_path
-    ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return res.returncode == 0 and os.path.exists(out_wav_path)
-
-def generate_srt(segments: list, display_mode: str = "bilingual", show_speaker: bool = False) -> str:
-    blocks = []
-    valid_idx = 1
-    for seg in segments:
-        src = clean_acoustic_noise(seg.get("source_text", ""))
-        tgt = clean_acoustic_noise(seg.get("target_text", ""))
-        spk = seg.get("speaker", "S01") if show_speaker else ""
-
-        if not src and not tgt:
-            continue
-
-        spk_prefix = f"[{spk}] " if spk else ""
-        lines = []
-
-        if display_mode == "bilingual":
-            if tgt:
-                lines.append(f"{spk_prefix}{smart_wrap_line(tgt, 24)}")
-            if src:
-                lines.append(smart_wrap_line(src, 42))
-        elif display_mode == "target_only":
-            if tgt:
-                lines.append(f"{spk_prefix}{smart_wrap_line(tgt, 24)}")
-            elif src:
-                lines.append(f"{spk_prefix}{smart_wrap_line(src, 42)}")
-        elif display_mode == "source_only":
-            if src:
-                lines.append(f"{spk_prefix}{smart_wrap_line(src, 42)}")
-
-        if not lines:
-            continue
-
-        t_start = format_srt_time(float(seg.get("start_sec", 0.0)))
-        t_end = format_srt_time(float(seg.get("end_sec", 0.0)))
-
-        block_content = "\n".join(lines)
-        blocks.append(f"{valid_idx}\n{t_start} --> {t_end}\n{block_content}\n")
-        valid_idx += 1
-
-    return "\n".join(blocks)
-
-def generate_ass(
-    segments: list,
-    display_mode: str = "bilingual",
-    show_speaker: bool = False,
-    font_size_multiplier: float = 1.8,
-    video_width: int = 1920,
-    video_height: int = 1080,
-    mask_hardsub: bool = False,
-) -> str:
-    base_font_size = max(20, round(video_height * 0.045 * font_size_multiplier))
-    sec_font_size = max(15, round(video_height * 0.028 * font_size_multiplier))
-
-    margin_l = max(20, round(video_width * 0.03))
-    margin_r = margin_l
-    margin_v = max(12, round(video_height * 0.03))
-
-    speakers = sorted({seg.get("speaker", "S01") for seg in segments})
-
-    # 🌟 100% 矢量超清文字样式：0 模糊，字形锋利立体
-    style_lines = [
-        f"Style: PrimaryStyle,Arial,{base_font_size},{COLOR_ZIDIAN_PRIMARY},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,2.0,1.0,2,{margin_l},{margin_r},{margin_v},1",
-        f"Style: SecondaryStyle,Arial,{sec_font_size},{COLOR_QINGSHUANG_SECONDARY},&H000000FF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,1.8,0.8,2,{margin_l},{margin_r},{margin_v},1",
-    ]
-
-    for idx, spk in enumerate(speakers):
-        color = SPEAKER_COLORS[idx % len(SPEAKER_COLORS)]
-        spk_style_name = f"Speaker_{spk}"
-        style_lines.append(
-            f"Style: {spk_style_name},Arial,{base_font_size},{color},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,2.0,1.0,2,{margin_l},{margin_r},{margin_v},1"
-        )
-
-    style_lines.append(
-        f"Style: CapsuleMask,Arial,10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,2,0,0,0,1"
-    )
-
-    dialogue_lines = []
-
-    for seg in segments:
-        raw_src = clean_acoustic_noise(seg.get("source_text", ""))
-        raw_tgt = clean_acoustic_noise(seg.get("target_text", ""))
-        spk = seg.get("speaker", "S01")
-
-        if not raw_src and not raw_tgt:
-            continue
-
-        wrapped_src = smart_wrap_line(raw_src, max_chars=40)
-        wrapped_tgt = smart_wrap_line(raw_tgt, max_chars=24)
-
-        src = escape_ass_text(wrapped_src)
-        tgt = escape_ass_text(wrapped_tgt)
-
-        spk_prefix = f"[{spk}] " if show_speaker and spk else ""
-        t_start = format_ass_time(float(seg.get("start_sec", 0.0)))
-        t_end = format_ass_time(float(seg.get("end_sec", 0.0)))
-
-        style_name = f"Speaker_{spk}" if show_speaker and spk in speakers else "PrimaryStyle"
-
-        # 🌟 紧凑型字形胶囊计算 (左右严格收敛，拒绝大黑带)
-        if mask_hardsub:
-            w_tgt = estimate_text_width(f"{spk_prefix}{tgt}", base_font_size) if tgt else 0.0
-            w_src = estimate_text_width(src, sec_font_size) if src else 0.0
-            max_text_w = max(w_tgt, w_src)
-
-            # 左右单侧仅外扩 0.55 个字宽 (约 18~22px)
-            pad_x = max(18, round(base_font_size * 0.55))
-            box_w = min(round(video_width * 0.80), max(100, round(max_text_w + pad_x * 2)))
-
-            # 紧凑高度计算
-            has_two_lines = bool(tgt and src and display_mode == "bilingual")
-            if has_two_lines:
-                tgt_lines_count = len(tgt.split("\\N"))
-                src_lines_count = len(src.split("\\N"))
-                box_h = round(base_font_size * 1.25 * tgt_lines_count + sec_font_size * 1.25 * src_lines_count + 10)
-            else:
-                active_text = tgt if (display_mode != "source_only" and tgt) else src
-                lines_count = len(active_text.split("\\N"))
-                box_h = round(base_font_size * 1.3 * lines_count + 8)
-
-            box_x0 = max(6, round((video_width - box_w) / 2))
-            box_y0 = max(6, round(video_height - margin_v - box_h + 2))
-
-            # 🌟 \blur6 紧致柔光 (杜绝光晕大幅向两侧蔓延)
-            mask_cmd = f"{{\\an7\\pos({box_x0},{box_y0})\\p1\\c&H000000&\\1a&H35&\\bord0\\shad0\\blur6}}m 0 0 l {box_w} 0 l {box_w} {box_h} l 0 {box_h}{{\\p0}}"
-            dialogue_lines.append(
-                f"Dialogue: 0,{t_start},{t_end},CapsuleMask,,0,0,0,,{mask_cmd}"
-            )
-
-        # 🌟 Layer 1 纯净矢量超清文字
-        if display_mode == "bilingual":
-            if tgt and src:
-                text_content = f"{spk_prefix}{tgt}\\N{{\\rSecondaryStyle}}{src}"
-            elif tgt:
-                text_content = f"{spk_prefix}{tgt}"
-            else:
-                text_content = f"{spk_prefix}{src}"
-        elif display_mode == "target_only":
-            text_content = f"{spk_prefix}{tgt}" if tgt else f"{spk_prefix}{src}"
-        elif display_mode == "source_only":
-            text_content = f"{spk_prefix}{src}"
-        else:
-            text_content = f"{spk_prefix}{tgt}"
-
-        dialogue_lines.append(
-            f"Dialogue: 1,{t_start},{t_end},{style_name},,0,0,0,,{text_content}"
-        )
-
-    header = [
-        "[Script Info]",
-        "Title: 紫电 AI 视频双语字幕工坊",
-        "ScriptType: v4.00+",
-        "WrapStyle: 0",
-        "ScaledBorderAndShadow: yes",
-        f"PlayResX: {video_width}",
-        f"PlayResY: {video_height}",
-        "",
-        "[V4+ Styles]",
-        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
-        "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
-        "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        *style_lines,
-        "",
-        "[Events]",
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-        *dialogue_lines,
-        "",
-    ]
-    return "\n".join(header)
-
-def mux_soft_subtitles(video_path: str, ass_path: str, out_mkv_path: str) -> bool:
-    ffmpeg_bin = resolve_ffmpeg_bin()
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-i", video_path,
-        "-i", ass_path,
-        "-c:v", "copy",
-        "-c:a", "copy",
-        "-c:s", "copy",
-        "-metadata:s:0", "language=zho",
-        "-metadata:s:0", "title=紫电 AI 双语字幕",
-        "-disposition:s:0", "default",
-        out_mkv_path
-    ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return res.returncode == 0 and os.path.exists(out_mkv_path)
-
-def burn_hard_subtitles_nvenc(video_path: str, ass_path: str, out_mp4_path: str) -> bool:
-    ffmpeg_bin = resolve_ffmpeg_bin()
-    escaped_ass = ass_path.replace("\\", "/").replace(":", "\\:")
-    vf_param = f"subtitles='{escaped_ass}'"
-    
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-hwaccel", "cuda",
-        "-i", video_path,
-        "-vf", vf_param,
-        "-c:v", "h264_nvenc",
-        "-preset", "p4",
-        "-cq", "23",
-        "-c:a", "copy",
-        out_mp4_path
-    ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if res.returncode == 0 and os.path.exists(out_mp4_path):
-        return True
-    
-    cmd_cpu = [
-        ffmpeg_bin, "-y",
-        "-i", video_path,
-        "-vf", vf_param,
-        "-c:v", "libx264",
-        "-crf", "23",
-        "-preset", "fast",
-        "-c:a", "copy",
-        out_mp4_path
-    ]
-    res_cpu = subprocess.run(cmd_cpu, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return res_cpu.returncode == 0 and os.path.exists(out_mp4_path)
-</file>
-
-<file path="src-tauri/crates/tools/video-subtitle/scripts/worker.py">
-import os
-import sys
-import json
-import time
-import struct
-import traceback
-
-for k in ["ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"]:
-    os.environ.pop(k, None)
-
-_dll_handles = []
-if sys.platform == "win32":
-    search_paths = [p for p in sys.path if os.path.isdir(p)]
-    for sp in search_paths:
-        for root, dirs, files in os.walk(sp):
-            if any(f.lower().endswith(".dll") for f in files):
-                try:
-                    _dll_handles.append(os.add_dll_directory(root))
-                except Exception:
-                    pass
-                current_path = os.environ.get("PATH", "")
-                if root not in current_path:
-                    os.environ["PATH"] = root + os.pathsep + current_path
-
-def hijack_stdout():
-    try:
-        real_stdout_fd = os.dup(1)
-        os.dup2(2, 1)
-        ipc_out = os.fdopen(real_stdout_fd, 'wb')
-        return ipc_out
-    except Exception as e:
-        print("FD 劫持失败: " + str(e), file=sys.stderr)
-        sys.exit(1)
-
-IPC_OUT = None
-IPC_IN = None
-
-def init_ipc():
-    global IPC_OUT, IPC_IN
-    IPC_OUT = hijack_stdout()
-    IPC_IN = sys.stdin.buffer
-
-def send_message(method: str, params: dict):
-    msg = {"method": method, "params": params}
-    data = json.dumps(msg, ensure_ascii=False).encode('utf-8')
-    IPC_OUT.write(struct.pack('>I', len(data)))
-    IPC_OUT.write(data)
-    IPC_OUT.flush()
-
-def recv_message():
-    header = IPC_IN.read(4)
-    if not header or len(header) < 4:
-        return None
-    msg_len = struct.unpack('>I', header)[0]
-    data = IPC_IN.read(msg_len)
-    if len(data) < msg_len:
-        return None
-    return json.loads(data.decode('utf-8'))
-
-scripts_dir = os.path.dirname(os.path.abspath(__file__))
-if scripts_dir not in sys.path:
-    sys.path.insert(0, scripts_dir)
-
-import subtitle_engine
-
-def handle_extract_audio(params: dict) -> dict:
-    video_path = params.get("video_path", "")
-    out_wav_path = params.get("out_wav_path", "")
-    
-    if not os.path.exists(video_path):
-        return {"success": False, "error": f"物理视频文件不存在: {video_path}"}
-        
-    ok = subtitle_engine.extract_audio_from_video(video_path, out_wav_path)
-    if ok:
-        return {"success": True, "wav_path": out_wav_path}
-    else:
-        return {"success": False, "error": "FFmpeg 从视频提取音频 WAV 失败"}
-
-def handle_extract_subtitle_stream(params: dict) -> dict:
-    video_path = params.get("video_path", "")
-    stream_index = int(params.get("stream_index", 0))
-    out_srt_path = params.get("out_srt_path", "")
-
-    if not os.path.exists(video_path):
-        return {"success": False, "error": f"物理视频文件不存在: {video_path}"}
-
-    ok = subtitle_engine.extract_subtitle_stream(video_path, stream_index, out_srt_path)
-    if not ok or not os.path.exists(out_srt_path):
-        return {"success": False, "error": f"FFmpeg 抽离字幕流 (index {stream_index}) 失败"}
-
-    try:
-        with open(out_srt_path, "r", encoding="utf-8", errors="ignore") as f:
-            srt_content = f.read()
-        segments = subtitle_engine.parse_srt_content(srt_content)
-        return {
-            "success": True,
-            "srt_path": out_srt_path,
-            "total_segments": len(segments),
-            "segments": segments
-        }
-    except Exception as e:
-        return {"success": False, "error": f"解析提取的 SRT 字幕失败: {str(e)}"}
-
-def handle_render_and_mux(params: dict) -> dict:
-    t0 = time.time()
-    video_path = params.get("video_path", "")
-    output_dir = params.get("output_dir", "")
-    segments = params.get("segments", [])
-    display_mode = params.get("display_mode", "bilingual")
-    show_speaker = params.get("show_speaker", False)
-    font_size_multiplier = float(params.get("font_size_multiplier", 1.8))
-    output_mode = params.get("output_mode", "soft_mkv")
-    mask_hardsub = bool(params.get("mask_hardsub", False))
-    video_width = int(params.get("video_width", 1920))
-    video_height = int(params.get("video_height", 1080))
-
-    if not os.path.exists(video_path):
-        return {"success": False, "error": f"物理视频文件不存在: {video_path}"}
-
-    os.makedirs(output_dir, exist_ok=True)
-    base_name = os.path.splitext(os.path.basename(video_path))[0]
-
-    srt_content = subtitle_engine.generate_srt(segments, display_mode, show_speaker)
-    srt_path = os.path.join(output_dir, f"{base_name}_subtitle.srt")
-    with open(srt_path, "w", encoding="utf-8") as f:
-        f.write(srt_content)
-
-    ass_content = subtitle_engine.generate_ass(
-        segments,
-        display_mode=display_mode,
-        show_speaker=show_speaker,
-        font_size_multiplier=font_size_multiplier,
-        video_width=video_width,
-        video_height=video_height,
-        mask_hardsub=mask_hardsub
-    )
-    ass_path = os.path.join(output_dir, f"{base_name}_subtitle.ass")
-    with open(ass_path, "w", encoding="utf-8") as f:
-        f.write(ass_content)
-
-    json_path = os.path.join(output_dir, f"{base_name}_bilingual.json")
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "video_path": video_path,
-            "total_segments": len(segments),
-            "segments": segments
-        }, f, ensure_ascii=False, indent=2)
-
-    output_video_path = ""
-    if output_mode == "hard_mp4_nvenc":
-        out_mp4 = os.path.join(output_dir, f"{base_name}_zidian_burned.mp4")
-        ok = subtitle_engine.burn_hard_subtitles_nvenc(video_path, ass_path, out_mp4)
-        if ok:
-            output_video_path = out_mp4
-        else:
-            return {"success": False, "error": "NVENC 显卡硬字幕压制失败"}
-    else:
-        out_mkv = os.path.join(output_dir, f"{base_name}_zidian_muxed.mkv")
-        ok = subtitle_engine.mux_soft_subtitles(video_path, ass_path, out_mkv)
-        if ok:
-            output_video_path = out_mkv
-        else:
-            return {"success": False, "error": "0.5s 无损软挂载 MKV 失败"}
-
-    elapsed_ms = round((time.time() - t0) * 1000, 2)
-    return {
-        "success": True,
-        "srt_path": srt_path,
-        "ass_path": ass_path,
-        "json_path": json_path,
-        "output_video_path": output_video_path,
-        "elapsed_ms": elapsed_ms
-    }
-
-def main():
-    init_ipc()
-    send_message("system.ready", {"status": "紫电 AI 视频双语字幕 Worker 已点火就绪"})
-
-    while True:
-        try:
-            msg = recv_message()
-            if msg is None:
-                break
-            method = msg.get("method")
-            params = msg.get("params", {})
-
-            if method == "extract_audio":
-                res = handle_extract_audio(params)
-                send_message("extract_audio_result", res)
-
-            elif method == "extract_subtitle_stream":
-                res = handle_extract_subtitle_stream(params)
-                send_message("extract_subtitle_stream_result", res)
-
-            elif method == "render_and_mux":
-                res = handle_render_and_mux(params)
-                send_message("render_and_mux_result", res)
-
-            elif method == "exit":
-                break
-            else:
-                send_message("error", {"message": f"未知指令: {method}"})
-
-        except Exception as e:
-            send_message("error", {"message": f"{str(e)}\n{traceback.format_exc()}"})
-
-if __name__ == "__main__":
-    main()
-</file>
-
-<file path="src-tauri/crates/tools/video-subtitle/src/lib.rs">
-pub mod probe;
-
-pub use probe::{SubtitleSourceKind, SubtitleTrackInfo, VideoProbeResult, VideoProbeService};
-
-use core_ipc::{spawn_uv_worker, IpcMessage};
-use serde::{Deserialize, Serialize};
-use service_asr::{AsrOptions, AsrService};
-use service_translation::{PureTranslationRequest, TranslationService};
-use shared_contracts::{TaskWeight, VramTokenGuard};
-use std::path::{Path, PathBuf};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DisplayMode {
-    Bilingual,
-    TargetOnly,
-    SourceOnly,
-}
-
-impl Default for DisplayMode {
-    fn default() -> Self {
-        Self::Bilingual
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum OutputMode {
-    SoftMkv,
-    HardMp4Nvenc,
-}
-
-impl Default for OutputMode {
-    fn default() -> Self {
-        Self::SoftMkv
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlossaryTerm {
-    pub source_term: String,
-    pub target_term: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VideoSubtitleOptions {
-    pub video_path: String,
-    pub output_dir: Option<String>,
-    pub target_lang: String,
-    pub display_mode: DisplayMode,
-    pub show_speaker: bool,
-    pub font_size_multiplier: f32,
-    pub output_mode: OutputMode,
-    pub hotwords: Option<String>,
-    pub glossary: Option<Vec<GlossaryTerm>>,
-    #[serde(default)]
-    pub source_kind: Option<SubtitleSourceKind>,
-    #[serde(default)]
-    pub subtitle_stream_index: Option<usize>,
-    /// 是否开启电影级羽化半透明遮罩 (温润遮挡原片硬字幕)
-    #[serde(default)]
-    pub mask_hardsub: bool,
-}
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SubtitleSegmentResult {
+pub struct EngineSegment {
     pub id: usize,
     pub speaker: String,
     pub start_sec: f64,
@@ -3679,457 +3018,551 @@ pub struct SubtitleSegmentResult {
     pub target_text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VideoSubtitleResult {
-    pub success: bool,
-    pub output_video_path: String,
-    pub srt_path: String,
-    pub ass_path: String,
-    pub json_path: String,
-    pub total_segments: usize,
-    pub segments: Vec<SubtitleSegmentResult>,
-    pub elapsed_ms: f64,
-    pub error: Option<String>,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ParsedSrtSegment {
+    pub id: usize,
+    pub speaker: String,
+    pub start_sec: f64,
+    pub end_sec: f64,
+    pub text: String,
 }
 
-pub struct VideoSubtitleTool;
+pub fn resolve_ffmpeg_bin() -> PathBuf {
+    let candidates = [
+        PathBuf::from(r"C:\dev\ai-forge\src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe"),
+        PathBuf::from(r"C:\dev\ai-forge\src-tauri\bin\ffmpeg.exe"),
+        PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe"),
+    ];
+    for c in candidates {
+        if c.exists() {
+            return c;
+        }
+    }
+    PathBuf::from("ffmpeg")
+}
 
-impl VideoSubtitleTool {
-    fn resolve_tool_dir() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\src-tauri\crates\tools\video-subtitle"),
-            PathBuf::from(r"C:\dev\ai-toolkit\src-tauri\crates\tools\video-subtitle"),
-        ];
-        for candidate in candidates {
-            if candidate.exists() {
-                return candidate;
-            }
-        }
-        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            return PathBuf::from(manifest_dir);
-        }
-        PathBuf::from("src-tauri/crates/tools/video-subtitle")
+pub fn clean_acoustic_noise(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    let re_square = Regex::new(r"(?i)\[(laughter|music|applause|singing|cough|snicker|sigh|groan)\]").unwrap();
+    let re_round = Regex::new(r"(?i)\((laughter|music|applause|singing|cough|snicker|sigh|groan)\)").unwrap();
+    let s1 = re_square.replace_all(text, "");
+    let s2 = re_round.replace_all(&s1, "");
+    s2.trim().to_string()
+}
+
+pub fn escape_ass_text(text: &str) -> String {
+    text.replace('{', "(").replace('}', ")").replace('\n', "\\N")
+}
+
+pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
+    let char_count = text.chars().count();
+    if text.is_empty() || char_count <= max_chars {
+        return text.to_string();
     }
 
-    /// 极简双轨调度：软字幕直通 / 生肉纯音频听写
-    pub async fn run_pipeline(
-        options: VideoSubtitleOptions,
-        vram_guard: Option<&VramTokenGuard>,
-    ) -> Result<VideoSubtitleResult, String> {
-        let video_path = Path::new(&options.video_path);
-        if !video_path.exists() {
-            return Err(format!("输入的物理视频文件不存在: {}", options.video_path));
-        }
+    let puncts = ['，', '；', '：', '。', '？', '！', ',', ';', ':', '?', '!'];
+    let mid = char_count / 2;
+    let mut best_split: Option<usize> = None;
+    let mut min_diff = char_count;
 
-        let resolved_mode = if let Some(mode) = options.source_kind {
-            mode
-        } else if options.subtitle_stream_index.is_some() {
-            SubtitleSourceKind::EmbeddedSoftStream
-        } else {
-            let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
-                VideoProbeResult {
-                    video_path: options.video_path.clone(),
-                    duration_sec: 0.0,
-                    width: 1920,
-                    height: 1080,
-                    has_audio: true,
-                    audio_streams_count: 1,
-                    soft_tracks: Vec::new(),
-                    recommended_mode: SubtitleSourceKind::RawAudio,
-                    elapsed_ms: 0.0,
-                }
-            });
-            probe_res.recommended_mode
-        };
-
-        match resolved_mode {
-            SubtitleSourceKind::EmbeddedSoftStream => {
-                tracing::info!("⚡ [双轨调度] 命中内嵌软字幕流，启动 0.05s 直通神经翻译通道");
-                Self::run_soft_stream_pipeline(options, vram_guard).await
-            }
-            SubtitleSourceKind::RawAudio => {
-                tracing::info!("🎙️ [双轨调度] 启动 MOSS 0.9B ASR 纯语音听写与翻译通道");
-                Self::run_raw_audio_pipeline(options, vram_guard).await
+    for (idx, ch) in text.chars().enumerate() {
+        if puncts.contains(&ch) && idx >= 8 && idx + 8 <= char_count {
+            let diff = (idx as isize - mid as isize).unsigned_abs();
+            if diff < min_diff {
+                min_diff = diff;
+                best_split = Some(idx + 1);
             }
         }
     }
 
-    pub async fn run_soft_stream_pipeline(
-        options: VideoSubtitleOptions,
-        vram_guard: Option<&VramTokenGuard>,
-    ) -> Result<VideoSubtitleResult, String> {
-        let t0 = std::time::Instant::now();
-        let video_path = Path::new(&options.video_path);
-        let output_dir = if let Some(dir) = &options.output_dir {
-            PathBuf::from(dir)
-        } else {
-            video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
-        };
-        let _ = tokio::fs::create_dir_all(&output_dir).await;
+    if let Some(split_idx) = best_split {
+        let left: String = text.chars().take(split_idx).collect();
+        let right: String = text.chars().skip(split_idx).collect();
+        return format!("{}\\N{}", left.trim(), right.trim());
+    }
 
-        let stream_idx = if let Some(idx) = options.subtitle_stream_index {
-            idx
-        } else {
-            let probe_res = VideoProbeService::probe(video_path).await?;
-            probe_res.soft_tracks.first().map(|t| t.stream_index).unwrap_or(2)
-        };
-
-        let tool_dir = Self::resolve_tool_dir();
-        let script_path = tool_dir.join("scripts/worker.py");
-
-        let timestamp_now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        let temp_srt_path = output_dir.join(format!("temp_extracted_{}.srt", timestamp_now));
-
-        let (mut child, mut channel) = spawn_uv_worker(&tool_dir, &script_path)
-            .map_err(|e| format!("启动 video-subtitle Worker 失败: {e}"))?;
-
-        let _ready_msg = channel.recv().await
-            .map_err(|e| format!("接收 Worker 就绪信号失败: {e}"))?;
-
-        let extract_req = IpcMessage {
-            method: "extract_subtitle_stream".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "stream_index": stream_idx,
-                "out_srt_path": temp_srt_path.to_string_lossy()
-            }),
-        };
-
-        channel.send(&extract_req).await
-            .map_err(|e| format!("发送字幕流提取请求失败: {e}"))?;
-
-        let extract_res = channel.recv().await
-            .map_err(|e| format!("接收字幕流提取响应失败: {e}"))?;
-
-        let res_params = &extract_res.params;
-        if res_params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = res_params.get("error").and_then(|v| v.as_str()).unwrap_or("抽离内嵌字幕流失败");
-            let _ = child.kill().await;
-            return Err(format!("FFmpeg 抽流错误: {err_msg}"));
-        }
-
-        let raw_segments_val = res_params.get("segments").and_then(|v| v.as_array())
-            .ok_or_else(|| "Worker 未能返回有效的台词数组".to_string())?;
-
-        if raw_segments_val.is_empty() {
-            let _ = child.kill().await;
-            let _ = tokio::fs::remove_file(&temp_srt_path).await;
-            return Err("抽离出的字幕轨道没有任何有效文本！".into());
-        }
-
-        let mut parsed_segments = Vec::new();
-        let mut source_texts = Vec::new();
-
-        for item in raw_segments_val {
-            let id = item["id"].as_u64().unwrap_or(0) as usize;
-            let speaker = item["speaker"].as_str().unwrap_or("S01").to_string();
-            let start_sec = item["start_sec"].as_f64().unwrap_or(0.0);
-            let end_sec = item["end_sec"].as_f64().unwrap_or(0.0);
-            let text = item["text"].as_str().unwrap_or("").to_string();
-
-            source_texts.push(text.clone());
-            parsed_segments.push((id, speaker, start_sec, end_sec, text));
-        }
-
-        let _vram_permit = if let Some(guard) = vram_guard {
-            match guard.acquire(TaskWeight::Light).await {
-                Ok(permit) => Some(permit),
-                Err(_) => None,
+    if text.contains(' ') {
+        let words: Vec<&str> = text.split(' ').collect();
+        let half_len = text.len() / 2;
+        let mut curr_len = 0;
+        let mut split_word_idx = 0;
+        for (i, w) in words.iter().enumerate() {
+            curr_len += w.len() + 1;
+            if curr_len >= half_len {
+                split_word_idx = i + 1;
+                break;
             }
-        } else {
-            None
-        };
+        }
+        if split_word_idx > 0 && split_word_idx < words.len() {
+            let line1 = words[..split_word_idx].join(" ");
+            let line2 = words[split_word_idx..].join(" ");
+            return format!("{}\\N{}", line1, line2);
+        }
+    }
 
-        let mut prepared_texts = Vec::new();
-        if let Some(terms) = &options.glossary {
-            if !terms.is_empty() {
-                let mut term_prompt = String::from("参考下面的翻译：\n");
-                for t in terms {
-                    term_prompt.push_str(&format!("{} 翻译成 {}\n", t.source_term, t.target_term));
-                }
-                for txt in &source_texts {
-                    prepared_texts.push(format!("{}\n{}", term_prompt.trim_end(), txt));
-                }
+    let left: String = text.chars().take(mid).collect();
+    let right: String = text.chars().skip(mid).collect();
+    format!("{}\\N{}", left, right)
+}
+
+pub fn estimate_text_width(text: &str, font_size: f64) -> f64 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    let lines: Vec<&str> = text.split("\\N").collect();
+    let mut max_w = 0.0f64;
+    for line in lines {
+        let mut w = 0.0f64;
+        for ch in line.chars() {
+            if (ch as u32) > 127 {
+                w += font_size * 0.92;
+            } else if ".,'!;: ".contains(ch) {
+                w += font_size * 0.25;
+            } else if ch.is_ascii_uppercase() || "MW@#%".contains(ch) {
+                w += font_size * 0.62;
             } else {
-                prepared_texts = source_texts.clone();
+                w += font_size * 0.46;
             }
-        } else {
-            prepared_texts = source_texts.clone();
+        }
+        if w > max_w {
+            max_w = w;
+        }
+    }
+    max_w
+}
+
+pub fn format_srt_time(seconds: f64) -> String {
+    let ms = (seconds * 1000.0).round().max(0.0) as u64;
+    let hrs = ms / 3_600_000;
+    let rem1 = ms % 3_600_000;
+    let mins = rem1 / 60_000;
+    let rem2 = rem1 % 60_000;
+    let secs = rem2 / 1_000;
+    let millis = rem2 % 1_000;
+    format!("{:02}:{:02}:{:02},{:03}", hrs, mins, secs, millis)
+}
+
+pub fn format_ass_time(seconds: f64) -> String {
+    let cs = (seconds * 100.0).round().max(0.0) as u64;
+    let hrs = cs / 360_000;
+    let rem1 = cs % 360_000;
+    let mins = rem1 / 6_000;
+    let rem2 = rem1 % 6_000;
+    let secs = rem2 / 100;
+    let centis = rem2 % 100;
+    format!("{}:{:02}:{:02}.{:02}", hrs, mins, secs, centis)
+}
+
+pub fn parse_srt_content(srt_text: &str) -> Vec<ParsedSrtSegment> {
+    let mut segments = Vec::new();
+    let normalized = srt_text.replace("\r\n", "\n");
+    let blocks: Vec<&str> = normalized.split("\n\n").collect();
+    let time_re = Regex::new(r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})").unwrap();
+    let tag_re = Regex::new(r"<[^>]+>").unwrap();
+
+    let mut seg_id = 1;
+    for block in blocks {
+        let lines: Vec<&str> = block.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        if lines.is_empty() {
+            continue;
         }
 
-        let trans_req = PureTranslationRequest {
-            texts: prepared_texts,
-            target_lang: Some(options.target_lang.clone()),
+        let mut time_line_idx: Option<usize> = None;
+        for (idx, line) in lines.iter().enumerate() {
+            if line.contains("-->") {
+                time_line_idx = Some(idx);
+                break;
+            }
+        }
+
+        let time_line_idx = match time_line_idx {
+            Some(idx) => idx,
+            None => continue,
         };
 
-        let trans_res = TranslationService::run_translation_pipeline(trans_req)
-            .await
-            .map_err(|e| format!("Hy-MT2 神经翻译失败: {e}"))?;
+        let caps = match time_re.captures(lines[time_line_idx]) {
+            Some(c) => c,
+            None => continue,
+        };
 
-        let mut result_segments = Vec::new();
-        for (idx, (id, speaker, start_sec, end_sec, source_text)) in parsed_segments.into_iter().enumerate() {
-            let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
-            result_segments.push(SubtitleSegmentResult {
-                id,
-                speaker,
-                start_sec,
-                end_sec,
-                source_text,
-                target_text,
+        let h1: f64 = caps[1].parse().unwrap_or(0.0);
+        let m1: f64 = caps[2].parse().unwrap_or(0.0);
+        let s1: f64 = caps[3].parse().unwrap_or(0.0);
+        let ms1: f64 = caps[4].parse().unwrap_or(0.0);
+
+        let h2: f64 = caps[5].parse().unwrap_or(0.0);
+        let m2: f64 = caps[6].parse().unwrap_or(0.0);
+        let s2: f64 = caps[7].parse().unwrap_or(0.0);
+        let ms2: f64 = caps[8].parse().unwrap_or(0.0);
+
+        let start_sec = h1 * 3600.0 + m1 * 60.0 + s1 + ms1 / 1000.0;
+        let end_sec = h2 * 3600.0 + m2 * 60.0 + s2 + ms2 / 1000.0;
+
+        let text_lines = &lines[time_line_idx + 1..];
+        let raw_text = text_lines.join(" ");
+        let clean_text = tag_re.replace_all(&raw_text, "").trim().to_string();
+
+        if !clean_text.is_empty() {
+            segments.push(ParsedSrtSegment {
+                id: seg_id,
+                speaker: "S01".to_string(),
+                start_sec: (start_sec * 1000.0).round() / 1000.0,
+                end_sec: (end_sec * 1000.0).round() / 1000.0,
+                text: clean_text,
             });
+            seg_id += 1;
+        }
+    }
+    segments
+}
+
+pub fn generate_srt(
+    segments: &[EngineSegment],
+    display_mode: &str,
+    show_speaker: bool,
+) -> String {
+    let mut blocks = Vec::new();
+    let mut valid_idx = 1;
+
+    for seg in segments {
+        let src = clean_acoustic_noise(&seg.source_text);
+        let tgt = clean_acoustic_noise(&seg.target_text);
+        let spk = if show_speaker && !seg.speaker.is_empty() {
+            format!("[{}] ", seg.speaker)
+        } else {
+            String::new()
+        };
+
+        if src.is_empty() && tgt.is_empty() {
+            continue;
         }
 
-        let display_mode_str = match options.display_mode {
-            DisplayMode::Bilingual => "bilingual",
-            DisplayMode::TargetOnly => "target_only",
-            DisplayMode::SourceOnly => "source_only",
-        };
-
-        let output_mode_str = match options.output_mode {
-            OutputMode::SoftMkv => "soft_mkv",
-            OutputMode::HardMp4Nvenc => "hard_mp4_nvenc",
-        };
-
-        let render_req = IpcMessage {
-            method: "render_and_mux".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "output_dir": output_dir.to_string_lossy(),
-                "segments": result_segments,
-                "display_mode": display_mode_str,
-                "show_speaker": options.show_speaker,
-                "font_size_multiplier": options.font_size_multiplier,
-                "output_mode": output_mode_str,
-                "mask_hardsub": options.mask_hardsub
-            }),
-        };
-
-        channel.send(&render_req).await
-            .map_err(|e| format!("发送渲染挂载请求失败: {e}"))?;
-
-        let render_res = channel.recv().await
-            .map_err(|e| format!("接收渲染挂载响应失败: {e}"))?;
-
-        let exit_msg = IpcMessage {
-            method: "exit".to_string(),
-            params: serde_json::json!({}),
-        };
-        let _ = channel.send(&exit_msg).await;
-        let _ = child.wait().await;
-
-        let _ = tokio::fs::remove_file(&temp_srt_path).await;
-
-        let res_params = &render_res.params;
-        if res_params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = res_params.get("error").and_then(|v| v.as_str()).unwrap_or("视频渲染压制失败");
-            return Err(format!("字幕渲染压制错误: {err_msg}"));
+        let mut lines = Vec::new();
+        match display_mode {
+            "bilingual" => {
+                if !tgt.is_empty() {
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 24)));
+                }
+                if !src.is_empty() {
+                    lines.push(smart_wrap_line(&src, 42));
+                }
+            }
+            "target_only" => {
+                if !tgt.is_empty() {
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 24)));
+                } else if !src.is_empty() {
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&src, 42)));
+                }
+            }
+            "source_only" => {
+                if !src.is_empty() {
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&src, 42)));
+                }
+            }
+            _ => {
+                if !tgt.is_empty() {
+                    lines.push(format!("{}{}", spk, smart_wrap_line(&tgt, 24)));
+                }
+            }
         }
 
-        let srt_path = res_params.get("srt_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let ass_path = res_params.get("ass_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let json_path = res_params.get("json_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let output_video_path = res_params.get("output_video_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if lines.is_empty() {
+            continue;
+        }
 
-        let elapsed_ms = t0.elapsed().as_millis() as f64;
-
-        Ok(VideoSubtitleResult {
-            success: true,
-            output_video_path,
-            srt_path,
-            ass_path,
-            json_path,
-            total_segments: result_segments.len(),
-            segments: result_segments,
-            elapsed_ms,
-            error: None,
-        })
+        let t_start = format_srt_time(seg.start_sec);
+        let t_end = format_srt_time(seg.end_sec);
+        let block_content = lines.join("\n");
+        blocks.push(format!("{}\n{} --> {}\n{}\n", valid_idx, t_start, t_end, block_content));
+        valid_idx += 1;
     }
 
-    pub async fn run_raw_audio_pipeline(
-        options: VideoSubtitleOptions,
-        vram_guard: Option<&VramTokenGuard>,
-    ) -> Result<VideoSubtitleResult, String> {
-        let t0 = std::time::Instant::now();
-        let video_path = Path::new(&options.video_path);
-        let output_dir = if let Some(dir) = &options.output_dir {
-            PathBuf::from(dir)
+    blocks.join("\n")
+}
+
+pub fn generate_ass(
+    segments: &[EngineSegment],
+    display_mode: &str,
+    show_speaker: bool,
+    font_size_multiplier: f32,
+    video_width: u32,
+    video_height: u32,
+    mask_hardsub: bool,
+) -> String {
+    let base_font_size = (video_height as f32 * 0.045 * font_size_multiplier).round().max(20.0) as u32;
+    let sec_font_size = (video_height as f32 * 0.028 * font_size_multiplier).round().max(15.0) as u32;
+
+    let margin_l = (video_width as f32 * 0.03).round().max(20.0) as u32;
+    let margin_r = margin_l;
+    let margin_v = (video_height as f32 * 0.03).round().max(12.0) as u32;
+
+    let mut speakers = std::collections::BTreeSet::new();
+    for seg in segments {
+        if !seg.speaker.is_empty() {
+            speakers.insert(seg.speaker.clone());
+        }
+    }
+    if speakers.is_empty() {
+        speakers.insert("S01".to_string());
+    }
+
+    let mut style_lines = vec![
+        format!("Style: PrimaryStyle,Arial,{},{},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,2.0,1.0,2,{},{},{},1", base_font_size, COLOR_ZIDIAN_PRIMARY, margin_l, margin_r, margin_v),
+        format!("Style: SecondaryStyle,Arial,{},{},&H000000FF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,1.8,0.8,2,{},{},{},1", sec_font_size, COLOR_QINGSHUANG_SECONDARY, margin_l, margin_r, margin_v),
+    ];
+
+    for (idx, spk) in speakers.iter().enumerate() {
+        let color = SPEAKER_COLORS[idx % SPEAKER_COLORS.len()];
+        let spk_style_name = format!("Speaker_{}", spk);
+        style_lines.push(
+            format!("Style: {},Arial,{},{},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,2.0,1.0,2,{},{},{},1", spk_style_name, base_font_size, color, margin_l, margin_r, margin_v)
+        );
+    }
+
+    style_lines.push(
+        "Style: CapsuleMask,Arial,10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,2,0,0,0,1".to_string()
+    );
+
+    let mut dialogue_lines = Vec::new();
+
+    for seg in segments {
+        let raw_src = clean_acoustic_noise(&seg.source_text);
+        let raw_tgt = clean_acoustic_noise(&seg.target_text);
+        let spk = &seg.speaker;
+
+        if raw_src.is_empty() && raw_tgt.is_empty() {
+            continue;
+        }
+
+        let wrapped_src = smart_wrap_line(&raw_src, 40);
+        let wrapped_tgt = smart_wrap_line(&raw_tgt, 24);
+
+        let src = escape_ass_text(&wrapped_src);
+        let tgt = escape_ass_text(&wrapped_tgt);
+
+        let spk_prefix = if show_speaker && !spk.is_empty() {
+            format!("[{}] ", spk)
         } else {
-            video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
+            String::new()
         };
-        let _ = tokio::fs::create_dir_all(&output_dir).await;
 
-        let tool_dir = Self::resolve_tool_dir();
-        let script_path = tool_dir.join("scripts/worker.py");
+        let t_start = format_ass_time(seg.start_sec);
+        let t_end = format_ass_time(seg.end_sec);
 
-        let _vram_permit = if let Some(guard) = vram_guard {
-            match guard.acquire(TaskWeight::Heavy).await {
-                Ok(permit) => Some(permit),
-                Err(_) => None,
-            }
+        let style_name = if show_speaker && speakers.contains(spk) {
+            format!("Speaker_{}", spk)
         } else {
-            None
+            "PrimaryStyle".to_string()
         };
 
-        let timestamp_now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        let temp_wav_path = output_dir.join(format!("temp_zidian_{}.wav", timestamp_now));
-        
-        let (mut child, mut channel) = spawn_uv_worker(&tool_dir, &script_path)
-            .map_err(|e| format!("启动 video-subtitle Worker 失败: {e}"))?;
-
-        let _ready_msg = channel.recv().await
-            .map_err(|e| format!("接收 Worker 就绪信号失败: {e}"))?;
-
-        let extract_req = IpcMessage {
-            method: "extract_audio".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "out_wav_path": temp_wav_path.to_string_lossy()
-            }),
-        };
-
-        channel.send(&extract_req).await
-            .map_err(|e| format!("发送音频提取请求失败: {e}"))?;
-
-        let extract_res = channel.recv().await
-            .map_err(|e| format!("接收音频提取响应失败: {e}"))?;
-
-        if extract_res.params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = extract_res.params.get("error").and_then(|v| v.as_str()).unwrap_or("提取音频失败");
-            return Err(format!("FFmpeg 音频提取错误: {err_msg}"));
-        }
-
-        let asr_opts = AsrOptions {
-            audio_path: temp_wav_path.to_string_lossy().to_string(),
-            language: Some("auto".into()),
-            prompt: None,
-            hotwords: options.hotwords.clone(),
-            max_new_tokens: Some(4096),
-            temperature: Some(0.0),
-        };
-
-        let asr_res = AsrService::run_asr_pipeline(asr_opts)
-            .await
-            .map_err(|e| format!("MOSS 0.9B ASR 听写流水线失败: {e}"))?;
-
-        if asr_res.segments.is_empty() {
-            let _ = tokio::fs::remove_file(&temp_wav_path).await;
-            return Err("视频中未识别出任何语音台词！".into());
-        }
-
-        let mut source_texts = Vec::new();
-        for seg in &asr_res.segments {
-            source_texts.push(seg.text.clone());
-        }
-
-        let mut prepared_texts = Vec::new();
-        if let Some(terms) = &options.glossary {
-            if !terms.is_empty() {
-                let mut term_prompt = String::from("参考下面的翻译：\n");
-                for t in terms {
-                    term_prompt.push_str(&format!("{} 翻译成 {}\n", t.source_term, t.target_term));
-                }
-                for txt in &source_texts {
-                    prepared_texts.push(format!("{}\n{}", term_prompt.trim_end(), txt));
-                }
+        if mask_hardsub {
+            let w_tgt = if !tgt.is_empty() {
+                estimate_text_width(&format!("{}{}", spk_prefix, tgt), base_font_size as f64)
             } else {
-                prepared_texts = source_texts.clone();
+                0.0
+            };
+            let w_src = if !src.is_empty() {
+                estimate_text_width(&src, sec_font_size as f64)
+            } else {
+                0.0
+            };
+            let max_text_w = w_tgt.max(w_src);
+
+            let pad_x = (base_font_size as f64 * 0.55).round().max(18.0) as i64;
+            let box_w = ((video_width as f64 * 0.80).round() as i64).min(100.max((max_text_w + (pad_x * 2) as f64).round() as i64));
+
+            let has_two_lines = !tgt.is_empty() && !src.is_empty() && display_mode == "bilingual";
+            let box_h = if has_two_lines {
+                let tgt_lines = tgt.split("\\N").count() as f64;
+                let src_lines = src.split("\\N").count() as f64;
+                (base_font_size as f64 * 1.25 * tgt_lines + sec_font_size as f64 * 1.25 * src_lines + 10.0).round() as i64
+            } else {
+                let active_text = if display_mode != "source_only" && !tgt.is_empty() { &tgt } else { &src };
+                let lines = active_text.split("\\N").count() as f64;
+                (base_font_size as f64 * 1.3 * lines + 8.0).round() as i64
+            };
+
+            let box_x0 = 6.max((video_width as i64 - box_w) / 2);
+            let box_y0 = 6.max(video_height as i64 - margin_v as i64 - box_h + 2);
+
+            let mask_cmd = format!(
+                r"{{\an7\pos({},{})\p1\c&H000000&\1a&H35&\bord0\shad0\blur6}}m 0 0 l {} 0 l {} {} l 0 {}{{\p0}}",
+                box_x0, box_y0, box_w, box_w, box_h, box_h
+            );
+            dialogue_lines.push(format!("Dialogue: 0,{},{},CapsuleMask,,0,0,0,,{}", t_start, t_end, mask_cmd));
+        }
+
+        let text_content = match display_mode {
+            "bilingual" => {
+                if !tgt.is_empty() && !src.is_empty() {
+                    format!("{}{}\\N{{\\rSecondaryStyle}}{}", spk_prefix, tgt, src)
+                } else if !tgt.is_empty() {
+                    format!("{}{}", spk_prefix, tgt)
+                } else {
+                    format!("{}{}", spk_prefix, src)
+                }
             }
-        } else {
-            prepared_texts = source_texts.clone();
+            "target_only" => {
+                if !tgt.is_empty() {
+                    format!("{}{}", spk_prefix, tgt)
+                } else {
+                    format!("{}{}", spk_prefix, src)
+                }
+            }
+            "source_only" => {
+                format!("{}{}", spk_prefix, src)
+            }
+            _ => {
+                format!("{}{}", spk_prefix, tgt)
+            }
+        };
+
+        dialogue_lines.push(format!("Dialogue: 1,{},{},{},,0,0,0,,{}", t_start, t_end, style_name, text_content));
+    }
+
+    let mut header = vec![
+        "[Script Info]".to_string(),
+        "Title: 紫电 AI 视频双语字幕工坊".to_string(),
+        "ScriptType: v4.00+".to_string(),
+        "WrapStyle: 0".to_string(),
+        "ScaledBorderAndShadow: yes".to_string(),
+        format!("PlayResX: {}", video_width),
+        format!("PlayResY: {}", video_height),
+        "".to_string(),
+        "[V4+ Styles]".to_string(),
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding".to_string(),
+    ];
+    header.extend(style_lines);
+    header.push("".to_string());
+    header.push("[Events]".to_string());
+    header.push("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text".to_string());
+    header.extend(dialogue_lines);
+    header.push("".to_string());
+
+    header.join("\n")
+}
+
+pub async fn extract_audio_from_video(video_path: &Path, out_wav_path: &Path) -> Result<(), String> {
+    let ffmpeg_bin = resolve_ffmpeg_bin();
+    let status = tokio::process::Command::new(ffmpeg_bin)
+        .arg("-y")
+        .arg("-i").arg(video_path)
+        .arg("-vn")
+        .arg("-acodec").arg("pcm_s16le")
+        .arg("-ar").arg("16000")
+        .arg("-ac").arg("1")
+        .arg(out_wav_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map_err(|e| format!("调起 FFmpeg 提取音频失败: {e}"))?;
+
+    if status.success() && out_wav_path.exists() {
+        Ok(())
+    } else {
+        Err("FFmpeg 从视频提取音频 WAV 失败".to_string())
+    }
+}
+
+pub async fn extract_subtitle_stream(video_path: &Path, stream_index: usize, out_sub_path: &Path) -> Result<Vec<ParsedSrtSegment>, String> {
+    let ffmpeg_bin = resolve_ffmpeg_bin();
+    let map_arg = format!("0:{}", stream_index);
+    let status = tokio::process::Command::new(ffmpeg_bin)
+        .arg("-y")
+        .arg("-i").arg(video_path)
+        .arg("-map").arg(&map_arg)
+        .arg(out_sub_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map_err(|e| format!("调起 FFmpeg 抽离字幕流失败: {e}"))?;
+
+    if !status.success() || !out_sub_path.exists() {
+        return Err(format!("FFmpeg 抽离字幕流 (index {}) 失败", stream_index));
+    }
+
+    let content = tokio::fs::read_to_string(out_sub_path).await
+        .map_err(|e| format!("读取提取的字幕文件失败: {e}"))?;
+
+    let segments = parse_srt_content(&content);
+    Ok(segments)
+}
+
+pub async fn mux_soft_subtitles(video_path: &Path, ass_path: &Path, out_mkv_path: &Path) -> Result<(), String> {
+    let ffmpeg_bin = resolve_ffmpeg_bin();
+    let status = tokio::process::Command::new(ffmpeg_bin)
+        .arg("-y")
+        .arg("-i").arg(video_path)
+        .arg("-i").arg(ass_path)
+        .arg("-c:v").arg("copy")
+        .arg("-c:a").arg("copy")
+        .arg("-c:s").arg("copy")
+        .arg("-metadata:s:0").arg("language=zho")
+        .arg("-metadata:s:0").arg("title=紫电 AI 双语字幕")
+        .arg("-disposition:s:0").arg("default")
+        .arg(out_mkv_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map_err(|e| format!("调起 FFmpeg 混流 MKV 失败: {e}"))?;
+
+    if status.success() && out_mkv_path.exists() {
+        Ok(())
+    } else {
+        Err("0.5s 无损软挂载 MKV 失败".to_string())
+    }
+}
+
+pub async fn burn_hard_subtitles_nvenc(video_path: &Path, ass_path: &Path, out_mp4_path: &Path) -> Result<(), String> {
+    let ffmpeg_bin = resolve_ffmpeg_bin();
+    let escaped_ass = ass_path.to_string_lossy().replace('\\', "/").replace(':', "\\:");
+    let vf_param = format!("subtitles='{}'", escaped_ass);
+
+    let status_gpu = tokio::process::Command::new(&ffmpeg_bin)
+        .arg("-y")
+        .arg("-hwaccel").arg("cuda")
+        .arg("-i").arg(video_path)
+        .arg("-vf").arg(&vf_param)
+        .arg("-c:v").arg("h264_nvenc")
+        .arg("-preset").arg("p4")
+        .arg("-cq").arg("23")
+        .arg("-c:a").arg("copy")
+        .arg(out_mp4_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
+
+    if let Ok(st) = status_gpu {
+        if st.success() && out_mp4_path.exists() {
+            return Ok(());
         }
+    }
 
-        let trans_req = PureTranslationRequest {
-            texts: prepared_texts,
-            target_lang: Some(options.target_lang.clone()),
-        };
+    let status_cpu = tokio::process::Command::new(&ffmpeg_bin)
+        .arg("-y")
+        .arg("-i").arg(video_path)
+        .arg("-vf").arg(&vf_param)
+        .arg("-c:v").arg("libx264")
+        .arg("-crf").arg("23")
+        .arg("-preset").arg("fast")
+        .arg("-c:a").arg("copy")
+        .arg(out_mp4_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map_err(|e| format!("CPU 兜底压制启动失败: {e}"))?;
 
-        let trans_res = TranslationService::run_translation_pipeline(trans_req)
-            .await
-            .map_err(|e| format!("Hy-MT2 1.8B 神经翻译流水线失败: {e}"))?;
-
-        let mut result_segments = Vec::new();
-        for (idx, seg) in asr_res.segments.iter().enumerate() {
-            let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
-            result_segments.push(SubtitleSegmentResult {
-                id: seg.id,
-                speaker: seg.speaker.clone(),
-                start_sec: seg.start_sec,
-                end_sec: seg.end_sec,
-                source_text: seg.text.clone(),
-                target_text,
-            });
-        }
-
-        let display_mode_str = match options.display_mode {
-            DisplayMode::Bilingual => "bilingual",
-            DisplayMode::TargetOnly => "target_only",
-            DisplayMode::SourceOnly => "source_only",
-        };
-
-        let output_mode_str = match options.output_mode {
-            OutputMode::SoftMkv => "soft_mkv",
-            OutputMode::HardMp4Nvenc => "hard_mp4_nvenc",
-        };
-
-        let render_req = IpcMessage {
-            method: "render_and_mux".to_string(),
-            params: serde_json::json!({
-                "video_path": options.video_path,
-                "output_dir": output_dir.to_string_lossy(),
-                "segments": result_segments,
-                "display_mode": display_mode_str,
-                "show_speaker": options.show_speaker,
-                "font_size_multiplier": options.font_size_multiplier,
-                "output_mode": output_mode_str,
-                "mask_hardsub": options.mask_hardsub
-            }),
-        };
-
-        channel.send(&render_req).await
-            .map_err(|e| format!("发送渲染挂载请求失败: {e}"))?;
-
-        let render_res = channel.recv().await
-            .map_err(|e| format!("接收渲染挂载响应失败: {e}"))?;
-
-        let exit_msg = IpcMessage {
-            method: "exit".to_string(),
-            params: serde_json::json!({}),
-        };
-        let _ = channel.send(&exit_msg).await;
-        let _ = child.wait().await;
-
-        let _ = tokio::fs::remove_file(&temp_wav_path).await;
-
-        let res_params = &render_res.params;
-        if res_params.get("success") != Some(&serde_json::Value::Bool(true)) {
-            let err_msg = res_params.get("error").and_then(|v| v.as_str()).unwrap_or("视频渲染压制失败");
-            return Err(format!("字幕渲染压制错误: {err_msg}"));
-        }
-
-        let srt_path = res_params.get("srt_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let ass_path = res_params.get("ass_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let json_path = res_params.get("json_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let output_video_path = res_params.get("output_video_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-
-        let elapsed_ms = t0.elapsed().as_millis() as f64;
-
-        Ok(VideoSubtitleResult {
-            success: true,
-            output_video_path,
-            srt_path,
-            ass_path,
-            json_path,
-            total_segments: result_segments.len(),
-            segments: result_segments,
-            elapsed_ms,
-            error: None,
-        })
+    if status_cpu.success() && out_mp4_path.exists() {
+        Ok(())
+    } else {
+        Err("硬字幕压制 (NVENC & CPU 兜底) 均失败".to_string())
     }
 }
 
@@ -4137,61 +3570,47 @@ impl VideoSubtitleTool {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_real_physical_5_mkv_e2e() {
-        let input_path = PathBuf::from(r"C:\dev\ai-forge\test\input\video-subtitle\5.mkv");
-        let output_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\video-subtitle");
-        let _ = tokio::fs::create_dir_all(&output_dir).await;
+    #[test]
+    fn test_clean_acoustic_noise() {
+        let input = "[laughter] Welcome to AI-Forge (music) project!";
+        let cleaned = clean_acoustic_noise(input);
+        assert_eq!(cleaned, "Welcome to AI-Forge  project!");
+    }
 
-        if !input_path.exists() {
-            eprintln!("⚠️ [跳过测试] 输入测试视频不存在: {:?}", input_path);
-            return;
-        }
+    #[test]
+    fn test_time_formatting() {
+        assert_eq!(format_srt_time(65.123), "00:01:05,123");
+        assert_eq!(format_ass_time(65.123), "0:01:05.12");
+    }
 
-        println!("\n🎬 ===== [5.mkv 26分钟长视频真机全流程转写与压制打靶] =====");
-        println!("  输入视频: {:?}", input_path);
-        println!("  输出目录: {:?}", output_dir);
-        println!("  遮罩模式: 电影级柔和羽化渐晕 (mask_hardsub = true)");
+    #[test]
+    fn test_parse_srt_content() {
+        let srt = "1\n00:00:01,000 --> 00:00:03,500\n<i>Hello world</i>\n\n2\n00:00:04,000 --> 00:00:06,000\nRust Native Engine\n";
+        let parsed = parse_srt_content(srt);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].start_sec, 1.0);
+        assert_eq!(parsed[0].end_sec, 3.5);
+        assert_eq!(parsed[0].text, "Hello world");
+        assert_eq!(parsed[1].text, "Rust Native Engine");
+    }
 
-        let t0 = std::time::Instant::now();
-
-        let opts = VideoSubtitleOptions {
-            video_path: input_path.to_string_lossy().to_string(),
-            output_dir: Some(output_dir.to_string_lossy().to_string()),
-            target_lang: "Chinese".into(),
-            display_mode: DisplayMode::Bilingual,
-            show_speaker: true,
-            font_size_multiplier: 1.8,
-            output_mode: OutputMode::SoftMkv,
-            hotwords: None,
-            glossary: None,
-            source_kind: None, // 探针自动判定 RawAudio 听写
-            subtitle_stream_index: None,
-            mask_hardsub: true,
-        };
-
-        let res = VideoSubtitleTool::run_pipeline(opts, None).await
-            .expect("5.mkv 双语字幕流水线执行失败");
-
-        let total_elapsed = t0.elapsed().as_secs_f64();
-
-        println!("\n🎉 ===== [5.mkv 26分钟长视频双语转写全量成功] =====");
-        println!("  ⏱️ 全量物理耗时: {:.2} s ({:.2} 分钟) | 共生成 {} 句双语字幕", total_elapsed, total_elapsed / 60.0, res.total_segments);
-        println!("  💾 1. 软字幕视频: {:?}", res.output_video_path);
-        println!("  💾 2. SRT 字幕:   {:?}", res.srt_path);
-        println!("  💾 3. ASS 特效字幕 (带柔和遮罩): {:?}", res.ass_path);
-        println!("  💾 4. JSON 结构数据: {:?}", res.json_path);
-
-        assert!(res.total_segments > 0, "提取台词数不可为 0！");
-        assert!(Path::new(&res.output_video_path).exists(), "产物视频必须真实落盘！");
-
-        println!("\n  👀 预览前 5 句双语对齐结果:");
-        for seg in res.segments.iter().take(5) {
-            println!("    [{:02}] [{:.2}s -> {:.2}s] [{}]", seg.id, seg.start_sec, seg.end_sec, seg.speaker);
-            println!("        原文: {}", seg.source_text);
-            println!("        译文: {}", seg.target_text);
-        }
-        println!("=======================================================\n");
+    #[test]
+    fn test_generate_ass_with_mask() {
+        let segs = vec![
+            EngineSegment {
+                id: 1,
+                speaker: "S01".to_string(),
+                start_sec: 1.0,
+                end_sec: 3.0,
+                source_text: "Hello world".to_string(),
+                target_text: "你好世界".to_string(),
+            }
+        ];
+        let ass = generate_ass(&segs, "bilingual", true, 1.8, 1920, 1080, true);
+        assert!(ass.contains("Style: CapsuleMask"));
+        assert!(ass.contains("Dialogue: 0,0:00:01.00,0:00:03.00,CapsuleMask"));
+        assert!(ass.contains("Dialogue: 1,0:00:01.00,0:00:03.00,Speaker_S01"));
+        assert!(ass.contains(r"[S01] 你好世界\N{\rSecondaryStyle}Hello world"));
     }
 }
 </file>
@@ -4544,43 +3963,6 @@ impl VideoProbeService {
 }
 </file>
 
-<file path="src-tauri/crates/tools/video-subtitle/Cargo.toml">
-[package]
-name = "video-subtitle"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "video_subtitle"
-path = "src/lib.rs"
-
-[dependencies]
-core-ipc = { path = "../../core-ipc" }
-shared-contracts = { path = "../../shared-contracts" }
-service-asr = { path = "../../services/service-asr" }
-service-translation = { path = "../../services/service-translation" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2"
-tracing = "0.1"
-tokio = { version = "1.38", features = ["full"] }
-</file>
-
-<file path="src-tauri/crates/tools/video-subtitle/pyproject.toml">
-[project]
-name = "video-subtitle"
-version = "0.1.0"
-description = "AI-Forge - Video Subtitle & Translation Tool Sandbox"
-requires-python = ">=3.10,<3.13"
-dependencies = [
-    "socksio>=1.0.0",
-    "httpx-socks>=0.8.0",
-]
-
-[tool.uv]
-package = false
-</file>
-
 <file path="src-tauri/src/main.rs">
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -4588,139 +3970,6 @@ package = false
 fn main() {
     ai_forge_lib::run();
 }
-</file>
-
-<file path="HANDOFF-TOOL.md">
-# 🛡️ AI-Forge (紫电 AI 桌面工坊) · 工具中台与视频双语字幕全栈重构交接文档 (HANDOFF_TOOL.md)
-
-> **文档版本**：v21.0.0 (2026年8月 桌面级多任务排队中台、动态羽化胶囊遮罩与纯血 C-FFI 闭环交接专版)  
-> **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 开发环境)  
-> **开发终端**：**Developer PowerShell for VS 2022 (快捷键 Ctrl+Shift+7)** / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1 / Ninja  
-> **面向对象**：新会话 AI 架构师 / 资深系统专家 (零历史障碍直接接管并启动下一阶段)
-
----
-
-## 🏢 1. 我们正在做什么与整体背景 (Context & Mission)
-
-1. **项目定位**：
-   - 工业级本地离线 AI 桌面工坊（**Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + C-FFI / ONNX 纯血直推**）。
-2. **核心工程哲学（钱学森系统工程 + Karpathy 极简原则）**：
-   - “不执着于单点技术的极致拔尖，而是通过全系统协同优化，让廉价 AI + 极致框架创造最大化生产力！”
-   - **大模型 100% 去 Python 化**：ASR（MOSS 0.9B）与神经翻译（Hy-MT2 1.8B）全面基于 Rust C-FFI 原生直连 C++ 动态库 + GGUF 单文件权重 + GPU 显存锁（`VramTokenGuard`），彻底消灭 Python 沙箱与网络端口；
-   - **前端中台化与拿来主义（Rule 14 Zero-Regression）**：1:1 外科手术式直译 ToolKnit 原生桌面端顶级暗黑单色美学，建立通用工作流状态机（`useToolWorkflow`）与通用布局骨架（`ToolWorkbenchLayout`），新工具接入仅需 3 分钟！
-
----
-
-## 🟢 2. 本会话已 100% 竣工的突破性成果 (Completed Work)
-
-### 2.1 工业级前端四层工具中台落地 (`src/components/workbench/` & `src/composables/`)
-1. **多任务批量队列状态机母线 (`useToolWorkflow.ts`)**：
-   - 支持单文件 / 多文件批量拖拽排队，自动提取文件元数据、时长与体积；
-   - 统一调度 `executeBatch` 串行推进（`正在处理... (1/N)`），集成流光进度遮罩与成功交付弹窗；
-   - 原生调用 `@tauri-apps/plugin-opener` 的 `revealItemInDir`，实现 `[打开文件夹]` 瞬间定位产物。
-2. **ToolKnit 1:1 原生桌面端骨架 (`ToolWorkbenchLayout.vue`)**：
-   - **左侧海报栏 (Poster Column, 340px)**：分类标签 + 超大中文标题 + 详细简介 + `LOCAL ONLY` 隐私卡片 + `01~04` 垂直步骤指示器；
-   - **右侧多任务工作台**：顶层上传控制条 + 参数选项胶囊排 + `待处理队列 (CONVERT QUEUE)` + 4 栏特性卡片 + 底部高反差 `[开始处理]` 按钮；
-   - **模态系统**：暗黑半透明处理中遮罩 + 纯白高反差成功交付对话框。
-
-### 2.2 彻底解耦 OCR 与极简双轨调度重构 (`crates/tools/video-subtitle`)
-1. **架构大瘦身**：彻底切断 `video-subtitle` 对 `service-ocr` 的重型依赖，消除长视频时域 OCR 抽帧带来的闪烁、漏字与空镜头漏判问题；
-2. **双轨极速智能分流**：
-   - 探针 10ms 嗅探到内嵌字幕流 ➔ **管道 B：0.05s 无损抽离直通 Hy-MT2 神经翻译 (1,000 MB 显存)**；
-   - 探针嗅探无字幕流 ➔ **管道 A：MOSS 0.9B ASR 语音识别 ➔ Hy-MT2 神经翻译 (8,000 MB 显存)**。
-
-### 2.3 电影级动态字形紧致羽化胶囊遮罩引擎 (`subtitle_engine.py`)
-1. **彻底解决原片硬字幕碰撞死结**：针对自带硬字幕的视频，引入 `mask_hardsub: bool` 开关；
-2. **Layer 0 + Layer 1 双图层彻底分离**：
-   - **Layer 1（文字层）**：0 模糊（`\blur0`），保留 1.5px 极细立体描边，字形如刀刻般 100% 锐利；
-   - **Layer 0（遮罩层）**：正向绝对坐标 `{\an7\pos(X0, Y0)\p1...}`，中文字宽动态估算（`0.92` 倍字号），左右仅紧凑外扩 `0.55` 倍字号（~20px），四周配合 `\blur6` 紧致柔边；
-   - **效果**：仅在字幕背后生成紧凑的烟熏暗夜小胶囊，原片旧字幕被完美压暗，两侧画面 100% 保持通透自然！
-
-### 2.4 全链路真实长视频物理打靶 100% 绿通 (`--release`)
-- **测试样本 1 (`1.mp4`, 192s)**：提取 48 句台词，4 说话人分离，全流程 59 秒生成 MKV、MP4、SRT、ASS、JSON 5 大产物；
-- **测试样本 2 (`5.mkv`, 26.02分钟 / 1561秒)**：全量物理耗时仅 **56.58 秒**（实时比 **27.6 倍速**！），双语 ASS 特效字幕与软挂载 MKV 完美生成！
-
----
-
-## 🛑 3. 当前精确卡点与未竟技术问题 (Current State & Known Bottlenecks)
-
-虽然单个长视频后端测试与前端构建全量通过，但桌面端全功能仍有以下细节需在下一会话深入打磨：
-
-1. **前端 GUI 多任务队列与后端并发控制的真机交互闭环**：
-   - 目前 GUI 界面已能展示多文件排队列表，但在实际点击 `[开始处理]` 时，队列中每个文件在界面的微观进度反馈（例如队列中第 1 项完成打勾、第 2 项显示转圈状态）仍需进一步精细化连通；
-2. **ASS 胶囊垂直基线在不同异形画幅下的自适应微调**：
-   - 当前在 `1280x520` 宽银幕下效果极佳，但对于 9:16 竖屏短视频或 4:3 老电影画幅，垂直 `Y0` 的基准偏移量需进一步验证自适应鲁棒性；
-3. **其他工具视图的组件中台化迁移**：
-   - 全能格式转换（`FormatConverterView.vue`）和 PDF 智能解析（`PdfParseView.vue`）尚未接入全新的 `ToolWorkbenchLayout` 桌面端海报海报布局。
-
----
-
-## 🗺️ 4. 下一会话全流程规划路线 (Master Roadmap)
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 1：完善 VideoSubtitleView 队列微观状态展示与全功能真机打靶       │
-│  • 细化多任务排队列表中单项完成/处理中/失败的图标状态与时间轴展示     │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 2：对齐全能格式转换 (FormatConverterView.vue) 至新桌面端海报布局 │
-│  • 将音频母带解密、表格清洗、电子书重排接入 ToolWorkbenchLayout 骨架  │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 3：对齐 PDF 智能解析 (PdfParseView.vue) 至新桌面端海报布局       │
-│  • 将 CPU 矢量轨 + GPU 混合版面解析接入 ToolWorkbenchLayout 骨架       │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  步骤 4：全平台 Release 工业级打包与真机集成测试验收                   │
-│  • 执行 pnpm tauri build，验证 Windows x64 便携版与安装包              │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🚀 5. 新会话接管第一步具体指令 (Next Session Step 1 Plan)
-
-新会话启动后，请直接向用户打招呼并指示接管方向：
-
-> **“你好！我已经完全阅读并对齐了 `HANDOFF_TOOL.md` (v21.0.0) 与全系统工程架构。当前基于 ToolKnit 原生桌面端重塑的通用工具中台（海报栏 + 多任务队列 + 模态遮罩 + 成功弹窗）、MOSS/Hy-MT2 纯血 C-FFI 双轨架构、以及动态紧致羽化胶囊遮罩引擎已 100% 竣工并通过 26 分钟长视频全量实测。我清楚了解当前处于【步骤 1：精细化完善 `VideoSubtitleView.vue` 队列单项状态机并进行桌面真机多视频联调，随后推进格式转换与 PDF 视图的中台化迁移】阶段。我们立即正式开始！”**
-
----
-
-## ⚠️ 6. 15 大实战踩坑终结手册与禁忌铁律 (Lessons Learned & Anti-Patterns)
-
-1. **终端选型铁律（唯一标准）**：
-   - 必须且只能使用 **`Developer PowerShell for VS 2022`（快捷键 Ctrl+Shift+7）**！严禁使用普通 PowerShell 执行 C++/CUDA 编译，防止头文件脱机盲人状态；
-2. **缓存守护铁律（严禁删 `target`）**：
-   - 严禁执行 `Remove-Item target`！773 个 CUDA 机器码算子已固化，日常开发直接运行 `cargo check` 或 `cargo test`，享受 **0.4 秒极速增量热检查**；
-3. **Python 布尔关键字铁律**：
-   - Python 默认布尔值必须首字母大写：`False` / `True`（严禁写成 JS/Rust 的 `false` / `true` 引发 `NameError`）；
-4. **ASS 矢量绘图绝对正向坐标铁律**：
-   - ASS 矢量绘图 `\p1` 必须使用绝对正向坐标 `{\an7\pos(X0, Y0)\p1...}m 0 0 l w 0 l w h l 0 h{\p0}`！严禁使用中心相对负坐标 `m -w -h` 导致播放器静默丢弃遮罩；
-5. **ASS 图层分离与字形清晰铁律**：
-   - 严禁在字幕文本前面插入 `{\blur5}`（这会把字体笔画本身模糊成失焦状）！必须实行 **Layer 0 柔焦遮罩 + Layer 1 矢量 0 模糊文字**；
-6. **胶囊动态字宽紧凑收敛规范**：
-   - 中文字宽按 `0.92` 倍字号估算，单侧外扩严控在 `0.55` 倍字号（~20px），配合 `\blur6` 紧致柔边，杜绝大黑带横跨屏幕；
-7. **PowerShell `Set-Content` 自动建目录铁律**：
-   - 写入文件前，必须在脚本首行执行 `New-Item -ItemType Directory -Path "..." -Force`，防止报 `Could not find a part of the path`；
-8. **TypeScript TS6133 零死代码防线**：
-   - Vue 3 `<script setup>` 中未在脚本内调用的 Props 声明，使用 `withDefaults(defineProps<...>(), {...})` 直接调用，严禁声明无用变量 `const props`；
-9. **泛型参数协变防线 (TS2719)**：
-   - 骨架组件接收的工作流 Prop 必须标注为 `ToolWorkflowInstance<any>`，防止泛型参数函数逆变冲突；
-10. **端口占用快速自愈命令**：
-    - `Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }`；
-11. **终端 Ctrl+C 退出弹窗认知**：
-    - `Error launching CrashSender.exe` 是 Windows WebView2 守护组件的硬杀信号误报，对工程 0 危害，优先通过点击窗口右上角 `✕` 优雅关闭；
-12. **LLM 采样链与 Jinja 模板防复读铁律**：
-    - Prompt 必须通过 `model.chat_template(None)` 封装，采样链必须挂载 `LlamaSampler::penalties(model.n_vocab(), 64, 1.15, 0.0, 0.0)`；
-13. **1:1 结构编译器原则 (Rule 14 Zero-Regression)**：
-    - 在成熟项目重构中充当 1:1 结构编译器，严禁自作主张发明破坏强类型契约的架构；
-14. **底座/未包含源码修改前置契约 (Rule 11)**：
-    - 若修改未包含源码的文件，严禁盲猜，必须先输出 `Get-Content` 白盒审阅后再开药方；
-15. **Release 压测铁律**：
-    - 凡涉及 Rust 性能评估与物理打靶，必须添加 `--release` 编译标志。
 </file>
 
 <file path="index.html">
@@ -4791,131 +4040,6 @@ export default defineConfig({
     },
   },
 });
-</file>
-
-<file path="src/components/layout/Sidebar.vue">
-<script setup lang="ts">
-import { useUIStore } from '../../store/uiStore'
-import ShinyText from '../effects/ShinyText.vue'
-import {
-  Zap, FileText, Film,
-  Scan, Database, PanelLeftClose,
-  LayoutDashboard
-} from 'lucide-vue-next'
-
-const ui = useUIStore()
-
-// 核心工坊主力算子
-const menuGroup1 = [
-  { id: 'home', label: '工坊主页', icon: LayoutDashboard },
-  { id: 'format', label: '全能格式转换', icon: Zap },
-  { id: 'pdf', label: 'PDF 智能解析', icon: FileText },
-  { id: 'asr', label: '视频双语字幕', icon: Film },
-]
-
-// 扩展算子与模型
-const menuGroup2 = [
-  { id: 'super_res', label: '8K 视觉超分', icon: Scan },
-  { id: 'knowledge', label: '本地离线知识库', icon: Database },
-]
-
-const switchView = (id: string) => {
-  if (['home', 'format', 'pdf', 'asr'].includes(id)) {
-    ui.currentView = id as 'home' | 'format' | 'pdf' | 'asr'
-  } else {
-    ui.弹出提示("💡 该 AI 模块正在并网建设中...", "info")
-  }
-}
-</script>
-
-<template>
-  <aside
-    class="h-[calc(100vh-32px)] my-4 bg-[#0e0e10]/80 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.5)] flex flex-col pt-6 pb-4 flex-shrink-0 z-20 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
-    :class="ui.侧边栏收起 ? 'w-0 opacity-0 ml-0 mr-0 my-0 py-0 px-0 overflow-hidden pointer-events-none' : 'w-[220px] ml-4'"
-    style="-webkit-app-region: drag;"
-  >
-    <!-- 头部品牌标识与收起按钮 -->
-    <div class="px-5 mb-6 flex items-center justify-between pointer-events-auto select-none" style="-webkit-app-region: no-drag;">
-      <div
-        @click="ui.currentView = 'home'"
-        class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2"
-        title="返回紫电主页"
-      >
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#bc05ff] to-[#DCA54C] flex items-center justify-center shadow-[0_0_12px_rgba(188,5,255,0.4)]">
-          <Zap :size="15" class="text-white fill-white" />
-        </div>
-        <ShinyText
-          text="紫电 AI"
-          :speed="3.5"
-          :spread="150"
-          color="#f2f2ef"
-          shine-color="#DCA54C"
-          class="text-[17px] font-black tracking-tight"
-        />
-      </div>
-
-      <button
-        @click="ui.切换侧边栏"
-        class="w-7 h-7 rounded-lg text-[#8b8b87] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
-        title="收起侧边栏"
-      >
-        <PanelLeftClose :size="15" class="stroke-[2]" />
-      </button>
-    </div>
-
-    <!-- 菜单滚动区 -->
-    <div class="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1.5 pointer-events-auto" style="-webkit-app-region: no-drag;">
-      
-      <!-- 主力工坊组 -->
-      <div
-        v-for="item in menuGroup1"
-        :key="item.id"
-        @click="switchView(item.id)"
-        class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl cursor-pointer transition-all duration-150 border"
-        :class="[
-          ui.currentView === item.id
-            ? 'bg-white/[0.08] border-white/15 text-white font-bold shadow-[0_4px_16px_rgba(0,0,0,0.3)]'
-            : 'border-transparent text-[#8b8b87] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
-        ]"
-      >
-        <component
-          :is="item.icon"
-          :size="16"
-          :class="ui.currentView === item.id ? 'text-[#DCA54C] stroke-[2.5]' : 'text-[#8b8b87] stroke-[2]'"
-        />
-        <span class="text-[13px] tracking-wide">{{ item.label }}</span>
-      </div>
-
-      <!-- 分组标头 -->
-      <div class="pt-5 pb-1.5 px-3">
-        <span class="text-[10px] font-mono font-bold text-[#5b5b58] uppercase tracking-wider">本地算力扩展</span>
-      </div>
-
-      <!-- 扩展算子组 -->
-      <div
-        v-for="item in menuGroup2"
-        :key="item.id"
-        @click="switchView(item.id)"
-        class="flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-colors border border-transparent text-[#8b8b87] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium"
-      >
-        <div class="flex items-center gap-3">
-          <component :is="item.icon" :size="16" class="text-[#5b5b58] stroke-[2]" />
-          <span class="text-[13px] tracking-wide">{{ item.label }}</span>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- 底部状态指示灯 -->
-    <div class="px-5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-[#5b5b58] pointer-events-auto" style="-webkit-app-region: no-drag;">
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        RTX 3060 Ready
-      </span>
-      <span class="text-[10px]">v2.0</span>
-    </div>
-  </aside>
-</template>
 </file>
 
 <file path="src/components/ui/aspect-ratio/AspectRatio.vue">
@@ -5984,572 +5108,6 @@ export function useTauriWindow() {
 }
 </file>
 
-<file path="src/views/HomeView.vue">
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useUIStore } from '../store/uiStore'
-import Aurora from '../components/effects/Aurora.vue'
-import DotField from '../components/effects/DotField.vue'
-import GradientText from '../components/effects/GradientText.vue'
-import {
-  Zap, FileText, Film, Scan, Database, Search,
-  ArrowRight, ArrowUpRight, Sparkles,
-  ArrowUp, Music, Table, BookOpen, Image as ImageIcon
-} from 'lucide-vue-next'
-
-const ui = useUIStore()
-
-const searchQuery = ref('')
-const activeCategory = ref('all')
-const workspaceRef = ref<HTMLDivElement | null>(null)
-const showBackToTop = ref(false)
-
-// 核心工具算子矩阵定义
-interface ToolItem {
-  id: string
-  name: string
-  category: 'core' | 'document' | 'media' | 'system'
-  tag: string
-  icon: any
-  desc: string
-  badge?: string
-  viewTarget?: 'format' | 'pdf' | 'asr'
-}
-
-const toolMatrix: ToolItem[] = [
-  {
-    id: 'format',
-    name: '全能格式转换',
-    category: 'core',
-    tag: 'PURE RUST / 0 VRAM',
-    icon: Zap,
-    desc: '音频母带解密、表格清洗、电子书重排与 ICO 图标流式合成',
-    badge: '主力算子',
-    viewTarget: 'format'
-  },
-  {
-    id: 'pdf',
-    name: 'PDF 智能混合解析',
-    category: 'document',
-    tag: 'VECTOR & GPU LAYOUT',
-    icon: FileText,
-    desc: 'CPU 矢量毫秒级提取 + GPU 多模态神经网络版面重构',
-    badge: '毫秒级',
-    viewTarget: 'pdf'
-  },
-  {
-    id: 'asr',
-    name: '视频双语字幕工坊',
-    category: 'media',
-    tag: 'MOSS 0.9B + HY-MT2',
-    icon: Film,
-    desc: '端侧离线语音识别、混元神经翻译与 NVENC 极速压制',
-    badge: '100% 本地',
-    viewTarget: 'asr'
-  },
-  {
-    id: 'super_res',
-    name: '8K 视觉超分辨率',
-    category: 'media',
-    tag: 'REAL-ESRGAN / ONNX',
-    icon: Scan,
-    desc: '基于 ONNX C-FFI 直推的图像超分重建与画质修复',
-    badge: 'GPU 优化'
-  },
-  {
-    id: 'knowledge',
-    name: '本地离线知识库',
-    category: 'core',
-    tag: 'EMBEDDING / RAG',
-    icon: Database,
-    desc: '纯端侧向量数据库检索，文档隐私 100% 物理驻留'
-  },
-  {
-    id: 'audio_master',
-    name: '音频解密与母带',
-    category: 'media',
-    tag: 'NCM / QMC / KGMA',
-    icon: Music,
-    desc: '网易云、QQ 音乐等无损加密音频格式一键还原'
-  },
-  {
-    id: 'table_clean',
-    name: '多维表格清洗',
-    category: 'document',
-    tag: 'CSV / TSV / JSON',
-    icon: Table,
-    desc: '超大结构化表格数据流式转换与 JSON 树解析'
-  },
-  {
-    id: 'ebook_gen',
-    name: '电子书重排排版',
-    category: 'document',
-    tag: 'EPUB / MOBI / DOCX',
-    icon: BookOpen,
-    desc: 'Markdown 与纯文本自动转为标准出版级电子书'
-  },
-  {
-    id: 'icon_craft',
-    name: '原生多尺寸图标',
-    category: 'core',
-    tag: 'ICO / PNG / BMP',
-    icon: ImageIcon,
-    desc: '一键生成 Windows 标准应用图标与各分辨率位图'
-  }
-]
-
-// 我的收藏（精选前 6 大算子）
-const favoriteTools = computed(() => {
-  return toolMatrix.slice(0, 6)
-})
-
-// 分类筛选列表
-const categoryList = [
-  { id: 'all', label: '全部工具', icon: Sparkles },
-  { id: 'core', label: '核心中台', icon: Zap },
-  { id: 'document', label: '文档解析', icon: FileText },
-  { id: 'media', label: '音视频矩阵', icon: Film },
-]
-
-// 搜索与分类过滤
-const filteredTools = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  return toolMatrix.filter(tool => {
-    const matchCategory = activeCategory.value === 'all' || tool.category === activeCategory.value
-    const matchSearch = !q || tool.name.toLowerCase().includes(q) || tool.desc.toLowerCase().includes(q) || tool.tag.toLowerCase().includes(q)
-    return matchCategory && matchSearch
-  })
-})
-
-const handleToolClick = (tool: ToolItem) => {
-  if (tool.viewTarget) {
-    ui.currentView = tool.viewTarget
-  } else {
-    ui.弹出提示(`💡 [${tool.name}] 正在并网适配中，即将就绪...`, 'info')
-  }
-}
-
-const handleScroll = (e: Event) => {
-  const target = e.target as HTMLElement
-  showBackToTop.value = target.scrollTop > 300
-}
-
-const scrollToTop = () => {
-  workspaceRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-const scrollToExplorer = () => {
-  const el = document.getElementById('tool-explorer-section')
-  if (el && workspaceRef.value) {
-    workspaceRef.value.scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' })
-  }
-}
-</script>
-
-<template>
-  <div class="relative w-full h-full overflow-hidden bg-[#060607] text-[#f5f5f3] select-none font-sans">
-    
-    <!-- 背景层 1：全息极光光子云层 (Aurora) -->
-    <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-      <Aurora
-        :speed="0.8"
-        :amplitude="1.2"
-        :color-stops="['#03140e', '#00ffa9', '#00d2ff']"
-        class="absolute inset-0 opacity-75"
-      />
-    </div>
-
-    <!-- 背景层 2：高精度交互点阵力场 (DotField) -->
-    <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-      <DotField
-        :dot-radius="1.5"
-        :dot-spacing="14"
-        :bulge-strength="67"
-        :glow-radius="200"
-        gradient-from="rgba(0, 255, 169, 0.45)"
-        gradient-to="rgba(0, 210, 255, 0.35)"
-        glow-color="#00ffa9"
-        class="absolute inset-0 opacity-80"
-      />
-    </div>
-
-    <!-- 主工作区滚动容器 -->
-    <div
-      ref="workspaceRef"
-      @scroll="handleScroll"
-      class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar px-8 pb-16"
-    >
-      <div class="max-w-[1380px] mx-auto space-y-14 pt-2">
-
-        <!-- ========================================== -->
-        <!-- 1. HERO 标杆展示区 (1:1 对齐图一/图二) -->
-        <!-- ========================================== -->
-        <section class="space-y-6 pt-6 max-w-4xl">
-          
-          <!-- 胶囊状态徽章 -->
-          <div
-            @click="scrollToExplorer"
-            class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-xs font-mono text-slate-300 hover:border-[#00ffa9]/50 transition-colors shadow-lg backdrop-blur-md group w-fit cursor-pointer"
-          >
-            <span class="px-2 py-0.5 rounded-full bg-[#00ffa9] text-slate-950 font-extrabold text-[11px] tracking-wide">
-              SOTA 2026
-            </span>
-            <span class="flex items-center gap-1.5 font-medium">
-              RTX 3060 12G 算力直连
-              <ArrowRight class="w-3.5 h-3.5 text-[#00ffa9] group-hover:translate-x-0.5 transition-transform" />
-            </span>
-          </div>
-
-          <!-- 核心紫电 AI 渐变字标 -->
-          <div class="space-y-2">
-            <GradientText
-              text="紫电AI"
-              :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
-              :animation-speed="6"
-              class="text-6xl sm:text-8xl font-black tracking-tight"
-            />
-          </div>
-
-          <!-- 钱学森工程思维哲学标语 -->
-          <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl font-sans space-y-1">
-            <span class="block">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
-            <span class="block text-slate-100">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
-          </p>
-
-          <!-- 1:1 双渐变行动按钮 -->
-          <div class="flex flex-wrap items-center gap-4 pt-2">
-            <button
-              @click="scrollToExplorer"
-              class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#A5F3FC] to-[#D8B4F8] hover:opacity-90 text-slate-950 font-extrabold text-sm tracking-wide transition-all shadow-lg shadow-purple-500/20 hover:scale-[1.02] active:scale-95 flex items-center gap-2 cursor-pointer"
-            >
-              <span>探索 AI 算力工具</span>
-              <ArrowRight class="w-4 h-4" />
-            </button>
-
-            <button
-              @click="ui.currentView = 'pdf'"
-              class="px-6 py-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm transition-all flex items-center gap-2 backdrop-blur-md active:scale-95 cursor-pointer hover:border-[#ffb74d]/50"
-            >
-              <Sparkles class="w-4 h-4 text-[#ffb74d]" />
-              <span>体验 PDF 解析</span>
-            </button>
-          </div>
-
-          <!-- 底层算力标签 -->
-          <div class="flex items-center gap-6 pt-3 text-[11px] font-mono text-[#8b8b87] uppercase">
-            <span class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              MSVC Native x64
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              Direct C-FFI
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              100% Private Offline
-            </span>
-          </div>
-        </section>
-
-        <!-- ========================================== -->
-        <!-- 2. 我的收藏（01 / YOUR WORKBENCH） -->
-        <!-- ========================================== -->
-        <section class="space-y-4 pt-2">
-          <div class="flex items-end justify-between border-b border-white/[0.08] pb-3">
-            <div>
-              <span class="text-[11px] font-mono text-[#8b8b87] uppercase tracking-wider">01 / YOUR WORKBENCH</span>
-              <h2 class="text-xl font-bold text-white mt-0.5">我的收藏算子</h2>
-            </div>
-            <span class="text-xs text-[#8b8b87] font-mono">Pinned Tools</span>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-              v-for="tool in favoriteTools"
-              :key="tool.id"
-              @click="handleToolClick(tool)"
-              class="group p-5 rounded-2xl border border-white/[0.08] bg-black/40 hover:bg-black/60 hover:border-white/20 backdrop-blur-md transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[140px] relative shadow-lg"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="w-10 h-10 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center text-white group-hover:text-[#00ffa9] group-hover:border-[#00ffa9]/40 transition-colors">
-                  <component :is="tool.icon" :size="18" class="stroke-[2]" />
-                </div>
-                <div class="flex items-center gap-1 text-[#8b8b87] group-hover:text-white transition-colors">
-                  <span class="text-[10px] font-mono tracking-wider uppercase">{{ tool.tag }}</span>
-                  <ArrowUpRight :size="14" />
-                </div>
-              </div>
-
-              <div class="mt-4">
-                <h4 class="text-sm font-bold text-[#f2f2ef] group-hover:text-white transition-colors">{{ tool.name }}</h4>
-                <p class="text-xs text-[#8b8b87] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ========================================== -->
-        <!-- 3. 搜索与全库矩阵（02 / TOOL EXPLORER） -->
-        <!-- ========================================== -->
-        <section id="tool-explorer-section" class="space-y-6 pt-2">
-          <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
-            <div>
-              <span class="text-[11px] font-mono text-[#8b8b87] uppercase tracking-wider">02 / TOOL EXPLORER</span>
-              <h2 class="text-xl font-bold text-white mt-0.5">搜索与探索全部工具</h2>
-            </div>
-
-            <!-- 搜索框 -->
-            <div class="relative w-full md:w-[360px]">
-              <Search :size="15" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8b8b87]" />
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="搜索格式转换、PDF、字幕、超分、表格..."
-                class="w-full h-10 pl-9 pr-4 bg-black/40 border border-white/10 hover:border-white/20 focus:border-[#00ffa9]/50 rounded-xl text-xs text-[#f2f2ef] outline-none transition-all placeholder-[#5b5b58] backdrop-blur-md"
-              />
-            </div>
-          </div>
-
-          <!-- 分类胶囊 -->
-          <div class="flex items-center gap-2 flex-wrap">
-            <button
-              v-for="cat in categoryList"
-              :key="cat.id"
-              @click="activeCategory = cat.id"
-              class="h-8 px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer"
-              :class="activeCategory === cat.id ? 'bg-[#f2f2ef] text-[#0a0a0a] font-bold shadow-sm' : 'bg-black/30 border border-white/[0.08] text-[#8b8b87] hover:text-white hover:bg-white/[0.06]'"
-            >
-              <component :is="cat.icon" :size="13" />
-              <span>{{ cat.label }}</span>
-            </button>
-          </div>
-
-          <!-- 工具卡片栅格流 -->
-          <div v-if="filteredTools.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div
-              v-for="tool in filteredTools"
-              :key="tool.id"
-              @click="handleToolClick(tool)"
-              class="p-5 rounded-2xl border border-white/[0.06] bg-black/30 hover:bg-black/50 hover:border-white/20 backdrop-blur-md transition-all duration-150 cursor-pointer flex flex-col justify-between min-h-[130px] group shadow-md"
-            >
-              <div class="flex items-center justify-between">
-                <div class="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.02] flex items-center justify-center text-[#8b8b87] group-hover:text-white group-hover:border-white/25 transition-colors">
-                  <component :is="tool.icon" :size="15" />
-                </div>
-                <span class="text-[9px] font-mono uppercase text-[#5b5b58] tracking-wider">{{ tool.tag }}</span>
-              </div>
-
-              <div class="mt-3">
-                <div class="flex items-center gap-2">
-                  <span class="text-xs font-bold text-[#f2f2ef] group-hover:text-white">{{ tool.name }}</span>
-                  <span v-if="tool.badge" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-white/10 text-[#00ffa9]">
-                    {{ tool.badge }}
-                  </span>
-                </div>
-                <p class="text-[11px] text-[#8b8b87] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 空搜索结果状态 -->
-          <div v-else class="py-16 text-center text-[#8b8b87] border border-white/[0.04] rounded-2xl bg-black/20">
-            <p class="text-xs">未找到与 "{{ searchQuery }}" 匹配的工具算子</p>
-          </div>
-        </section>
-
-        <!-- 底部落款 -->
-        <footer class="flex justify-between items-center text-[11px] font-mono text-[#5b5b58] border-t border-white/[0.06] pt-8 pb-4">
-          <span>ZIDIAN AI DESKTOP 2026 / HIGH PERFORMANCE WORKBENCH</span>
-          <span>ALL COMPUTATION STAYS ON YOUR DEVICE</span>
-        </footer>
-
-      </div>
-    </div>
-
-    <!-- 回到顶部悬浮球 -->
-    <button
-      v-if="showBackToTop"
-      @click="scrollToTop"
-      class="fixed right-8 bottom-8 z-50 w-10 h-10 rounded-full bg-[#f2f2ef] hover:bg-white text-[#0a0a0a] shadow-2xl flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
-      title="回到顶部"
-    >
-      <ArrowUp :size="16" class="stroke-[2.5]" />
-    </button>
-
-  </div>
-</template>
-</file>
-
-<file path="src/views/VideoSubtitleView.vue">
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useI18n } from 'vue-i18n';
-import { Mic, Languages, HardDrive, FileCheck2 } from 'lucide-vue-next';
-import { useToolWorkflow } from '../composables/useToolWorkflow';
-import ToolWorkbenchLayout from '../components/layout/ToolWorkbenchLayout.vue';
-import {
-  runVideoSubtitle,
-  type VideoSubtitleOptions,
-  type VideoSubtitleResult,
-  type SubtitleDisplayMode,
-  type SubtitleOutputMode,
-} from '../bindings/tools/video-subtitle';
-
-const { t } = useI18n();
-
-// 1. 业务参数选项
-const targetLang = ref<string>('Chinese');
-const displayMode = ref<SubtitleDisplayMode>('bilingual');
-const outputMode = ref<SubtitleOutputMode>('soft_mkv');
-const fontSizeMultiplier = ref<number>(1.8);
-const showSpeaker = ref<boolean>(false);
-const maskHardsub = ref<boolean>(false); // 电影级柔和羽化遮罩开关
-const hotwords = ref<string>('');
-
-// 2. 初始化批量多任务状态机
-const workflow = useToolWorkflow<VideoSubtitleResult>();
-
-// 3. 语言快捷选项
-const targetLangOptions = [
-  { label: '简体中文', value: 'Chinese' },
-  { label: '英语', value: 'English' },
-  { label: '日语', value: 'Japanese' },
-  { label: '韩语', value: 'Korean' },
-];
-
-// 4. 封装格式快捷选项
-const outputModeOptions = [
-  { label: '软字幕【. mkv】', value: 'soft_mkv' },
-  { label: '硬字幕【. mp4】', value: 'hard_mp4_nvenc' },
-];
-
-// 5. 底层 4 栏特性展示
-const featureCards = [
-  { icon: Mic, text: '无字幕视频一键生成双语字幕' },
-  { icon: Languages, text: 'Hy-MT2 1.8B 腾讯混元神经翻译模型，多语言精准对齐。' },
-  { icon: HardDrive, text: '0.5s 无损软挂载 MKV / NVIDIA NVENC 显卡硬压 MP4。' },
-  { icon: FileCheck2, text: '支持电影级半透明羽化遮罩，柔和覆盖原片硬字幕且不遮挡焦点。' },
-];
-
-// 6. 执行批量流水线
-const handleExecute = async () => {
-  await workflow.executeBatch(
-    async (file) => {
-      const options: VideoSubtitleOptions = {
-        video_path: file.path,
-        output_dir: null,
-        target_lang: targetLang.value,
-        display_mode: displayMode.value,
-        show_speaker: showSpeaker.value,
-        font_size_multiplier: fontSizeMultiplier.value,
-        output_mode: outputMode.value,
-        hotwords: hotwords.value.trim() ? hotwords.value.trim() : null,
-        glossary: null,
-        source_kind: null,
-        subtitle_stream_index: null,
-        mask_hardsub: maskHardsub.value,
-      };
-      return await runVideoSubtitle(options);
-    },
-    {
-      targetFormat: outputMode.value === 'soft_mkv' ? 'MKV' : 'MP4',
-      statusPrefix: '正在生成双语字幕与压制',
-    }
-  );
-};
-</script>
-
-<template>
-  <ToolWorkbenchLayout
-    :kicker="'VIDEO SUBTITLE & TRANSLATION'"
-    :title="t('subtitle.title')"
-    :description="'多视频批量排队一键生成指定语言字幕，纯血 C-FFI 显存直推。'"
-    :vram-cost-mb="8000"
-    :steps="['01 添加视频', '02 选择语言', '03 批量转写', '04 打开结果']"
-    :meta-rows="[
-      { label: '语音识别', value: 'MOSS 0.9B ASR' },
-      { label: '神经翻译', value: 'Hy-MT2 1.8B' },
-      { label: '渲染遮罩', value: 'Cinematic Soft Vignette' }
-    ]"
-    :feature-cards="featureCards"
-    :workflow="workflow"
-    :accepted-formats-text="t('subtitle.supportedFormats')"
-    :dropzone-title="'把需要生成双语字幕的视频放到这里'"
-    :dropzone-subtitle="'支持拖拽多个视频或点击上传，上传后进入队列，再选择目标语言统一转写。'"
-    :upload-button-text="'上传视频文件'"
-    :queue-title="'待转写视频队列'"
-    :action-button-text="'开始一键双语转写'"
-    :bottom-hint-text="'确认文件和目标语言后开始处理，转写完成后会自动弹出结果提示并可直接定位目录。'"
-    @execute="handleExecute"
-  >
-    <!-- 插槽：目标语言与渲染模式胶囊选择行 -->
-    <template #options>
-      <div class="space-y-4">
-        <!-- 目标语言选择 -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="text-[11px] font-bold text-white font-mono uppercase tracking-wider">目标语言 (TARGET LANGUAGE)</label>
-            <span class="text-[11px] text-[#8b8b87] font-mono">腾讯混元神经翻译多语系</span>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="lang in targetLangOptions"
-              :key="lang.value"
-              type="button"
-              @click="targetLang = lang.value"
-              class="px-4 py-2 rounded-full border text-xs font-bold transition-all cursor-pointer"
-              :class="[
-                targetLang === lang.value
-                  ? 'bg-white text-black border-white shadow-md scale-[1.02]'
-                  : 'bg-black/40 border-white/10 text-[#8b8b87] hover:border-white/25 hover:text-white'
-              ]"
-            >
-              {{ lang.label }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 封装模式与电影级柔和羽化遮罩开关 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-white/[0.06] items-center">
-          <div class="space-y-2">
-            <label class="text-[11px] font-bold text-white font-mono uppercase tracking-wider block">输出封装 (OUTPUT CONTAINER)</label>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="mode in outputModeOptions"
-                :key="mode.value"
-                type="button"
-                @click="outputMode = mode.value as SubtitleOutputMode"
-                class="px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all cursor-pointer"
-                :class="[
-                  outputMode === mode.value
-                    ? 'bg-white text-black border-white shadow-sm'
-                    : 'bg-black/40 border-white/10 text-[#8b8b87] hover:border-white/25 hover:text-white'
-                ]"
-              >
-                {{ mode.label }}
-              </button>
-            </div>
-          </div>
-
-          <!-- 电影级柔和羽化遮罩开关 -->
-          <div class="p-3 bg-black/40 border border-white/10 rounded-2xl flex items-center justify-between gap-3">
-            <div class="min-w-0 space-y-0.5">
-              <label class="text-xs font-bold text-white block">覆盖原片硬字幕</label>
-            </div>
-            <input
-              type="checkbox"
-              v-model="maskHardsub"
-              class="w-4 h-4 rounded border-white/20 bg-black/50 text-white focus:ring-white cursor-pointer"
-            />
-          </div>
-        </div>
-      </div>
-    </template>
-  </ToolWorkbenchLayout>
-</template>
-</file>
-
 <file path="src/bindings.ts">
 // 🛡️ 紫电 AI 桌面工坊 - 根级契约转发桥接 (bindings.ts)
 // 指向模块化门面中枢，保持向下完全兼容
@@ -6893,6 +5451,711 @@ anyhow = "1.0"
 encoding_rs = "0.8"
 </file>
 
+<file path="src-tauri/crates/tools/video-subtitle/src/lib.rs">
+pub mod engine;
+pub mod probe;
+
+pub use engine::{
+    burn_hard_subtitles_nvenc, clean_acoustic_noise, estimate_text_width, extract_audio_from_video,
+    extract_subtitle_stream, generate_ass, generate_srt, mux_soft_subtitles, parse_srt_content,
+    smart_wrap_line, EngineSegment, ParsedSrtSegment,
+};
+pub use probe::{SubtitleSourceKind, SubtitleTrackInfo, VideoProbeResult, VideoProbeService};
+
+use serde::{Deserialize, Serialize};
+use service_asr::{AsrOptions, AsrService};
+use service_translation::{PureTranslationRequest, TranslationService};
+use shared_contracts::{TaskWeight, VramTokenGuard};
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayMode {
+    Bilingual,
+    TargetOnly,
+    SourceOnly,
+}
+
+impl Default for DisplayMode {
+    fn default() -> Self {
+        Self::Bilingual
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputMode {
+    SoftMkv,
+    HardMp4Nvenc,
+}
+
+impl Default for OutputMode {
+    fn default() -> Self {
+        Self::SoftMkv
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlossaryTerm {
+    pub source_term: String,
+    pub target_term: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoSubtitleOptions {
+    pub video_path: String,
+    pub output_dir: Option<String>,
+    pub target_lang: String,
+    pub display_mode: DisplayMode,
+    pub show_speaker: bool,
+    pub font_size_multiplier: f32,
+    pub output_mode: OutputMode,
+    pub hotwords: Option<String>,
+    pub glossary: Option<Vec<GlossaryTerm>>,
+    #[serde(default)]
+    pub source_kind: Option<SubtitleSourceKind>,
+    #[serde(default)]
+    pub subtitle_stream_index: Option<usize>,
+    /// 是否开启电影级羽化半透明遮罩 (温润遮挡原片硬字幕)
+    #[serde(default)]
+    pub mask_hardsub: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SubtitleSegmentResult {
+    pub id: usize,
+    pub speaker: String,
+    pub start_sec: f64,
+    pub end_sec: f64,
+    pub source_text: String,
+    pub target_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoSubtitleResult {
+    pub success: bool,
+    pub output_video_path: String,
+    pub srt_path: String,
+    pub ass_path: String,
+    pub json_path: String,
+    pub total_segments: usize,
+    pub segments: Vec<SubtitleSegmentResult>,
+    pub elapsed_ms: f64,
+    pub error: Option<String>,
+}
+
+pub struct VideoSubtitleTool;
+
+impl VideoSubtitleTool {
+    /// 极简双轨调度：软字幕直通 / 生肉纯音频听写 (100% 纯血 Rust 架构)
+    pub async fn run_pipeline(
+        options: VideoSubtitleOptions,
+        vram_guard: Option<&VramTokenGuard>,
+    ) -> Result<VideoSubtitleResult, String> {
+        let video_path = Path::new(&options.video_path);
+        if !video_path.exists() {
+            return Err(format!("输入的物理视频文件不存在: {}", options.video_path));
+        }
+
+        let resolved_mode = if let Some(mode) = options.source_kind {
+            mode
+        } else if options.subtitle_stream_index.is_some() {
+            SubtitleSourceKind::EmbeddedSoftStream
+        } else {
+            let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
+                VideoProbeResult {
+                    video_path: options.video_path.clone(),
+                    duration_sec: 0.0,
+                    width: 1920,
+                    height: 1080,
+                    has_audio: true,
+                    audio_streams_count: 1,
+                    soft_tracks: Vec::new(),
+                    recommended_mode: SubtitleSourceKind::RawAudio,
+                    elapsed_ms: 0.0,
+                }
+            });
+            probe_res.recommended_mode
+        };
+
+        match resolved_mode {
+            SubtitleSourceKind::EmbeddedSoftStream => {
+                tracing::info!("⚡ [双轨调度] 命中内嵌软字幕流，启动 0.05s 直通纯血 Rust 神经翻译通道");
+                Self::run_soft_stream_pipeline(options, vram_guard).await
+            }
+            SubtitleSourceKind::RawAudio => {
+                tracing::info!("🎙️ [双轨调度] 启动 MOSS 0.9B ASR 纯语音听写与翻译通道 (纯血 Rust)");
+                Self::run_raw_audio_pipeline(options, vram_guard).await
+            }
+        }
+    }
+
+    pub async fn run_soft_stream_pipeline(
+        options: VideoSubtitleOptions,
+        vram_guard: Option<&VramTokenGuard>,
+    ) -> Result<VideoSubtitleResult, String> {
+        let t0 = std::time::Instant::now();
+        let video_path = Path::new(&options.video_path);
+        let output_dir = if let Some(dir) = &options.output_dir {
+            PathBuf::from(dir)
+        } else {
+            video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
+        };
+        let _ = tokio::fs::create_dir_all(&output_dir).await;
+
+        let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
+            VideoProbeResult {
+                video_path: options.video_path.clone(),
+                duration_sec: 0.0,
+                width: 1920,
+                height: 1080,
+                has_audio: true,
+                audio_streams_count: 1,
+                soft_tracks: Vec::new(),
+                recommended_mode: SubtitleSourceKind::EmbeddedSoftStream,
+                elapsed_ms: 0.0,
+            }
+        });
+
+        let stream_idx = if let Some(idx) = options.subtitle_stream_index {
+            idx
+        } else {
+            probe_res.soft_tracks.first().map(|t| t.stream_index).unwrap_or(2)
+        };
+
+        let timestamp_now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let temp_srt_path = output_dir.join(format!("temp_extracted_{}.srt", timestamp_now));
+
+        let raw_segments = engine::extract_subtitle_stream(video_path, stream_idx, &temp_srt_path).await?;
+        let _ = tokio::fs::remove_file(&temp_srt_path).await;
+
+        if raw_segments.is_empty() {
+            return Err("抽离出的字幕轨道没有任何有效文本！".into());
+        }
+
+        let _vram_permit = if let Some(guard) = vram_guard {
+            match guard.acquire(TaskWeight::Light).await {
+                Ok(permit) => Some(permit),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        let source_texts: Vec<String> = raw_segments.iter().map(|s| s.text.clone()).collect();
+        let mut prepared_texts = Vec::new();
+        if let Some(terms) = &options.glossary {
+            if !terms.is_empty() {
+                let mut term_prompt = String::from("参考下面的翻译：\n");
+                for t in terms {
+                    term_prompt.push_str(&format!("{} 翻译成 {}\n", t.source_term, t.target_term));
+                }
+                for txt in &source_texts {
+                    prepared_texts.push(format!("{}\n{}", term_prompt.trim_end(), txt));
+                }
+            } else {
+                prepared_texts = source_texts.clone();
+            }
+        } else {
+            prepared_texts = source_texts.clone();
+        }
+
+        let trans_req = PureTranslationRequest {
+            texts: prepared_texts,
+            target_lang: Some(options.target_lang.clone()),
+        };
+
+        let trans_res = TranslationService::run_translation_pipeline(trans_req)
+            .await
+            .map_err(|e| format!("Hy-MT2 神经翻译失败: {e}"))?;
+
+        let mut engine_segments = Vec::new();
+        let mut result_segments = Vec::new();
+
+        for (idx, seg) in raw_segments.into_iter().enumerate() {
+            let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
+            engine_segments.push(EngineSegment {
+                id: seg.id,
+                speaker: seg.speaker.clone(),
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text.clone(),
+                target_text: target_text.clone(),
+            });
+            result_segments.push(SubtitleSegmentResult {
+                id: seg.id,
+                speaker: seg.speaker,
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text,
+                target_text,
+            });
+        }
+
+        let display_mode_str = match options.display_mode {
+            DisplayMode::Bilingual => "bilingual",
+            DisplayMode::TargetOnly => "target_only",
+            DisplayMode::SourceOnly => "source_only",
+        };
+
+        let base_name = video_path.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+        let srt_path = output_dir.join(format!("{}_subtitle.srt", base_name));
+        let srt_content = engine::generate_srt(&engine_segments, display_mode_str, options.show_speaker);
+        tokio::fs::write(&srt_path, srt_content).await
+            .map_err(|e| format!("写入 SRT 字幕失败: {e}"))?;
+
+        let ass_path = output_dir.join(format!("{}_subtitle.ass", base_name));
+        let ass_content = engine::generate_ass(
+            &engine_segments,
+            display_mode_str,
+            options.show_speaker,
+            options.font_size_multiplier,
+            probe_res.width,
+            probe_res.height,
+            options.mask_hardsub,
+        );
+        tokio::fs::write(&ass_path, ass_content).await
+            .map_err(|e| format!("写入 ASS 字幕失败: {e}"))?;
+
+        let json_path = output_dir.join(format!("{}_bilingual.json", base_name));
+        let json_payload = serde_json::json!({
+            "video_path": options.video_path,
+            "total_segments": result_segments.len(),
+            "segments": result_segments
+        });
+        tokio::fs::write(&json_path, serde_json::to_string_pretty(&json_payload).unwrap()).await
+            .map_err(|e| format!("写入 JSON 失败: {e}"))?;
+
+        let output_video_path = match options.output_mode {
+            OutputMode::HardMp4Nvenc => {
+                let out_mp4 = output_dir.join(format!("{}_zidian_burned.mp4", base_name));
+                engine::burn_hard_subtitles_nvenc(video_path, &ass_path, &out_mp4).await?;
+                out_mp4.to_string_lossy().to_string()
+            }
+            OutputMode::SoftMkv => {
+                let out_mkv = output_dir.join(format!("{}_zidian_muxed.mkv", base_name));
+                engine::mux_soft_subtitles(video_path, &ass_path, &out_mkv).await?;
+                out_mkv.to_string_lossy().to_string()
+            }
+        };
+
+        let elapsed_ms = t0.elapsed().as_millis() as f64;
+
+        Ok(VideoSubtitleResult {
+            success: true,
+            output_video_path,
+            srt_path: srt_path.to_string_lossy().to_string(),
+            ass_path: ass_path.to_string_lossy().to_string(),
+            json_path: json_path.to_string_lossy().to_string(),
+            total_segments: result_segments.len(),
+            segments: result_segments,
+            elapsed_ms,
+            error: None,
+        })
+    }
+
+    pub async fn run_raw_audio_pipeline(
+        options: VideoSubtitleOptions,
+        vram_guard: Option<&VramTokenGuard>,
+    ) -> Result<VideoSubtitleResult, String> {
+        let t0 = std::time::Instant::now();
+        let video_path = Path::new(&options.video_path);
+        let output_dir = if let Some(dir) = &options.output_dir {
+            PathBuf::from(dir)
+        } else {
+            video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
+        };
+        let _ = tokio::fs::create_dir_all(&output_dir).await;
+
+        let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
+            VideoProbeResult {
+                video_path: options.video_path.clone(),
+                duration_sec: 0.0,
+                width: 1920,
+                height: 1080,
+                has_audio: true,
+                audio_streams_count: 1,
+                soft_tracks: Vec::new(),
+                recommended_mode: SubtitleSourceKind::RawAudio,
+                elapsed_ms: 0.0,
+            }
+        });
+
+        let _vram_permit = if let Some(guard) = vram_guard {
+            match guard.acquire(TaskWeight::Heavy).await {
+                Ok(permit) => Some(permit),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        let timestamp_now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let temp_wav_path = output_dir.join(format!("temp_zidian_{}.wav", timestamp_now));
+
+        // 1. 纯血 Rust 调起原生 FFmpeg 提取 16k mono 音频
+        engine::extract_audio_from_video(video_path, &temp_wav_path).await?;
+
+        // 2. MOSS 0.9B ASR 原位听写
+        let asr_opts = AsrOptions {
+            audio_path: temp_wav_path.to_string_lossy().to_string(),
+            language: Some("auto".into()),
+            prompt: None,
+            hotwords: options.hotwords.clone(),
+            max_new_tokens: Some(4096),
+            temperature: Some(0.0),
+        };
+
+        let asr_res = AsrService::run_asr_pipeline(asr_opts)
+            .await
+            .map_err(|e| format!("MOSS 0.9B ASR 听写流水线失败: {e}"))?;
+
+        let _ = tokio::fs::remove_file(&temp_wav_path).await;
+
+        if asr_res.segments.is_empty() {
+            return Err("视频中未识别出任何语音台词！".into());
+        }
+
+        let source_texts: Vec<String> = asr_res.segments.iter().map(|s| s.text.clone()).collect();
+        let mut prepared_texts = Vec::new();
+        if let Some(terms) = &options.glossary {
+            if !terms.is_empty() {
+                let mut term_prompt = String::from("参考下面的翻译：\n");
+                for t in terms {
+                    term_prompt.push_str(&format!("{} 翻译成 {}\n", t.source_term, t.target_term));
+                }
+                for txt in &source_texts {
+                    prepared_texts.push(format!("{}\n{}", term_prompt.trim_end(), txt));
+                }
+            } else {
+                prepared_texts = source_texts.clone();
+            }
+        } else {
+            prepared_texts = source_texts.clone();
+        }
+
+        // 3. Hy-MT2 1.8B 神经翻译
+        let trans_req = PureTranslationRequest {
+            texts: prepared_texts,
+            target_lang: Some(options.target_lang.clone()),
+        };
+
+        let trans_res = TranslationService::run_translation_pipeline(trans_req)
+            .await
+            .map_err(|e| format!("Hy-MT2 1.8B 神经翻译流水线失败: {e}"))?;
+
+        let mut engine_segments = Vec::new();
+        let mut result_segments = Vec::new();
+
+        for (idx, seg) in asr_res.segments.iter().enumerate() {
+            let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
+            engine_segments.push(EngineSegment {
+                id: seg.id,
+                speaker: seg.speaker.clone(),
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text.clone(),
+                target_text: target_text.clone(),
+            });
+            result_segments.push(SubtitleSegmentResult {
+                id: seg.id,
+                speaker: seg.speaker.clone(),
+                start_sec: seg.start_sec,
+                end_sec: seg.end_sec,
+                source_text: seg.text.clone(),
+                target_text,
+            });
+        }
+
+        let display_mode_str = match options.display_mode {
+            DisplayMode::Bilingual => "bilingual",
+            DisplayMode::TargetOnly => "target_only",
+            DisplayMode::SourceOnly => "source_only",
+        };
+
+        let base_name = video_path.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+        let srt_path = output_dir.join(format!("{}_subtitle.srt", base_name));
+        let srt_content = engine::generate_srt(&engine_segments, display_mode_str, options.show_speaker);
+        tokio::fs::write(&srt_path, srt_content).await
+            .map_err(|e| format!("写入 SRT 字幕失败: {e}"))?;
+
+        let ass_path = output_dir.join(format!("{}_subtitle.ass", base_name));
+        let ass_content = engine::generate_ass(
+            &engine_segments,
+            display_mode_str,
+            options.show_speaker,
+            options.font_size_multiplier,
+            probe_res.width,
+            probe_res.height,
+            options.mask_hardsub,
+        );
+        tokio::fs::write(&ass_path, ass_content).await
+            .map_err(|e| format!("写入 ASS 字幕失败: {e}"))?;
+
+        let json_path = output_dir.join(format!("{}_bilingual.json", base_name));
+        let json_payload = serde_json::json!({
+            "video_path": options.video_path,
+            "total_segments": result_segments.len(),
+            "segments": result_segments
+        });
+        tokio::fs::write(&json_path, serde_json::to_string_pretty(&json_payload).unwrap()).await
+            .map_err(|e| format!("写入 JSON 失败: {e}"))?;
+
+        let output_video_path = match options.output_mode {
+            OutputMode::HardMp4Nvenc => {
+                let out_mp4 = output_dir.join(format!("{}_zidian_burned.mp4", base_name));
+                engine::burn_hard_subtitles_nvenc(video_path, &ass_path, &out_mp4).await?;
+                out_mp4.to_string_lossy().to_string()
+            }
+            OutputMode::SoftMkv => {
+                let out_mkv = output_dir.join(format!("{}_zidian_muxed.mkv", base_name));
+                engine::mux_soft_subtitles(video_path, &ass_path, &out_mkv).await?;
+                out_mkv.to_string_lossy().to_string()
+            }
+        };
+
+        let elapsed_ms = t0.elapsed().as_millis() as f64;
+
+        Ok(VideoSubtitleResult {
+            success: true,
+            output_video_path,
+            srt_path: srt_path.to_string_lossy().to_string(),
+            ass_path: ass_path.to_string_lossy().to_string(),
+            json_path: json_path.to_string_lossy().to_string(),
+            total_segments: result_segments.len(),
+            segments: result_segments,
+            elapsed_ms,
+            error: None,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_real_physical_1_mp4_e2e() {
+        let input_path = PathBuf::from(r"C:\dev\ai-forge\test\input\video-subtitle\1.mp4");
+        let output_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\video-subtitle");
+        let _ = tokio::fs::create_dir_all(&output_dir).await;
+
+        if !input_path.exists() {
+            eprintln!("⚠️ [跳过测试] 输入测试视频不存在: {:?}", input_path);
+            return;
+        }
+
+        println!("\n🎬 ===== [1.mp4 3分钟生肉视频纯血 Rust 全流程转写与压制打靶] =====");
+        println!("  输入视频: {:?}", input_path);
+        println!("  输出目录: {:?}", output_dir);
+        println!("  架构模式: 100% 纯血 Rust (零 Python, 零 IPC)");
+        println!("  遮罩模式: 电影级柔和羽化渐晕 (mask_hardsub = true)");
+
+        let t0 = std::time::Instant::now();
+
+        let opts = VideoSubtitleOptions {
+            video_path: input_path.to_string_lossy().to_string(),
+            output_dir: Some(output_dir.to_string_lossy().to_string()),
+            target_lang: "Chinese".into(),
+            display_mode: DisplayMode::Bilingual,
+            show_speaker: true,
+            font_size_multiplier: 1.8,
+            output_mode: OutputMode::SoftMkv,
+            hotwords: None,
+            glossary: None,
+            source_kind: None,
+            subtitle_stream_index: None,
+            mask_hardsub: true,
+        };
+
+        let res = VideoSubtitleTool::run_pipeline(opts, None).await
+            .expect("1.mp4 双语字幕流水线执行失败");
+
+        let total_elapsed = t0.elapsed().as_secs_f64();
+
+        println!("\n🎉 ===== [1.mp4 纯血 Rust 双语转写全量打靶成功] =====");
+        println!("  ⏱️ 全量物理耗时: {:.2} s ({:.2} 分钟) | 共生成 {} 句双语字幕", total_elapsed, total_elapsed / 60.0, res.total_segments);
+        println!("  💾 1. 软字幕视频: {:?}", res.output_video_path);
+        println!("  💾 2. SRT 字幕:   {:?}", res.srt_path);
+        println!("  💾 3. ASS 特效字幕 (带柔和遮罩): {:?}", res.ass_path);
+        println!("  💾 4. JSON 结构数据: {:?}", res.json_path);
+
+        assert!(res.total_segments > 0, "提取台词数不可为 0！");
+        assert!(Path::new(&res.output_video_path).exists(), "产物视频必须真实落盘！");
+
+        println!("\n  👀 预览前 5 句双语对齐结果:");
+        for seg in res.segments.iter().take(5) {
+            println!("    [{:02}] [{:.2}s -> {:.2}s] [{}]", seg.id, seg.start_sec, seg.end_sec, seg.speaker);
+            println!("        原文: {}", seg.source_text);
+            println!("        译文: {}", seg.target_text);
+        }
+        println!("=======================================================\n");
+    }
+}
+</file>
+
+<file path="src-tauri/crates/tools/video-subtitle/Cargo.toml">
+[package]
+name = "video-subtitle"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "video_subtitle"
+path = "src/lib.rs"
+
+[dependencies]
+shared-contracts = { path = "../../shared-contracts" }
+service-asr = { path = "../../services/service-asr" }
+service-translation = { path = "../../services/service-translation" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+tracing = "0.1"
+tokio = { version = "1.38", features = ["full"] }
+regex = "1.10"
+</file>
+
+<file path="HANDOFF-TOOL.md">
+# 🛡️ AI-Forge (紫电 AI 桌面工坊) · 全栈纯血 Rust 闭环与 5:7 极简 UI 重塑交接文档 (HANDOFF_TOOL.md)
+
+> **文档版本**：v22.0.0 (2026年8月 彻底消灭 Python 沙箱、100% 纯血 Rust 直推、极夜青碳 5:7 顶奢桌面 UI 专版)  
+> **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 开发环境)  
+> **开发终端**：**Developer PowerShell for VS 2022 (快捷键 Ctrl+Shift+7)** / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1 / Ninja  
+> **面向对象**：新会话 AI 系统架构师 / 资深全栈工程师 (零历史障碍直接接管并启动下一阶段)
+
+---
+
+## 🏢 1. 项目背景、定位与核心工程哲学 (Context & Mission)
+
+1. **项目定位**：
+   - 工业级端侧离线 AI 桌面工坊（**Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + C-FFI / ONNX 纯血直推**）。
+2. **核心工程哲学（钱学森系统工程 + Karpathy 极简原则）**：
+   - “不执着于单点技术的极致拔尖，而是通过全系统协同优化，让廉价 AI + 极致框架创造最大化生产力！”
+   - **大模型 100% 去 Python 化**：ASR（MOSS 0.9B）与神经翻译（Hy-MT2 1.8B）全面基于 Rust C-FFI 原生直连 C++ 动态库 + GGUF 单文件权重 + GPU 显存锁（`VramTokenGuard`），**彻底消灭 Python 沙箱（.venv）、`uv`、`pyproject.toml` 与网络端口**；
+   - **顶奢极简工业美学 (Zero-Clutter & NautilusTrader 风格)**：全面采用极夜青碳底色（`#20292b`）与高定电光海青绿（`#02c3b4`），建立 5 : 7 黄金栅格双翼拓扑与 2~4 字精炼交互法则。
+
+---
+
+## 🟢 2. 本会话已 100% 竣工的突破性战果 (Completed Milestones)
+
+### 2.1 `video-subtitle` 纯血 Rust 改造与去 Python 化 100% 闭环
+1. **1:1 外科手术式直译 (`crates/tools/video-subtitle/src/engine.rs`)**：
+   - 原 Python 辅助脚本中的所有逻辑（声学噪声清洗、ASS/SRT 文本转义、中文字宽精确估算、智能换行、电影级烟熏柔焦胶囊遮罩计算、FFmpeg 原生异步管道）全部以 100% 纯血 Rust 直译落地；
+2. **物理清除全部 Python 痕迹**：
+   - 彻底删除了 `scripts/` 目录（`worker.py`、`subtitle_engine.py`）、`pyproject.toml`、`uv.lock`、`.venv`；
+   - 精简 `Cargo.toml`，彻底剥离无用的 `core-ipc` 依赖；
+3. **真实压测绿通**：
+   - 4 个字宽与遮罩单元测试 100% 通过；
+   - `1.mp4` 3 分钟生肉视频全流程（音频解码 ➔ MOSS 0.9B 听写 ➔ 混元 Hy-MT2 1.8B 神经翻译 ➔ 双轨 ASS 特效压制 ➔ MKV 封装）**全量物理耗时仅 17.89 秒（近 11 倍速！）**。
+
+### 2.2 极夜青碳与电光海青绿设计系统定型 (`#20292b` + `#02c3b4`)
+1. **色彩体系升级**：
+   - 主背景色全面换装为 NautilusTrader 风格极夜青碳灰（`#20292b` / `rgb(32, 41, 43)`）；
+   - 高亮交互全面锁定为电光海青绿（`#02c3b4` / `rgb(2, 195, 180)`）；
+   - 卡片采用纯净磨砂玻璃拟态（`bg-white/[0.02] border border-white/[0.06] rounded-3xl backdrop-blur-xl`）；
+2. **去繁琐与 2~4 字按钮法则**：
+   - 按钮文字严格精炼为 2~4 字（如 `中文`、`双语对照`、`仅译文`、`软字幕 MKV`、`硬压制 MP4`、`选择视频`、`开始转写`）；
+   - 彻底去除标签多余的外边框，消除大写英文标头与页脚冗余落款，回归极致清爽。
+
+### 2.3 5 : 7 黄金双翼拓扑与三阶动线重塑
+1. **页面顶部居中大标题**：页面顶部正中央展示工具大标题（如 `视频一键双语字幕`），右上角保留极简 `🌐 EN / 中` 切换；
+2. **左栏 5 列 (41.7%) · 选项配置指南**：
+   - 舒展展示与右侧 6 个参数 1:1 对应的【6 大选项配置指南卡片】；
+   - 底端平铺 3 联独立大号流程胶囊（`1 添加视频` ➔ `2 定制选项` ➔ `3 完成交付`）；
+3. **右栏 7 列 (58.3%) · 三阶多任务工作台**：
+   - **顶层卡片 (步骤 1)**：待转写队列与大号居中拖拽上传综合卡片（空状态下呈现大号气派发光「选择视频」按钮，多文件排队时展开清晰列表）；
+   - **中层卡片 (步骤 2)**：6 大参数定制面板（2 列表格矩阵）；
+   - **底层卡片 (步骤 3)**：独立主行动栏（离线隐私提示 + 「开始转写 ➔」海青绿发光 CTA 胶囊）；
+   - 双翼通过 `items-stretch` 在 Y 轴底部**像素级精准齐平**。
+
+### 2.4 沉淀通用工程设计规范 (`docs/DESIGN_SPEC.md`)
+- 编撰全量《AI 可复现 UI 页面工程设计规范》，内含精确色彩 Token、5:7 拓扑图解、组件微交互规范以及专有 AI Prompt 模版。
+
+---
+
+## 🛑 3. 当前精确停点与系统现状 (Current State & Stopping Point)
+
+- **构建与测试状态**：
+  - 后端 Rust 单元测试与端到端压测：`test result: ok. 5 passed; 0 failed`（0 errors）；
+  - 前端编译检查：`pnpm build` (`vue-tsc --noEmit && vite build`) **100% 双绿通**，0 Warnings / 0 TS Errors；
+- **当前精确停点**：
+  - `video-subtitle` 视频字幕模块已彻底竣工并达到商业级标准；
+  - 接下来需将该标准 1:1 推广至另外两大核心工具：**全能格式转换 (`FormatConverterView.vue`)** 与 **PDF 智能解析 (`PdfParseView.vue`)**。
+
+---
+
+## 🗺️ 4. 全局路线图与下一会话执行规划 (Master Roadmap)
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│  阶段 1：对齐全能格式转换 (FormatConverterView.vue) 至新 5:7 架构       │
+│  • 将音频母带解密、表格清洗、电子书重排、ICO流式合成接入 6大指南与队列    │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  阶段 2：对齐 PDF 智能解析 (PdfParseView.vue) 至新 5:7 架构             │
+│  • 将 CPU 矢量毫秒提取 + GPU 版面分析接入 6大指南与 Markdown 实时渲染    │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  阶段 3：全平台 Release 工业级打包与真机集成测试验收                   │
+│  • 执行 pnpm tauri build，验证 Windows x64 便携版与独立安装包           │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 5. 新会话接管第一步具体指令 (Next Session Step 1 Plan)
+
+新会话启动后，请直接向用户报到并指示接管方向：
+
+> **“你好！我已经完全阅读并对齐了 `HANDOFF_TOOL.md` (v22.0.0) 与 `docs/DESIGN_SPEC.md`。当前 `video-subtitle` 模块已 100% 完成去 Python 化纯血 Rust 直推、`1.mp4` 17秒高速压测全绿通、以及 NautilusTrader 风格 5:7 极夜青碳 UI 架构重塑。我清楚了解当前处于【阶段 1：将全能格式转换 `FormatConverterView.vue` 按照 5:7 极简设计规范进行重构与中台化对齐】阶段。我们立即正式开始！”**
+
+---
+
+## ⚠️ 6. 16 大实战踩坑与禁忌铁律 (Lessons Learned & Anti-Patterns)
+
+1. **终端选型铁律（唯一标准）**：
+   - 必须且只能使用 **`Developer PowerShell for VS 2022`（快捷键 Ctrl+Shift+7）**！严禁使用普通终端执行 MSVC/CUDA 编译；
+2. **缓存守护铁律（严禁删 `target`）**：
+   - 严禁执行 `Remove-Item target`！773 个 CUDA 机器码算子已固化，享受毫秒级增量编译；
+3. **Release 压测铁律**：
+   - 凡涉及 Rust 性能评估与物理打靶，必须添加 `--release` 编译标志（Debug 模式未开启矢量化优化，性能衰减 300% 以上）；
+4. **ASS 时间轴格式铁律**：
+   - ASS 时间戳格式为 `H:MM:SS.cc`（百分秒，如 `0:00:01.00`），测试断言严禁将秒数误写为分（`0:01:01.00` 会触发断言失败）；
+5. **TypeScript TS6133 零死代码防线**：
+   - 脚本中解构或 import 的变量未消费时必须立即清除（如 `const { t } = useI18n()` 或未用到的图标），防止阻断 `vue-tsc` 编译；
+6. **按钮 2~4 字精炼铁律**：
+   - 按钮文案严格保持在 2~4 个汉字内，严禁在按钮中塞入长句或括号补充；
+7. **去框线大字阶规范**：
+   - 左侧配置指南的 Tag 标签（如 `中 / 英 / 日 / 韩`）直接以大号海青绿 `text-[#02c3b4] font-bold` 呈现，禁止加粗重边框包裹；
+8. **5 : 7 栅格黄金配比**：
+   - 左栏固定 `lg:col-span-5`（41.7%），右栏固定 `lg:col-span-7`（58.3%），父容器使用 `items-stretch` 消除 Y 轴空白；
+9. **三阶逻辑动线规范**：
+   - 右侧工作区从上至下严格按：`1. 待处理队列与大号上传(顶)` ➔ `2. 6大定制选项(中)` ➔ `3. 独立行动栏(底)` 顺序排列；
+10. **PowerShell `Set-Content` 单引号原样字符串协议**：
+    - 写入源码必须使用 `@' ... '@` 单引号，禁止使用双引号 `@" ... "@`，防止 `$PSScriptRoot` / `$env` 被提前求值；
+11. **命令行开头禁止 `#` 注释**：
+    - 命令行首行严禁出现 `#`，防止 PowerShell 误识别跳过执行；
+12. **色板统一标准**：
+    - 主背景色必须使用极夜青碳灰 `#20292b` / `rgb(32, 41, 43)`，高亮交互色必须使用电光海青绿 `#02c3b4` / `rgb(2, 195, 180)`；
+13. **底座/未包含源码修改前置契约 (Rule 11)**：
+    - 若需修改未打包源码，必须先执行 `Get-Content` 白盒审阅后再开药方；
+14. **1:1 结构编译器原则 (Rule 14 Zero-Regression)**：
+    - 在成熟项目重构中充当 1:1 结构编译器，严禁自作主张发明破坏强类型契约的新架构；
+15. **端口占用快速自愈命令**：
+    - `Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }`；
+16. **Tauri Command 错误传递规范**：
+    - 后端 Command 返回值必须通过 `Result<T, String>` 显式传递，严禁 `unwrap()` 导致进程 Panic。
+</file>
+
 <file path=".cargo/config.toml">
 [build]
 rustflags = ["-C", "target-feature=-crt-static"]
@@ -6900,6 +6163,131 @@ rustflags = ["-C", "target-feature=-crt-static"]
 [env]
 CMAKE_GENERATOR = { value = "Ninja", force = true }
 CMAKE_MAKE_PROGRAM = { value = "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe", force = true }
+</file>
+
+<file path="src/components/layout/Sidebar.vue">
+<script setup lang="ts">
+import { useUIStore } from '../../store/uiStore'
+import ShinyText from '../effects/ShinyText.vue'
+import {
+  Zap, FileText, Film,
+  Scan, Database, PanelLeftClose,
+  LayoutDashboard
+} from 'lucide-vue-next'
+
+const ui = useUIStore()
+
+// 核心工坊主力算子
+const menuGroup1 = [
+  { id: 'home', label: '工坊主页', icon: LayoutDashboard },
+  { id: 'format', label: '全能格式转换', icon: Zap },
+  { id: 'pdf', label: 'PDF 智能解析', icon: FileText },
+  { id: 'asr', label: '视频双语字幕', icon: Film },
+]
+
+// 扩展算子与模型
+const menuGroup2 = [
+  { id: 'super_res', label: '8K 视觉超分', icon: Scan },
+  { id: 'knowledge', label: '本地离线知识库', icon: Database },
+]
+
+const switchView = (id: string) => {
+  if (['home', 'format', 'pdf', 'asr'].includes(id)) {
+    ui.currentView = id as 'home' | 'format' | 'pdf' | 'asr'
+  } else {
+    ui.弹出提示("💡 该 AI 模块正在并网建设中...", "info")
+  }
+}
+</script>
+
+<template>
+  <aside
+    class="h-[calc(100vh-32px)] my-4 bg-[#182022]/85 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.4)] flex flex-col pt-6 pb-4 flex-shrink-0 z-20 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
+    :class="ui.侧边栏收起 ? 'w-0 opacity-0 ml-0 mr-0 my-0 py-0 px-0 overflow-hidden pointer-events-none' : 'w-[220px] ml-4'"
+    style="-webkit-app-region: drag;"
+  >
+    <!-- 头部品牌标识与收起按钮 -->
+    <div class="px-5 mb-6 flex items-center justify-between pointer-events-auto select-none" style="-webkit-app-region: no-drag;">
+      <div
+        @click="ui.currentView = 'home'"
+        class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2"
+        title="返回紫电主页"
+      >
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#bc05ff] to-[#DCA54C] flex items-center justify-center shadow-[0_0_12px_rgba(188,5,255,0.4)]">
+          <Zap :size="15" class="text-white fill-white" />
+        </div>
+        <ShinyText
+          text="紫电 AI"
+          :speed="3.5"
+          :spread="150"
+          color="#f2f2ef"
+          shine-color="#DCA54C"
+          class="text-[17px] font-black tracking-tight"
+        />
+      </div>
+
+      <button
+        @click="ui.切换侧边栏"
+        class="w-7 h-7 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
+        title="收起侧边栏"
+      >
+        <PanelLeftClose :size="15" class="stroke-[2]" />
+      </button>
+    </div>
+
+    <!-- 菜单滚动区 -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1.5 pointer-events-auto" style="-webkit-app-region: no-drag;">
+      
+      <!-- 主力工坊组 -->
+      <div
+        v-for="item in menuGroup1"
+        :key="item.id"
+        @click="switchView(item.id)"
+        class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl cursor-pointer transition-all duration-150 border"
+        :class="[
+          ui.currentView === item.id
+            ? 'bg-white/[0.08] border-white/15 text-white font-bold shadow-[0_4px_16px_rgba(0,0,0,0.3)]'
+            : 'border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
+        ]"
+      >
+        <component
+          :is="item.icon"
+          :size="16"
+          :class="ui.currentView === item.id ? 'text-[#DCA54C] stroke-[2.5]' : 'text-[#8b999b] stroke-[2]'"
+        />
+        <span class="text-[13px] tracking-wide">{{ item.label }}</span>
+      </div>
+
+      <!-- 分组标头 -->
+      <div class="pt-5 pb-1.5 px-3">
+        <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
+      </div>
+
+      <!-- 扩展算子组 -->
+      <div
+        v-for="item in menuGroup2"
+        :key="item.id"
+        @click="switchView(item.id)"
+        class="flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-colors border border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium"
+      >
+        <div class="flex items-center gap-3">
+          <component :is="item.icon" :size="16" class="text-[#5b696b] stroke-[2]" />
+          <span class="text-[13px] tracking-wide">{{ item.label }}</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 底部状态指示灯 -->
+    <div class="px-5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-[#5b696b] pointer-events-auto" style="-webkit-app-region: no-drag;">
+      <span class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        RTX 3060 Ready
+      </span>
+      <span class="text-[10px]">v2.0</span>
+    </div>
+  </aside>
+</template>
 </file>
 
 <file path="src/locales/en-US.json">
@@ -7058,170 +6446,657 @@ CMAKE_MAKE_PROGRAM = { value = "C:/Program Files (x86)/Microsoft Visual Studio/2
 }
 </file>
 
-<file path="src/style.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+<file path="src/views/HomeView.vue">
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useUIStore } from '../store/uiStore'
+import Aurora from '../components/effects/Aurora.vue'
+import DotField from '../components/effects/DotField.vue'
+import GradientText from '../components/effects/GradientText.vue'
+import {
+  Zap, FileText, Film, Scan, Database, Search,
+  ArrowRight, ArrowUpRight, Sparkles,
+  ArrowUp, Music, Table, BookOpen, Image as ImageIcon
+} from 'lucide-vue-next'
 
-@layer base {
-  :root {
-    color-scheme: dark;
-    --bg: #060607;
-    --panel: rgba(14, 14, 16, 0.72);
-    --panel-card: rgba(255, 255, 255, 0.02);
-    --panel-card-hover: rgba(255, 255, 255, 0.045);
-    --ink: #f5f5f3;
-    --muted: #8b8b87;
-    --quiet: #5b5b58;
-    --line: rgba(255, 255, 255, 0.06);
-    --line-strong: rgba(255, 255, 255, 0.16);
-    --white: #f2f2ef;
-    --black: #0a0a0a;
-    --zidian-gold: #DCA54C;
-    --zidian-purple: #bc05ff;
-    --aegis-nav-height: 45px;
+const ui = useUIStore()
+
+const searchQuery = ref('')
+const activeCategory = ref('all')
+const workspaceRef = ref<HTMLDivElement | null>(null)
+const showBackToTop = ref(false)
+
+// 核心工具算子矩阵定义
+interface ToolItem {
+  id: string
+  name: string
+  category: 'core' | 'document' | 'media' | 'system'
+  tag: string
+  icon: any
+  desc: string
+  badge?: string
+  viewTarget?: 'format' | 'pdf' | 'asr'
+}
+
+const toolMatrix: ToolItem[] = [
+  {
+    id: 'format',
+    name: '全能格式转换',
+    category: 'core',
+    tag: 'PURE RUST / 0 VRAM',
+    icon: Zap,
+    desc: '音频母带解密、表格清洗、电子书重排与 ICO 图标流式合成',
+    badge: '主力算子',
+    viewTarget: 'format'
+  },
+  {
+    id: 'pdf',
+    name: 'PDF 智能混合解析',
+    category: 'document',
+    tag: 'VECTOR & GPU LAYOUT',
+    icon: FileText,
+    desc: 'CPU 矢量毫秒级提取 + GPU 多模态神经网络版面重构',
+    badge: '毫秒级',
+    viewTarget: 'pdf'
+  },
+  {
+    id: 'asr',
+    name: '视频双语字幕工坊',
+    category: 'media',
+    tag: 'MOSS 0.9B + HY-MT2',
+    icon: Film,
+    desc: '端侧离线语音识别、混元神经翻译与 NVENC 极速压制',
+    badge: '100% 本地',
+    viewTarget: 'asr'
+  },
+  {
+    id: 'super_res',
+    name: '8K 视觉超分辨率',
+    category: 'media',
+    tag: 'REAL-ESRGAN / ONNX',
+    icon: Scan,
+    desc: '基于 ONNX C-FFI 直推的图像超分重建与画质修复',
+    badge: 'GPU 优化'
+  },
+  {
+    id: 'knowledge',
+    name: '本地离线知识库',
+    category: 'core',
+    tag: 'EMBEDDING / RAG',
+    icon: Database,
+    desc: '纯端侧向量数据库检索，文档隐私 100% 物理驻留'
+  },
+  {
+    id: 'audio_master',
+    name: '音频解密与母带',
+    category: 'media',
+    tag: 'NCM / QMC / KGMA',
+    icon: Music,
+    desc: '网易云、QQ 音乐等无损加密音频格式一键还原'
+  },
+  {
+    id: 'table_clean',
+    name: '多维表格清洗',
+    category: 'document',
+    tag: 'CSV / TSV / JSON',
+    icon: Table,
+    desc: '超大结构化表格数据流式转换与 JSON 树解析'
+  },
+  {
+    id: 'ebook_gen',
+    name: '电子书重排排版',
+    category: 'document',
+    tag: 'EPUB / MOBI / DOCX',
+    icon: BookOpen,
+    desc: 'Markdown 与纯文本自动转为标准出版级电子书'
+  },
+  {
+    id: 'icon_craft',
+    name: '原生多尺寸图标',
+    category: 'core',
+    tag: 'ICO / PNG / BMP',
+    icon: ImageIcon,
+    desc: '一键生成 Windows 标准应用图标与各分辨率位图'
   }
+]
 
-  * {
-    box-sizing: border-box;
-  }
+const favoriteTools = computed(() => {
+  return toolMatrix.slice(0, 6)
+})
 
-  html,
-  body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background-color: var(--bg);
-    color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    text-rendering: geometricPrecision;
-    -webkit-font-smoothing: antialiased;
+const categoryList = [
+  { id: 'all', label: '全部工具', icon: Sparkles },
+  { id: 'core', label: '核心中台', icon: Zap },
+  { id: 'document', label: '文档解析', icon: FileText },
+  { id: 'media', label: '音视频矩阵', icon: Film },
+]
+
+const filteredTools = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  return toolMatrix.filter(tool => {
+    const matchCategory = activeCategory.value === 'all' || tool.category === activeCategory.value
+    const matchSearch = !q || tool.name.toLowerCase().includes(q) || tool.desc.toLowerCase().includes(q) || tool.tag.toLowerCase().includes(q)
+    return matchCategory && matchSearch
+  })
+})
+
+const handleToolClick = (tool: ToolItem) => {
+  if (tool.viewTarget) {
+    ui.currentView = tool.viewTarget
+  } else {
+    ui.弹出提示(`💡 [${tool.name}] 正在并网适配中，即将就绪...`, 'info')
   }
 }
 
-#app {
-  height: 100vh;
-  width: 100vw;
-  background-color: var(--bg);
+const handleScroll = (e: Event) => {
+  const target = e.target as HTMLElement
+  showBackToTop.value = target.scrollTop > 300
 }
 
-/* 滚动条深空暗黑微调 */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+const scrollToTop = () => {
+  workspaceRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+const scrollToExplorer = () => {
+  const el = document.getElementById('tool-explorer-section')
+  if (el && workspaceRef.value) {
+    workspaceRef.value.scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' })
+  }
 }
+</script>
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #343431;
-  border-radius: 6px;
-}
+<template>
+  <div class="relative w-full h-full overflow-hidden bg-[#20292b] text-[#f5f5f3] select-none font-sans">
+    
+    <!-- 背景层 1：全息极光光子云层 (Aurora) -->
+    <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+      <Aurora
+        :speed="0.8"
+        :amplitude="1.2"
+        :color-stops="['#101e21', '#00ffa9', '#00d2ff']"
+        class="absolute inset-0 opacity-60"
+      />
+    </div>
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #4a4a45;
-}
+    <!-- 背景层 2：高精度交互点阵力场 (DotField) -->
+    <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+      <DotField
+        :dot-radius="1.5"
+        :dot-spacing="14"
+        :bulge-strength="67"
+        :glow-radius="200"
+        gradient-from="rgba(0, 255, 169, 0.45)"
+        gradient-to="rgba(0, 210, 255, 0.35)"
+        glow-color="#00ffa9"
+        class="absolute inset-0 opacity-70"
+      />
+    </div>
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
+    <!-- 主工作区滚动容器 -->
+    <div
+      ref="workspaceRef"
+      @scroll="handleScroll"
+      class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar px-8 pb-16"
+    >
+      <div class="max-w-[1380px] mx-auto space-y-14 pt-2">
 
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+        <!-- 1. HERO 标杆展示区 -->
+        <section class="space-y-6 pt-6 max-w-4xl">
+          
+          <!-- 胶囊状态徽章 -->
+          <div
+            @click="scrollToExplorer"
+            class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#182022]/80 border border-white/10 text-xs font-mono text-slate-300 hover:border-[#00ffa9]/50 transition-colors shadow-lg backdrop-blur-md group w-fit cursor-pointer"
+          >
+            <span class="px-2 py-0.5 rounded-full bg-[#00ffa9] text-slate-950 font-extrabold text-[11px] tracking-wide">
+              SOTA 2026
+            </span>
+            <span class="flex items-center gap-1.5 font-medium">
+              RTX 3060 12G 算力直连
+              <ArrowRight class="w-3.5 h-3.5 text-[#00ffa9] group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </div>
 
-/* 霓虹微发光与动效 */
-.glow-border {
-  border: 1px solid var(--line);
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
-}
+          <!-- 核心紫电 AI 渐变字标 -->
+          <div class="space-y-2">
+            <GradientText
+              text="紫电AI"
+              :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
+              :animation-speed="6"
+              class="text-6xl sm:text-8xl font-black tracking-tight"
+            />
+          </div>
 
-.glow-border:hover {
-  border-color: var(--line-strong);
-}
+          <!-- 标语 -->
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl font-sans space-y-1">
+            <span class="block">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
+            <span class="block text-slate-100">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
+          </p>
 
-/* Markdown 结构渲染排版暗黑适配层 */
-@layer components {
-  .markdown-content h1 {
-    font-size: 1.5rem !important;
-    font-weight: 800 !important;
-    color: var(--white) !important;
-    margin-top: 1.25rem !important;
-    margin-bottom: 0.75rem !important;
-  }
-  .markdown-content h2 {
-    font-size: 1.35rem !important;
-    font-weight: 700 !important;
-    color: var(--white) !important;
-    margin-top: 1.1rem !important;
-    margin-bottom: 0.6rem !important;
-  }
-  .markdown-content h3 {
-    font-size: 1.15rem !important;
-    font-weight: 600 !important;
-    color: var(--white) !important;
-    margin-top: 0.9rem !important;
-    margin-bottom: 0.5rem !important;
-  }
-  .markdown-content ul {
-    list-style-type: disc !important;
-    padding-left: 1.5rem !important;
-    margin-top: 0.6rem !important;
-    margin-bottom: 0.6rem !important;
-    color: var(--muted) !important;
-  }
-  .markdown-content ol {
-    list-style-type: decimal !important;
-    padding-left: 1.5rem !important;
-    margin-top: 0.6rem !important;
-    margin-bottom: 0.6rem !important;
-    color: var(--muted) !important;
-  }
-  .markdown-content li {
-    margin-bottom: 0.35rem !important;
-    line-height: 1.6 !important;
-  }
-  .markdown-content strong {
-    color: var(--white) !important;
-    font-weight: 700 !important;
-    margin-left: 0.15em !important;
-    margin-right: 0.15em !important;
-  }
-  .markdown-content p {
-    margin-bottom: 0.75rem !important;
-    line-height: 1.7 !important;
-    color: #b1b0aa !important;
-  }
-  .markdown-content code {
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    color: #f43f5e !important;
-    background-color: rgba(244, 63, 94, 0.1) !important;
-    padding: 0.15rem 0.35rem !important;
-    border-radius: 0.375rem !important;
-    font-family: Consolas, Monaco, monospace !important;
-    margin-left: 0.2em !important;
-    margin-right: 0.2em !important;
-  }
-  .markdown-content pre {
-    background-color: #0d0d10 !important;
-    border: 1px solid var(--line) !important;
-    border-radius: 0.75rem !important;
-    padding: 1rem !important;
-    margin: 0.75rem 0 !important;
-    overflow-x: auto !important;
-  }
-  .markdown-content pre code {
-    background-color: transparent !important;
-    color: var(--ink) !important;
-    padding: 0 !important;
-  }
-}
+          <!-- 行动按钮 -->
+          <div class="flex flex-wrap items-center gap-4 pt-2">
+            <button
+              @click="scrollToExplorer"
+              class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#A5F3FC] to-[#D8B4F8] hover:opacity-90 text-slate-950 font-extrabold text-sm tracking-wide transition-all shadow-lg shadow-purple-500/20 hover:scale-[1.02] active:scale-95 flex items-center gap-2 cursor-pointer"
+            >
+              <span>探索 AI 算力工具</span>
+              <ArrowRight class="w-4 h-4" />
+            </button>
+
+            <button
+              @click="ui.currentView = 'pdf'"
+              class="px-6 py-3.5 rounded-2xl bg-[#182022]/90 hover:bg-[#182022] text-slate-200 border border-white/10 font-semibold text-sm transition-all flex items-center gap-2 backdrop-blur-md active:scale-95 cursor-pointer hover:border-[#ffb74d]/50"
+            >
+              <Sparkles class="w-4 h-4 text-[#ffb74d]" />
+              <span>体验 PDF 解析</span>
+            </button>
+          </div>
+
+          <!-- 底层算力标签 -->
+          <div class="flex items-center gap-6 pt-3 text-[11px] font-mono text-[#8b999b] uppercase">
+            <span class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              MSVC Native x64
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              Direct C-FFI
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              100% Private Offline
+            </span>
+          </div>
+        </section>
+
+        <!-- 2. 我的收藏 -->
+        <section class="space-y-4 pt-2">
+          <div class="flex items-end justify-between border-b border-white/[0.08] pb-3">
+            <div>
+              <span class="text-[11px] font-mono text-[#8b999b] uppercase tracking-wider">01 / YOUR WORKBENCH</span>
+              <h2 class="text-xl font-bold text-white mt-0.5">我的收藏算子</h2>
+            </div>
+            <span class="text-xs text-[#8b999b] font-mono">Pinned Tools</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div
+              v-for="tool in favoriteTools"
+              :key="tool.id"
+              @click="handleToolClick(tool)"
+              class="group p-5 rounded-2xl border border-white/[0.08] bg-[#182022]/60 hover:bg-[#182022]/90 hover:border-white/20 backdrop-blur-md transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[140px] relative shadow-lg"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="w-10 h-10 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center text-white group-hover:text-[#00ffa9] group-hover:border-[#00ffa9]/40 transition-colors">
+                  <component :is="tool.icon" :size="18" class="stroke-[2]" />
+                </div>
+                <div class="flex items-center gap-1 text-[#8b999b] group-hover:text-white transition-colors">
+                  <span class="text-[10px] font-mono tracking-wider uppercase">{{ tool.tag }}</span>
+                  <ArrowUpRight :size="14" />
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <h4 class="text-sm font-bold text-[#f2f2ef] group-hover:text-white transition-colors">{{ tool.name }}</h4>
+                <p class="text-xs text-[#8b999b] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. 搜索与全库矩阵 -->
+        <section id="tool-explorer-section" class="space-y-6 pt-2">
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
+            <div>
+              <span class="text-[11px] font-mono text-[#8b999b] uppercase tracking-wider">02 / TOOL EXPLORER</span>
+              <h2 class="text-xl font-bold text-white mt-0.5">搜索与探索全部工具</h2>
+            </div>
+
+            <!-- 搜索框 -->
+            <div class="relative w-full md:w-[360px]">
+              <Search :size="15" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8b999b]" />
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="搜索格式转换、PDF、字幕、超分、表格..."
+                class="w-full h-10 pl-9 pr-4 bg-[#182022]/60 border border-white/10 hover:border-white/20 focus:border-[#00ffa9]/50 rounded-xl text-xs text-[#f2f2ef] outline-none transition-all placeholder-[#5b696b] backdrop-blur-md"
+              />
+            </div>
+          </div>
+
+          <!-- 分类胶囊 -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              v-for="cat in categoryList"
+              :key="cat.id"
+              @click="activeCategory = cat.id"
+              class="h-8 px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer"
+              :class="activeCategory === cat.id ? 'bg-[#f2f2ef] text-[#0a0a0a] font-bold shadow-sm' : 'bg-[#182022]/50 border border-white/[0.08] text-[#8b999b] hover:text-white hover:bg-white/[0.06]'"
+            >
+              <component :is="cat.icon" :size="13" />
+              <span>{{ cat.label }}</span>
+            </button>
+          </div>
+
+          <!-- 工具卡片栅格流 -->
+          <div v-if="filteredTools.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div
+              v-for="tool in filteredTools"
+              :key="tool.id"
+              @click="handleToolClick(tool)"
+              class="p-5 rounded-2xl border border-white/[0.06] bg-[#182022]/50 hover:bg-[#182022]/80 hover:border-white/20 backdrop-blur-md transition-all duration-150 cursor-pointer flex flex-col justify-between min-h-[130px] group shadow-md"
+            >
+              <div class="flex items-center justify-between">
+                <div class="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.02] flex items-center justify-center text-[#8b999b] group-hover:text-white group-hover:border-white/25 transition-colors">
+                  <component :is="tool.icon" :size="15" />
+                </div>
+                <span class="text-[9px] font-mono uppercase text-[#5b696b] tracking-wider">{{ tool.tag }}</span>
+              </div>
+
+              <div class="mt-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-[#f2f2ef] group-hover:text-white">{{ tool.name }}</span>
+                  <span v-if="tool.badge" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-white/10 text-[#00ffa9]">
+                    {{ tool.badge }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-[#8b999b] mt-1 line-clamp-2 leading-relaxed">{{ tool.desc }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 空搜索结果 -->
+          <div v-else class="py-16 text-center text-[#8b999b] border border-white/[0.04] rounded-2xl bg-[#182022]/30">
+            <p class="text-xs">未找到与 "{{ searchQuery }}" 匹配的工具算子</p>
+          </div>
+        </section>
+
+        <!-- 底部落款 -->
+        <footer class="flex justify-between items-center text-[11px] font-mono text-[#5b696b] border-t border-white/[0.06] pt-8 pb-4">
+          <span>ZIDIAN AI DESKTOP 2026 / HIGH PERFORMANCE WORKBENCH</span>
+          <span>ALL COMPUTATION STAYS ON YOUR DEVICE</span>
+        </footer>
+
+      </div>
+    </div>
+
+    <!-- 回到顶部悬浮球 -->
+    <button
+      v-if="showBackToTop"
+      @click="scrollToTop"
+      class="fixed right-8 bottom-8 z-50 w-10 h-10 rounded-full bg-[#f2f2ef] hover:bg-white text-[#0a0a0a] shadow-2xl flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
+      title="回到顶部"
+    >
+      <ArrowUp :size="16" class="stroke-[2.5]" />
+    </button>
+
+  </div>
+</template>
+</file>
+
+<file path="src/views/VideoSubtitleView.vue">
+<script setup lang="ts">
+import { ref } from 'vue';
+import { UserCheck, Layers } from 'lucide-vue-next';
+import { useToolWorkflow } from '../composables/useToolWorkflow';
+import ToolWorkbenchLayout, { type GuideItem } from '../components/layout/ToolWorkbenchLayout.vue';
+import {
+  runVideoSubtitle,
+  type VideoSubtitleOptions,
+  type VideoSubtitleResult,
+  type SubtitleDisplayMode,
+  type SubtitleOutputMode,
+} from '../bindings/tools/video-subtitle';
+
+// 1. 参数状态机
+const targetLang = ref<string>('Chinese');
+const displayMode = ref<SubtitleDisplayMode>('bilingual');
+const outputMode = ref<SubtitleOutputMode>('soft_mkv');
+const fontSizeMultiplier = ref<number>(1.8);
+const showSpeaker = ref<boolean>(false);
+const maskHardsub = ref<boolean>(false);
+const hotwords = ref<string>('');
+
+// 2. 多任务工作流
+const workflow = useToolWorkflow<VideoSubtitleResult>();
+
+// 3. 极简语言选项
+const targetLangOptions = [
+  { label: '中文', value: 'Chinese' },
+  { label: '英语', value: 'English' },
+  { label: '日语', value: 'Japanese' },
+  { label: '韩语', value: 'Korean' },
+];
+
+// 4. 极简显示模式
+const displayModeOptions = [
+  { label: '双语对照', value: 'bilingual' },
+  { label: '仅译文', value: 'target_only' },
+  { label: '仅原文', value: 'source_only' },
+];
+
+// 5. 极简封装格式
+const outputModeOptions = [
+  { label: '软字幕 MKV', value: 'soft_mkv' },
+  { label: '硬压制 MP4', value: 'hard_mp4_nvenc' },
+];
+
+// 6. 左侧 6 大选项配置指南
+const optionGuides: GuideItem[] = [
+  {
+    title: '1. 目标语言',
+    tag: '中 / 英 / 日 / 韩',
+    desc: '指定神经机器翻译的目标语种。',
+  },
+  {
+    title: '2. 字幕呈现',
+    tag: '双语 / 仅译 / 仅原',
+    desc: '双语适合外语学习；仅译文适合原片观影；仅原文适合听写。',
+  },
+  {
+    title: '3. 说话人标注',
+    tag: '[S01/S02]',
+    desc: '区分多角色发言并分配独立色标（独白视频建议关闭）。',
+  },
+  {
+    title: '4. 覆盖旧字幕',
+    tag: '烟熏柔焦胶囊',
+    desc: '原片自带硬字幕时开启，以动态微黑胶囊遮挡原字幕。',
+  },
+  {
+    title: '5. 封装格式',
+    tag: 'MKV / MP4',
+    desc: '软字幕（MKV）秒级混流可自由开关；硬压制（MP4）永久烧录。',
+  },
+  {
+    title: '6. 识别热词',
+    tag: '专有名词',
+    desc: '填入特定人名、术语（逗号分隔），提高 ASR 识别准确率。',
+  },
+];
+
+// 7. 执行批量流水线
+const handleExecute = async () => {
+  await workflow.executeBatch(
+    async (file) => {
+      const options: VideoSubtitleOptions = {
+        video_path: file.path,
+        output_dir: null,
+        target_lang: targetLang.value,
+        display_mode: displayMode.value,
+        show_speaker: showSpeaker.value,
+        font_size_multiplier: fontSizeMultiplier.value,
+        output_mode: outputMode.value,
+        hotwords: hotwords.value.trim() ? hotwords.value.trim() : null,
+        glossary: null,
+        source_kind: null,
+        subtitle_stream_index: null,
+        mask_hardsub: maskHardsub.value,
+      };
+      return await runVideoSubtitle(options);
+    },
+    {
+      targetFormat: outputMode.value === 'soft_mkv' ? 'MKV' : 'MP4',
+      statusPrefix: '正在转写并封装',
+    }
+  );
+};
+</script>
+
+<template>
+  <ToolWorkbenchLayout
+    :title="'视频一键双语字幕'"
+    :steps="['添加视频', '定制选项', '完成交付']"
+    :guides="optionGuides"
+    :workflow="workflow"
+    :upload-button-text="'选择视频文件'"
+    :queue-title="'待转写视频队列'"
+    :action-button-text="'开始一键双语转写'"
+    @execute="handleExecute"
+  >
+    <!-- 插槽：高定海青绿 rgb(2, 195, 180) 参数区 -->
+    <template #options>
+      <div class="space-y-4">
+
+        <!-- 第 1 行：译文语言 + 排版呈现 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 目标语言 -->
+          <div class="space-y-2 p-3.5 rounded-2xl bg-white/[0.02]">
+            <span class="text-xs font-bold text-white/90 block">目标语言</span>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="lang in targetLangOptions"
+                :key="lang.value"
+                type="button"
+                @click="targetLang = lang.value"
+                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer"
+                :class="[
+                  targetLang === lang.value
+                    ? 'bg-[#02c3b4]/15 border border-[#02c3b4]/50 text-[#02c3b4] shadow-[0_0_18px_rgba(2,195,180,0.22)] scale-[1.02]'
+                    : 'bg-white/[0.03] text-[#8b999b] hover:bg-white/[0.06] hover:text-white'
+                ]"
+              >
+                {{ lang.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 排版呈现 -->
+          <div class="space-y-2 p-3.5 rounded-2xl bg-white/[0.02]">
+            <span class="text-xs font-bold text-white/90 block">字幕呈现</span>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="mode in displayModeOptions"
+                :key="mode.value"
+                type="button"
+                @click="displayMode = mode.value as SubtitleDisplayMode"
+                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer"
+                :class="[
+                  displayMode === mode.value
+                    ? 'bg-[#02c3b4]/15 border border-[#02c3b4]/50 text-[#02c3b4] shadow-[0_0_18px_rgba(2,195,180,0.22)] scale-[1.02]'
+                    : 'bg-white/[0.03] text-[#8b999b] hover:bg-white/[0.06] hover:text-white'
+                ]"
+              >
+                {{ mode.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 第 2 行：说话人标注 + 覆盖旧字幕开关 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- 说话人开关 -->
+          <div
+            @click="showSpeaker = !showSpeaker"
+            class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
+            :class="showSpeaker ? 'border border-[#02c3b4]/50 shadow-[0_0_16px_rgba(2,195,180,0.12)]' : 'border border-transparent'"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div
+                class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                :class="showSpeaker ? 'bg-[#02c3b4]/20 text-[#02c3b4]' : 'bg-white/[0.04] text-[#8b999b]'"
+              >
+                <UserCheck :size="15" />
+              </div>
+              <span class="text-xs sm:text-sm font-bold text-white">说话人标注 [S01/S02]</span>
+            </div>
+            <div
+              class="w-9 h-5 rounded-full p-0.5 transition-colors shrink-0"
+              :class="showSpeaker ? 'bg-[#02c3b4] shadow-[0_0_10px_rgba(2,195,180,0.5)]' : 'bg-white/15'"
+            >
+              <div
+                class="w-4 h-4 rounded-full bg-black shadow-sm transform transition-transform"
+                :class="showSpeaker ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </div>
+          </div>
+
+          <!-- 遮罩开关 -->
+          <div
+            @click="maskHardsub = !maskHardsub"
+            class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
+            :class="maskHardsub ? 'border border-[#02c3b4]/50 shadow-[0_0_16px_rgba(2,195,180,0.12)]' : 'border border-transparent'"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div
+                class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                :class="maskHardsub ? 'bg-[#02c3b4]/20 text-[#02c3b4]' : 'bg-white/[0.04] text-[#8b999b]'"
+              >
+                <Layers :size="15" />
+              </div>
+              <span class="text-xs sm:text-sm font-bold text-white">覆盖原片旧字幕</span>
+            </div>
+            <div
+              class="w-9 h-5 rounded-full p-0.5 transition-colors shrink-0"
+              :class="maskHardsub ? 'bg-[#02c3b4] shadow-[0_0_10px_rgba(2,195,180,0.5)]' : 'bg-white/15'"
+            >
+              <div
+                class="w-4 h-4 rounded-full bg-black shadow-sm transform transition-transform"
+                :class="maskHardsub ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 第 3 行：封装格式 + 识别热词 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 封装容器 -->
+          <div class="space-y-2 p-3.5 rounded-2xl bg-white/[0.02]">
+            <span class="text-xs font-bold text-white/90 block">封装格式</span>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="mode in outputModeOptions"
+                :key="mode.value"
+                type="button"
+                @click="outputMode = mode.value as SubtitleOutputMode"
+                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer"
+                :class="[
+                  outputMode === mode.value
+                    ? 'bg-[#02c3b4]/15 border border-[#02c3b4]/50 text-[#02c3b4] shadow-[0_0_18px_rgba(2,195,180,0.22)] scale-[1.02]'
+                    : 'bg-white/[0.03] text-[#8b999b] hover:bg-white/[0.06] hover:text-white'
+                ]"
+              >
+                {{ mode.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- ASR 热词 -->
+          <div class="space-y-2 p-3.5 rounded-2xl bg-white/[0.02]">
+            <span class="text-xs font-bold text-white/90 block">识别热词 (可选)</span>
+            <input
+              v-model="hotwords"
+              type="text"
+              placeholder="专有名词，逗号分隔 (如: DeepSeek, Rust, 町中華)"
+              class="w-full h-8 px-3.5 bg-white/[0.03] border border-white/[0.06] hover:border-white/15 focus:border-[#02c3b4]/70 focus:ring-1 focus:ring-[#02c3b4]/30 rounded-xl text-xs sm:text-sm text-[#f2f2ef] outline-none transition-all placeholder-[#5b696b]"
+            />
+          </div>
+        </div>
+
+      </div>
+    </template>
+  </ToolWorkbenchLayout>
+</template>
 </file>
 
 <file path="src-tauri/crates/core-onnx-infer/src/infer.rs">
@@ -7630,6 +7505,172 @@ impl OrtInfer {
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  }
+}
+</file>
+
+<file path="src/style.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --bg: #20292b;
+    --panel: rgba(24, 32, 34, 0.78);
+    --panel-card: rgba(255, 255, 255, 0.03);
+    --panel-card-hover: rgba(255, 255, 255, 0.06);
+    --ink: #f5f5f3;
+    --muted: #8b999b;
+    --quiet: #5b696b;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.18);
+    --white: #f2f2ef;
+    --black: #141b1c;
+    --zidian-gold: #DCA54C;
+    --zidian-purple: #bc05ff;
+    --aegis-nav-height: 45px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg);
+}
+
+/* 滚动条深空青碳微调 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2f3b3e;
+  border-radius: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #415054;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 霓虹微发光与动效 */
+.glow-border {
+  border: 1px solid var(--line);
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.glow-border:hover {
+  border-color: var(--line-strong);
+}
+
+/* Markdown 结构渲染排版暗黑适配层 */
+@layer components {
+  .markdown-content h1 {
+    font-size: 1.5rem !important;
+    font-weight: 800 !important;
+    color: var(--white) !important;
+    margin-top: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .markdown-content h2 {
+    font-size: 1.35rem !important;
+    font-weight: 700 !important;
+    color: var(--white) !important;
+    margin-top: 1.1rem !important;
+    margin-bottom: 0.6rem !important;
+  }
+  .markdown-content h3 {
+    font-size: 1.15rem !important;
+    font-weight: 600 !important;
+    color: var(--white) !important;
+    margin-top: 0.9rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  .markdown-content ul {
+    list-style-type: disc !important;
+    padding-left: 1.5rem !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.6rem !important;
+    color: var(--muted) !important;
+  }
+  .markdown-content ol {
+    list-style-type: decimal !important;
+    padding-left: 1.5rem !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.6rem !important;
+    color: var(--muted) !important;
+  }
+  .markdown-content li {
+    margin-bottom: 0.35rem !important;
+    line-height: 1.6 !important;
+  }
+  .markdown-content strong {
+    color: var(--white) !important;
+    font-weight: 700 !important;
+    margin-left: 0.15em !important;
+    margin-right: 0.15em !important;
+  }
+  .markdown-content p {
+    margin-bottom: 0.75rem !important;
+    line-height: 1.7 !important;
+    color: #b1b0aa !important;
+  }
+  .markdown-content code {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #f43f5e !important;
+    background-color: rgba(244, 63, 94, 0.1) !important;
+    padding: 0.15rem 0.35rem !important;
+    border-radius: 0.375rem !important;
+    font-family: Consolas, Monaco, monospace !important;
+    margin-left: 0.2em !important;
+    margin-right: 0.2em !important;
+  }
+  .markdown-content pre {
+    background-color: #141b1c !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 0.75rem !important;
+    padding: 1rem !important;
+    margin: 0.75rem 0 !important;
+    overflow-x: auto !important;
+  }
+  .markdown-content pre code {
+    background-color: transparent !important;
+    color: var(--ink) !important;
+    padding: 0 !important;
   }
 }
 </file>
@@ -8157,7 +8198,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-screen w-full flex overflow-hidden font-sans select-none bg-[#060607] text-[#f5f5f3] relative">
+  <div class="h-screen w-full flex overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
     
     <!-- 悬浮侧边栏展开按钮 (当侧边栏收起时显现) -->
     <div
@@ -8167,12 +8208,12 @@ onMounted(() => {
     >
       <button
         @click="ui.切换侧边栏"
-        class="h-9 w-9 rounded-xl bg-[#0e0e10]/85 backdrop-blur-xl border border-white/10 text-[#8b8b87] hover:text-white hover:bg-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
+        class="h-9 w-9 rounded-xl bg-[#182022]/85 backdrop-blur-xl border border-white/10 text-[#8b999b] hover:text-white hover:bg-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
         title="展开侧边栏"
       >
         <PanelLeftOpen :size="16" class="stroke-[2]" />
       </button>
-      <div class="absolute top-11 left-1/2 -translate-x-1/2 bg-[#0e0e10]/95 backdrop-blur-xl border border-white/15 rounded-xl px-3 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.8)] flex items-center justify-center pointer-events-none opacity-0 scale-95 group-hover/expand:opacity-100 group-hover/expand:scale-100 transition-all duration-200 select-none z-50">
+      <div class="absolute top-11 left-1/2 -translate-x-1/2 bg-[#182022]/95 backdrop-blur-xl border border-white/15 rounded-xl px-3 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.8)] flex items-center justify-center pointer-events-none opacity-0 scale-95 group-hover/expand:opacity-100 group-hover/expand:scale-100 transition-all duration-200 select-none z-50">
         <span class="text-[11px] font-bold text-[#f2f2ef] whitespace-nowrap">展开侧边栏</span>
       </div>
     </div>
@@ -8189,14 +8230,14 @@ onMounted(() => {
         <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
           <button
             @click="触发最小化"
-            class="h-7 w-9 flex items-center justify-center text-[#8b8b87] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
             title="最小化"
           >
             <Minus :size="13" class="stroke-[2.5]" />
           </button>
           <button
             @click="触发最大化还原"
-            class="h-7 w-9 flex items-center justify-center text-[#8b8b87] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
             :title="是否已最大化 ? '向下还原' : '最大化'"
           >
             <Square v-if="!是否已最大化" :size="11" class="stroke-[2.5]" />
@@ -8204,7 +8245,7 @@ onMounted(() => {
           </button>
           <button
             @click="触发关闭"
-            class="h-7 w-9 flex items-center justify-center text-[#8b8b87] hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer"
+            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer"
             title="关闭"
           >
             <X :size="14" class="stroke-[2.5]" />
@@ -8212,7 +8253,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 视图路由分发区 (带顶部 48px 留白避开拖拽轨) -->
+      <!-- 视图路由分发区 -->
       <div class="flex-1 w-full h-full overflow-hidden relative z-10 pt-12">
         <HomeView v-if="ui.currentView === 'home'" />
         <FormatConverterView v-else-if="ui.currentView === 'format'" />
@@ -8232,7 +8273,7 @@ onMounted(() => {
         leave-from-class="opacity-100 scale-100 translate-y-0"
         leave-to-class="opacity-0 scale-95 translate-y-2"
       >
-        <div class="px-5 py-3 rounded-2xl bg-[#0e0e10]/95 backdrop-blur-2xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center gap-3 select-none pointer-events-auto max-w-[420px]">
+        <div class="px-5 py-3 rounded-2xl bg-[#182022]/95 backdrop-blur-2xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center gap-3 select-none pointer-events-auto max-w-[420px]">
           <div
             class="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
             :class="[
