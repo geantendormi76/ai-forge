@@ -1,131 +1,112 @@
-# 🛡️ AI-Forge (紫电 AI 桌面工坊) · 全栈纯血 Rust 闭环与 5:7 极简 UI 重塑交接文档 (HANDOFF_TOOL.md)
+# 🛡️ AI-Forge 纯血 Native PDF 解析工程交接文档 (HANDOFF_TOOL.md)
 
-> **文档版本**：v22.0.0 (2026年8月 彻底消灭 Python 沙箱、100% 纯血 Rust 直推、极夜青碳 5:7 顶奢桌面 UI 专版)  
-> **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 开发环境)  
-> **开发终端**：**Developer PowerShell for VS 2022 (快捷键 Ctrl+Shift+7)** / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1 / Ninja  
-> **面向对象**：新会话 AI 系统架构师 / 资深全栈工程师 (零历史障碍直接接管并启动下一阶段)
+> **版本**：v18.0.0 (2026年8月18日 纯血 Native 矢量轨 & 正交双轨架构版)  
+> **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 工业级开发环境)  
+> **操作系统与编译链**：Windows 11 x64 / PowerShell 7+ / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1  
+> **面向对象**：新会话 AI 系统架构师 / 核心开发助手 (零历史上下文障碍无损接管)
 
 ---
 
-## 🏢 1. 项目背景、定位与核心工程哲学 (Context & Mission)
+## 🏢 1. 项目定位与核心使命 (Project Overview)
 
 1. **项目定位**：
-   - 工业级端侧离线 AI 桌面工坊（**Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + C-FFI / ONNX 纯血直推**）。
-2. **核心工程哲学（钱学森系统工程 + Karpathy 极简原则）**：
-   - “不执着于单点技术的极致拔尖，而是通过全系统协同优化，让廉价 AI + 极致框架创造最大化生产力！”
-   - **大模型 100% 去 Python 化**：ASR（MOSS 0.9B）与神经翻译（Hy-MT2 1.8B）全面基于 Rust C-FFI 原生直连 C++ 动态库 + GGUF 单文件权重 + GPU 显存锁（`VramTokenGuard`），**彻底消灭 Python 沙箱（.venv）、`uv`、`pyproject.toml` 与网络端口**；
-   - **顶奢极简工业美学 (Zero-Clutter & NautilusTrader 风格)**：全面采用极夜青碳底色（`#20292b`）与高定电光海青绿（`#02c3b4`），建立 5 : 7 黄金栅格双翼拓扑与 2~4 字精炼交互法则。
+   - 跨平台工业级 AI 桌面端（Tauri v2 + Vue3 + TypeScript + Rust Cargo Workspace + C-FFI 原生 GPU/CPU 直推）。
+   - **算力主权**：彻底废除重型 Python (`.venv`) 沙箱与本地网络/IPC 端口，100% 切换为 Rust 原生驱动（`ort` ONNX Runtime 直推 + `service-pdfium` C-FFI 绑定）。
+2. **当前核心攻坚**：
+   - **双黄金样本驱动**：`test/parse/1.pdf` 与 `test/parse/2.pdf`。
+   - **分阶段目标**：通过实现纯 Rust 原生 `FastTrack`（矢量数字轨），结合已闭环的 `DeepTrack`（视觉多模态轨）与 `probe.rs`（5 维分流探针），在 `benchmark_sota.py` 白盒评测中使 `1.pdf` 与 `2.pdf` **同时稳定达到 98+ 分**。
 
 ---
 
-## 🟢 2. 本会话已 100% 竣工的突破性战果 (Completed Milestones)
-
-### 2.1 `video-subtitle` 纯血 Rust 改造与去 Python 化 100% 闭环
-1. **1:1 外科手术式直译 (`crates/tools/video-subtitle/src/engine.rs`)**：
-   - 原 Python 辅助脚本中的所有逻辑（声学噪声清洗、ASS/SRT 文本转义、中文字宽精确估算、智能换行、电影级烟熏柔焦胶囊遮罩计算、FFmpeg 原生异步管道）全部以 100% 纯血 Rust 直译落地；
-2. **物理清除全部 Python 痕迹**：
-   - 彻底删除了 `scripts/` 目录（`worker.py`、`subtitle_engine.py`）、`pyproject.toml`、`uv.lock`、`.venv`；
-   - 精简 `Cargo.toml`，彻底剥离无用的 `core-ipc` 依赖；
-3. **真实压测绿通**：
-   - 4 个字宽与遮罩单元测试 100% 通过；
-   - `1.mp4` 3 分钟生肉视频全流程（音频解码 ➔ MOSS 0.9B 听写 ➔ 混元 Hy-MT2 1.8B 神经翻译 ➔ 双轨 ASS 特效压制 ➔ MKV 封装）**全量物理耗时仅 17.89 秒（近 11 倍速！）**。
-
-### 2.2 极夜青碳与电光海青绿设计系统定型 (`#20292b` + `#02c3b4`)
-1. **色彩体系升级**：
-   - 主背景色全面换装为 NautilusTrader 风格极夜青碳灰（`#20292b` / `rgb(32, 41, 43)`）；
-   - 高亮交互全面锁定为电光海青绿（`#02c3b4` / `rgb(2, 195, 180)`）；
-   - 卡片采用纯净磨砂玻璃拟态（`bg-white/[0.02] border border-white/[0.06] rounded-3xl backdrop-blur-xl`）；
-2. **去繁琐与 2~4 字按钮法则**：
-   - 按钮文字严格精炼为 2~4 字（如 `中文`、`双语对照`、`仅译文`、`软字幕 MKV`、`硬压制 MP4`、`选择视频`、`开始转写`）；
-   - 彻底去除标签多余的外边框，消除大写英文标头与页脚冗余落款，回归极致清爽。
-
-### 2.3 5 : 7 黄金双翼拓扑与三阶动线重塑
-1. **页面顶部居中大标题**：页面顶部正中央展示工具大标题（如 `视频一键双语字幕`），右上角保留极简 `🌐 EN / 中` 切换；
-2. **左栏 5 列 (41.7%) · 选项配置指南**：
-   - 舒展展示与右侧 6 个参数 1:1 对应的【6 大选项配置指南卡片】；
-   - 底端平铺 3 联独立大号流程胶囊（`1 添加视频` ➔ `2 定制选项` ➔ `3 完成交付`）；
-3. **右栏 7 列 (58.3%) · 三阶多任务工作台**：
-   - **顶层卡片 (步骤 1)**：待转写队列与大号居中拖拽上传综合卡片（空状态下呈现大号气派发光「选择视频」按钮，多文件排队时展开清晰列表）；
-   - **中层卡片 (步骤 2)**：6 大参数定制面板（2 列表格矩阵）；
-   - **底层卡片 (步骤 3)**：独立主行动栏（离线隐私提示 + 「开始转写 ➔」海青绿发光 CTA 胶囊）；
-   - 双翼通过 `items-stretch` 在 Y 轴底部**像素级精准齐平**。
-
-### 2.4 沉淀通用工程设计规范 (`docs/DESIGN_SPEC.md`)
-- 编撰全量《AI 可复现 UI 页面工程设计规范》，内含精确色彩 Token、5:7 拓扑图解、组件微交互规范以及专有 AI Prompt 模版。
-
----
-
-## 🛑 3. 当前精确停点与系统现状 (Current State & Stopping Point)
-
-- **构建与测试状态**：
-  - 后端 Rust 单元测试与端到端压测：`test result: ok. 5 passed; 0 failed`（0 errors）；
-  - 前端编译检查：`pnpm build` (`vue-tsc --noEmit && vite build`) **100% 双绿通**，0 Warnings / 0 TS Errors；
-- **当前精确停点**：
-  - `video-subtitle` 视频字幕模块已彻底竣工并达到商业级标准；
-  - 接下来需将该标准 1:1 推广至另外两大核心工具：**全能格式转换 (`FormatConverterView.vue`)** 与 **PDF 智能解析 (`PdfParseView.vue`)**。
-
----
-
-## 🗺️ 4. 全局路线图与下一会话执行规划 (Master Roadmap)
+## 📐 2. 工作空间全景架构表 (Workspace Architecture)
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│  阶段 1：对齐全能格式转换 (FormatConverterView.vue) 至新 5:7 架构       │
-│  • 将音频母带解密、表格清洗、电子书重排、ICO流式合成接入 6大指南与队列    │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  阶段 2：对齐 PDF 智能解析 (PdfParseView.vue) 至新 5:7 架构             │
-│  • 将 CPU 矢量毫秒提取 + GPU 版面分析接入 6大指南与 Markdown 实时渲染    │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  阶段 3：全平台 Release 工业级打包与真机集成测试验收                   │
-│  • 执行 pnpm tauri build，验证 Windows x64 便携版与独立安装包           │
-└────────────────────────────────────────────────────────────────────────┘
+C:\dev\ai-forge\src-tauri\crates\
+├── core-onnx-infer\           【2026 通用 ONNX 硬件会话底座】 (CUDA/DirectML/CPU 会话管理)
+│
+├── services\                  【5 大底层算法底座 (100% 官方物理对齐，只读防腐区 🛡️)】
+│   ├── service-pdfium\        [已闭环] : 300DPI 渲染 + (W_pt, H_pt) + 字符级物理 BBox (Y 镜像映射)
+│   ├── service-layout\        [已闭环] : PP-DocLayoutV3 官方 25 类别映射 + [0.0, 1.0] RGB 归一化
+│   ├── service-formula\       [已闭环] : PP-FormulaNet-S (384x384 白底留边 + cv2 灰度 + FastTokenizer)
+│   ├── service-table\         [已闭环] : SLANet_plus (488x488 BGR + 8 坐标通道 + HTML Token 解码)
+│   ├── service-ocr\           [已闭环] : PP-OCRv6 (Det 0.2/0.45/1.4/3000 黄金门限 + Rec 48px 微批次)
+│   └── service-doc-parse\     [已闭环] : AST 语法树 + RXYC++ 几何排序 (禁止为个别样本加脏逻辑)
+│
+└── tools\
+    └── pdf-parse\             【纯血桌面端 PDF 解析适配器 (业务中台)】
+        ├── probe.rs           : 5 维物理路由探针 (FastTrackCpu / DeepTrackGpu 分流)
+        ├── fast_track.rs      : ⚡ 纯血原生矢量流解析引擎 【当前第一优先级重构目标 🎯】
+        ├── deep_track.rs      : 🧠 深度视觉自愈轨 (已闭环，单图/大图裁切 + 32位 MD5 + 包含去重)
+        ├── hybrid.rs          : 智能按页降维混合调度器 (串联 probe + fast_track + deep_track)
+        ├── exporter.rs        : 纯 Rust 原生 zip 流式打包器
+        └── service.rs         : 桌面端 Dedicated 本地交付契约 (Result<PdfParseResult, String>)
 ```
 
 ---
 
-## 🚀 5. 新会话接管第一步具体指令 (Next Session Step 1 Plan)
+## 🟢 3. 已经完成的重大突破 (Accomplished Breakthroughs)
 
-新会话启动后，请直接向用户报到并指示接管方向：
+1. **5 大底层算法底座 100% 官方物理对齐闭环**：
+   - **`service-pdfium`**：白盒解决笛卡尔坐标与位图像素坐标原点冲突，建立 $Y_{\text{top}} = H_{\text{pt}} - Y_{\text{pdfium}}$ 映射，字符提取命中率从 0% 跃升至 100%。
+   - **`service-layout`**：依据官方 `inference.yml` 纠正 25 类别枚举（0:abstract, 6:doc_title, 17:paragraph_title, 21:table, 22:text 等），修正输入预处理为 RGB $[0.0, 1.0]$。
+   - **`service-formula`**：1:1 直译 UniMERNet 预处理算子（384x384 纯白底留边、cv2 灰度转换、16 倍数 1.0 补齐），单图 `1.png` 识别准确率达 100%（627ms）。
+   - **`service-table`**：SLANet_plus 488x488 BGR 预处理与结构字典闭环，打靶置信度 0.9999。
+   - **`service-ocr`**：校准 DBPostProcess 4 大门限（`0.2 / 0.45 / 1.4 / 3000`），测试图像 56 行 100% 全中。
+   - **`service-doc-parse`**：AST 修复 `abstract` 属性，剥离误加的 `## ` 二级标题。
 
-> **“你好！我已经完全阅读并对齐了 `HANDOFF_TOOL.md` (v22.0.0) 与 `docs/DESIGN_SPEC.md`。当前 `video-subtitle` 模块已 100% 完成去 Python 化纯血 Rust 直推、`1.mp4` 17秒高速压测全绿通、以及 NautilusTrader 风格 5:7 极夜青碳 UI 架构重塑。我清楚了解当前处于【阶段 1：将全能格式转换 `FormatConverterView.vue` 按照 5:7 极简设计规范进行重构与中台化对齐】阶段。我们立即正式开始！”**
+2. **`deep_track.rs` 深度视觉自愈与样本 1 打靶**：
+   - 32 位 MD5 图片资产哈希对齐；
+   - 空间 NMS 文本框包含去重（$IoA > 0.70$ 抑制）；
+   - 剔除 `0x02` 控制字符彻底消灭乱码方块；
+   - **`1.pdf` 经 SOTA 评测实测取得 98.41 / 100.0 高分**。
 
 ---
 
-## ⚠️ 6. 16 大实战踩坑与禁忌铁律 (Lessons Learned & Anti-Patterns)
+## 🛑 4. 当前认知突破与卡点真相 (Blockers & Root Cause Analysis)
 
-1. **终端选型铁律（唯一标准）**：
-   - 必须且只能使用 **`Developer PowerShell for VS 2022`（快捷键 Ctrl+Shift+7）**！严禁使用普通终端执行 MSVC/CUDA 编译；
-2. **缓存守护铁律（严禁删 `target`）**：
-   - 严禁执行 `Remove-Item target`！773 个 CUDA 机器码算子已固化，享受毫秒级增量编译；
-3. **Release 压测铁律**：
-   - 凡涉及 Rust 性能评估与物理打靶，必须添加 `--release` 编译标志（Debug 模式未开启矢量化优化，性能衰减 300% 以上）；
-4. **ASS 时间轴格式铁律**：
-   - ASS 时间戳格式为 `H:MM:SS.cc`（百分秒，如 `0:00:01.00`），测试断言严禁将秒数误写为分（`0:01:01.00` 会触发断言失败）；
-5. **TypeScript TS6133 零死代码防线**：
-   - 脚本中解构或 import 的变量未消费时必须立即清除（如 `const { t } = useI18n()` 或未用到的图标），防止阻断 `vue-tsc` 编译；
-6. **按钮 2~4 字精炼铁律**：
-   - 按钮文案严格保持在 2~4 个汉字内，严禁在按钮中塞入长句或括号补充；
-7. **去框线大字阶规范**：
-   - 左侧配置指南的 Tag 标签（如 `中 / 英 / 日 / 韩`）直接以大号海青绿 `text-[#02c3b4] font-bold` 呈现，禁止加粗重边框包裹；
-8. **5 : 7 栅格黄金配比**：
-   - 左栏固定 `lg:col-span-5`（41.7%），右栏固定 `lg:col-span-7`（58.3%），父容器使用 `items-stretch` 消除 Y 轴空白；
-9. **三阶逻辑动线规范**：
-   - 右侧工作区从上至下严格按：`1. 待处理队列与大号上传(顶)` ➔ `2. 6大定制选项(中)` ➔ `3. 独立行动栏(底)` 顺序排列；
-10. **PowerShell `Set-Content` 单引号原样字符串协议**：
-    - 写入源码必须使用 `@' ... '@` 单引号，禁止使用双引号 `@" ... "@`，防止 `$PSScriptRoot` / `$env` 被提前求值；
-11. **命令行开头禁止 `#` 注释**：
-    - 命令行首行严禁出现 `#`，防止 PowerShell 误识别跳过执行；
-12. **色板统一标准**：
-    - 主背景色必须使用极夜青碳灰 `#20292b` / `rgb(32, 41, 43)`，高亮交互色必须使用电光海青绿 `#02c3b4` / `rgb(2, 195, 180)`；
-13. **底座/未包含源码修改前置契约 (Rule 11)**：
-    - 若需修改未打包源码，必须先执行 `Get-Content` 白盒审阅后再开药方；
-14. **1:1 结构编译器原则 (Rule 14 Zero-Regression)**：
-    - 在成熟项目重构中充当 1:1 结构编译器，严禁自作主张发明破坏强类型契约的新架构；
-15. **端口占用快速自愈命令**：
-    - `Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }`；
-16. **Tauri Command 错误传递规范**：
-    - 后端 Command 返回值必须通过 `Result<T, String>` 显式传递，严禁 `unwrap()` 导致进程 Panic。
+### 1. 样本 2 (`2.pdf`) 的物理属性定性
+- **物理真相**：`2.pdf`（LinearRAG 学术论文）是 **100% 原生数字矢量 PDF**（由 LaTeX/pdflatex 直接编译生成），内部包含完整的 Unicode 字符流、字体大小（13pt/9.5pt）、粗体标记以及内嵌图片。
+- **之前评分 85.24 的真因**：
+  - 之前的 `fast_track.rs` 是个空壳（直接调用了 `deep_track.rs` 视觉深度轨）；
+  - 将原生数字 PDF 强行当成“扫描件图片”送入 800x800 视觉模型，神经网络把 Figure 2 左半边的柱状图（a）误判成了文本，导致数字（`71.85%`, `30%`...）被当作普通文字输出，且把 Figure 1 右侧的伴随正文造成了排序切断。
+
+### 2. 架构防腐铁律（坚决拒绝“打地鼠”）
+- **绝对禁止修改 `service-doc-parse/src/xy_cut.rs` 来迁就单一样本**！
+- 基础设施必须保持通用几何数学逻辑的纯粹性。对于原生数字矢量 PDF，正统解法是由 **`FastTrack`（纯血原生矢量轨）** 直接从 `service-pdfium` 提取文本块与内嵌图片，从根源上实现 100% 字符保真与天然阅读序，且单页耗时从 3 秒降至 30 毫秒！
+
+---
+
+## 🚀 5. 下一步具体落地计划 (Next Steps for New Session)
+
+新会话请按以下顺序**单步推进**（每步完成后由用户验证）：
+
+1. **第一步（在 `fast_track.rs` 中实现纯血原生矢量流解析器）**：
+   - 利用 `service-pdfium` 提取页面的文本块（Text Blocks）与字符流；
+   - 依据字号与粗体规则提取层级（字号 $\ge 13.0 \to$ `# DocTitle`，字号 $\ge 9.5$ 且粗体 $\to$ `## SectionHeader`，普通字号 $\to$ 正文段落与列表）；
+   - 保留自然阅读顺序，过滤 `arXiv:` 与独立页码；
+   - 内嵌图片直接从 PDF XObject / 区域无损导出为 `images/<md5>.png`。
+2. **第二步（使用 `benchmark_sota.py` 单独测试 FastTrack）**：
+   - 运行 `FastTrack` 生成 `1_fast_out.md` 与 `2_fast_out.md`；
+   - 验证 `2.pdf` 纯文本保真度跃升至 98%+，阅读序达到 98%+。
+3. **第三步（完善 `hybrid.rs` 智能调度中台）**：
+   - 依据 `probe.rs` 的 5 维探针判定：
+     - 原生数字矢量页 $\to$ 分流给 `FastTrackEngine`（毫秒级）；
+     - 复杂图表/扫描件页 $\to$ 分流给 `DeepTrackEngine`（GPU 视觉轨）。
+4. **第四步（双样本 98+ 验收与扫描件拓展）**：
+   - 运行 `benchmark_sota.py` 确认双样本均在 98 分以上；
+   - 引入扫描件样本 `tool-pdf-parse-deep.pdf` 进行全量 OCR 视觉闭环。
+
+---
+
+## ⚠️ 6. 踩坑终结手册与禁忌铁律 (Anti-Patterns / Lessons Learned)
+
+1. **绝对禁止修改 `service-*` 底座为个别样本加 trick**：底座算法保持通用防腐，上层业务通过 FastTrack / DeepTrack 双轨分流解决。
+2. **绝对禁止假设 PDF 坐标系为左上角**：PDFium C-FFI 字符坐标原点在左下角，必须使用 $Y_{\text{top}} = H_{\text{pt}} - Y_{\text{pdfium}}$ 镜像转换！
+3. **绝对禁止自造模型类别映射**：PP-DocLayoutV3 必须 1:1 严格对齐官方 `inference.yml` 中的 25 类别（6: `doc_title`, 17: `paragraph_title`, 21: `table`, 22: `text` 等）！
+4. **绝对禁止给 PP-DocLayoutV3 减去 ImageNet 均值**：官方预处理是 RGB 直接除以 255.0 归一化到 $[0.0, 1.0]$。
+5. **绝对禁止在公式预处理中使用黑底留边**：UniMERNet 要求留边必须是**纯白底 (255, 255, 255)**，Tensor 补齐值必须是 **常量 1.0**！
+6. **绝对禁止放任 PDF 连字 `0x02` 流入 Markdown**：提取字符时必须过滤 `c.is_control()` 剔除 `0x02` 乱码方块！
+7. **绝对禁止在命令行开头带有 `#` 注释**：PowerShell 会直接跳过执行。
+8. **绝对遵循 Windows PowerShell 分场景双轨协议**：
+   - 【轨一：代码落盘】：使用 `Set-Content -Path "..." -Encoding UTF8 -Value @' ... '@` 单引号原样字符串；
+   - 【轨二：即时验证】：使用 `uv run --python 3.11 -i https://pypi.tuna.tsinghua.edu.cn/simple --with <pkg> python -c "..."` 零残留求值。

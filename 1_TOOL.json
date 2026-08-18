@@ -39,15 +39,26 @@
     "src/locales/**",
     "src/components/**",
     "src/views/HomeView.vue",
-    "src/views/VideoSubtitleView.vue",
+
+
 
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
     "src-tauri/crates/core-onnx-infer/**",
-    "src-tauri/crates/services/service-asr/**",
-    "src-tauri/crates/services/service-translation/**",
-    "src-tauri/crates/tools/video-subtitle/**"
+          
+
+    "src/views/PdfParseView.vue",
+
+    "src-tauri/crates/services/service-pdfium/**",
+    "src-tauri/crates/services/service-doc-parse/**",
+    "src-tauri/crates/services/service-formula/**",
+    "src-tauri/crates/services/service-layout/**",
+    "src-tauri/crates/services/service-table/**",
+    "src-tauri/crates/services/service-ocr/**",
+    "src-tauri/crates/tools/pdf-parse/**"
+
+
   ],
   "ignore": {
     "useGitignore": true,
@@ -69,16 +80,15 @@
       "dist/**",
 
       "src-tauri/crates/tools/tool-pdf-parse/**",
-      "src-tauri/crates/tools/pdf-parse/**",
+
       "src-tauri/crates/tools/format-converter/**",
-      
-      "src-tauri/crates/services/service-pdfium/**",
-      "src-tauri/crates/services/service-doc-parse/**",
-      "src-tauri/crates/services/service-formula/**",
-      "src-tauri/crates/services/service-layout/**",
-      "src-tauri/crates/services/service-table/**",
-      "src-tauri/crates/services/service-ocr/**",
-      "src-tauri/crates/services/service-converter/**"
+
+      "src-tauri/crates/services/service-converter/**",
+
+      "src/views/VideoSubtitleView.vue",
+      "src-tauri/crates/services/service-asr/**",
+      "src-tauri/crates/services/service-translation/**",
+      "src-tauri/crates/tools/video-subtitle/**"
     ]
   }
 }
