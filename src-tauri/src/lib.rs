@@ -3,6 +3,7 @@ use format_converter::{service::FormatConvertService, FormatConvertResult, Forma
 use pdf_parse::service::{PdfParseResult, PdfParseService};
 use shared_contracts::VramTokenGuard;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State};
 use video_subtitle::{
@@ -13,6 +14,7 @@ use video_subtitle::{
 pub struct AppState {
     pub vram_guard: Arc<VramTokenGuard>,
     pub output_dir: PathBuf,
+    pub cancel_token: Arc<AtomicBool>,
 }
 
 #[tauri::command]
@@ -62,7 +64,23 @@ async fn run_video_subtitle(
 
     Gatekeeper::check_permission("video-subtitle").await?;
 
-    VideoSubtitleTool::run_pipeline(options, Some(&state.vram_guard)).await
+    // 重置取消令牌为运行状态
+    state.cancel_token.store(false, Ordering::SeqCst);
+
+    VideoSubtitleTool::run_pipeline_cancellable(
+        options,
+        Some(&state.vram_guard),
+        state.cancel_token.clone(),
+    )
+    .await
+}
+
+/// 🛡️ 2026 SOTA 硬件级全局截停指令：一键通知底座与 GPU 算子熔断退出
+#[tauri::command]
+fn cancel_current_task(state: State<'_, AppState>) -> Result<bool, String> {
+    tracing::warn!("🛑 [IPC 截停专线] 收到前端紧急截停请求，正在中断底层算子与 GPU 推理...");
+    state.cancel_token.store(true, Ordering::SeqCst);
+    Ok(true)
 }
 
 #[tauri::command]
@@ -95,6 +113,7 @@ pub fn run() {
     let app_state = AppState {
         vram_guard: Arc::new(VramTokenGuard::default_rtx3060()),
         output_dir,
+        cancel_token: Arc::new(AtomicBool::new(false)),
     };
 
     tauri::Builder::default()
@@ -105,6 +124,7 @@ pub fn run() {
             parse_pdf,
             probe_video,
             run_video_subtitle,
+            cancel_current_task,
             get_hardware_fingerprint,
             run_format_convert
         ])

@@ -1,6 +1,16 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue';
 import { useUIStore } from '../../store/uiStore';
-import { UploadCloud, X, Check, Loader2, FolderOpen, CheckCircle2, ArrowRight } from 'lucide-vue-next';
+import {
+  UploadCloud,
+  X,
+  Check,
+  Loader2,
+  FolderOpen,
+  CheckCircle2,
+  ArrowRight,
+  ArrowLeft,
+} from 'lucide-vue-next';
 import DotField from '../effects/DotField.vue';
 import GradientText from '../effects/GradientText.vue';
 import type { ToolWorkflowInstance } from '../../composables/useToolWorkflow';
@@ -34,6 +44,21 @@ const emit = defineEmits<{
 }>();
 
 const ui = useUIStore();
+
+// 🌟 SOTA 原生快捷键：按下 ESC 键秒级返回工坊主页
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && !ui.toast显示) {
+    ui.currentView = 'home';
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
+});
 </script>
 
 <template>
@@ -70,14 +95,38 @@ const ui = useUIStore();
     >
       <div class="max-w-[1480px] w-full mx-auto space-y-5 pt-1">
 
-        <!-- 1. 顶部居中大标题 (装配专属紫电 GradientText 流光组件) -->
-        <header class="flex items-center justify-center border-b border-white/[0.06] pb-3.5 pt-1">
-          <GradientText
-            :text="title"
-            :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
-            :animation-speed="6"
-            class="text-2xl sm:text-3xl font-black tracking-tight text-center"
-          />
+        <!-- 🌟 1. 2026 SOTA 顶栏：回退胶囊 (左) + 居中流光标题 (中) + ESC 快捷指示 (右) -->
+        <header class="relative flex items-center justify-between border-b border-white/[0.06] pb-3.5 pt-1">
+          <!-- 左侧：磨砂玻璃回退胶囊 -->
+          <button
+            type="button"
+            @click="ui.currentView = 'home'"
+            class="h-8 px-3.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-[#02c3b4]/40 text-[#8b999b] hover:text-white transition-all duration-200 flex items-center gap-2 text-xs font-bold shadow-md active:scale-95 cursor-pointer group"
+            title="返回工坊主页 (Esc)"
+          >
+            <ArrowLeft :size="14" class="group-hover:-translate-x-0.5 transition-transform text-[#02c3b4]" />
+            <span>返回主页</span>
+          </button>
+
+          <!-- 中间：绝对居中紫电 GradientText 流光标题 -->
+          <div class="absolute left-1/2 -translate-x-1/2 pointer-events-none">
+            <GradientText
+              :text="title"
+              :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
+              :animation-speed="6"
+              class="text-2xl sm:text-3xl font-black tracking-tight text-center"
+            />
+          </div>
+
+          <!-- 右侧：ESC 键盘流微标 -->
+          <div
+            @click="ui.currentView = 'home'"
+            class="flex items-center gap-1.5 text-[11px] font-mono text-[#5b696b] hover:text-[#8b999b] cursor-pointer transition-colors select-none"
+            title="点击或按 ESC 返回主页"
+          >
+            <kbd class="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-[#8b999b] text-[10px] font-bold">ESC</kbd>
+            <span class="hidden sm:inline">快捷返回</span>
+          </div>
         </header>
 
         <!-- 🌟 2. 左右双翼 5 : 7 黄金栅格严格锁定 -->

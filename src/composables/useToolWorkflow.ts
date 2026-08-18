@@ -6,6 +6,7 @@ import { useUIStore } from '../store/uiStore';
 import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { cancelCurrentTask } from '../bindings/index';
 
 export type WorkflowState =
   | 'idle'      // 空闲：等待添加文件
@@ -27,6 +28,7 @@ export interface ToolFileMetadata {
 export interface BatchSuccessPayload {
   title: string;
   totalProcessed: number;
+  failedCount?: number;
   targetFormat?: string;
   outputDir: string;
   lastOutputPath?: string;
@@ -109,7 +111,7 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 调起 Tauri v2 原生文件选取窗口（确保 100% 捕获完整绝对路径） */
+  /** 调起 Tauri v2 原生文件选取窗口 */
   const triggerFileSelect = async () => {
     try {
       const selected = await openDialog({
@@ -137,7 +139,7 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 批量追加文件到队列（兼顾 DOM File 回退） */
+  /** 批量追加文件到队列 */
   const addFiles = async (files: FileList | File[] | { name: string; path?: string; size?: number }[]) => {
     const rawList = Array.isArray(files) ? files : Array.from(files);
     if (rawList.length === 0) return;
@@ -180,7 +182,6 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 剔除指定索引的任务 */
   const removeFile = (index: number) => {
     queue.value.splice(index, 1);
     if (queue.value.length === 0) {
@@ -189,7 +190,6 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 一键清空任务队列 */
   const clearQueue = () => {
     queue.value = [];
     state.value = 'idle';
@@ -225,7 +225,6 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 挂载原生桌面拖拽监听 */
   onMounted(async () => {
     try {
       const appWindow = getCurrentWebviewWindow();
@@ -253,15 +252,20 @@ export function useToolWorkflow<TResult = any>() {
     }
   });
 
-  /** 取消当前批处理 */
-  const cancelProcessing = () => {
+  /** 🛡️ 2026 SOTA 毫秒级主动截停：向 Rust 网关发射硬件级熔断指令 */
+  const cancelProcessing = async () => {
     isCancelled.value = true;
     isProcessingModalOpen.value = false;
     state.value = 'queued';
-    ui.弹出提示('已取消当前任务处理', 'info');
+    try {
+      await cancelCurrentTask();
+      ui.弹出提示('🛑 已成功截停当前任务，GPU 算力已释放', 'info');
+    } catch (err) {
+      console.warn('⚠️ 截停指令发送异常:', err);
+    }
   };
 
-  /** 统一多任务批处理调度母线 */
+  /** 🛡️ 工业级舱壁隔离批处理调度母线 */
   const executeBatch = async (
     runner: (file: ToolFileMetadata, index: number, total: number) => Promise<TResult>,
     options: {
@@ -284,53 +288,75 @@ export function useToolWorkflow<TResult = any>() {
     const total = queue.value.length;
     const t0 = performance.now();
     let lastOutput = '';
+    let successCount = 0;
+    let failedCount = 0;
+    const failureErrors: string[] = [];
 
-    try {
-      for (let i = 0; i < total; i++) {
-        if (isCancelled.value) break;
+    for (let i = 0; i < total; i++) {
+      if (isCancelled.value) break;
 
-        activeIndex.value = i;
-        progress.value = Math.round((i / total) * 100);
-        statusText.value = `${options.statusPrefix || '正在处理...'} (${i + 1}/${total})`;
+      activeIndex.value = i;
+      progress.value = Math.round((i / total) * 100);
+      const currentFile = queue.value[i];
+      statusText.value = `${options.statusPrefix || '正在处理'} (${i + 1}/${total}): ${currentFile.name}`;
 
-        const file = queue.value[i];
-        const res = await runner(file, i, total);
+      try {
+        const res = await runner(currentFile, i, total);
         latestResults.value.push(res);
+        successCount++;
 
         if (res && typeof res === 'object') {
           if ('output_video_path' in res) lastOutput = (res as any).output_video_path;
           else if ('output_path' in res) lastOutput = (res as any).output_path;
         }
+      } catch (itemErr: any) {
+        if (isCancelled.value) {
+          console.info('ℹ️ 任务已被用户取消，跳过后续排队。');
+          break;
+        }
+        failedCount++;
+        const msg = typeof itemErr === 'string' ? itemErr : itemErr?.message || String(itemErr);
+        failureErrors.push(`${currentFile.name}: ${msg}`);
+        console.error(`🚨 [任务 ${i + 1}/${total} 失败]`, itemErr);
+        ui.弹出提示(`⚠️ [${currentFile.name}] 处理失败: ${msg}`, 'error');
       }
-
-      if (isCancelled.value) return;
-
-      progress.value = 100;
-      state.value = 'success';
-      isProcessingModalOpen.value = false;
-      elapsedMs.value = Math.round(performance.now() - t0);
-
-      const outputDir = lastOutput
-        ? lastOutput.substring(0, lastOutput.lastIndexOf('\\')) || lastOutput.substring(0, lastOutput.lastIndexOf('/'))
-        : '已保存至源文件同级目录';
-
-      successInfo.value = {
-        title: total === 1 ? `已将 ${queue.value[0].name} 处理完成` : `已成功批量处理 ${total} 个视频文件`,
-        totalProcessed: total,
-        targetFormat: options.targetFormat || 'MKV',
-        outputDir,
-        lastOutputPath: lastOutput,
-      };
-
-      isSuccessModalOpen.value = true;
-    } catch (err: any) {
-      state.value = 'error';
-      isProcessingModalOpen.value = false;
-      const msg = typeof err === 'string' ? err : err?.message || String(err);
-      errorMessage.value = msg;
-      ui.弹出提示(`🚨 处理失败: ${msg}`, 'error');
-      throw err;
     }
+
+    if (isCancelled.value) return;
+
+    progress.value = 100;
+    elapsedMs.value = Math.round(performance.now() - t0);
+    isProcessingModalOpen.value = false;
+
+    if (successCount === 0 && failedCount > 0) {
+      state.value = 'error';
+      errorMessage.value = failureErrors.join(';\n');
+      ui.弹出提示(`🚨 全部任务处理失败`, 'error');
+      return;
+    }
+
+    state.value = 'success';
+    const outputDir = lastOutput
+      ? lastOutput.substring(0, lastOutput.lastIndexOf('\\')) || lastOutput.substring(0, lastOutput.lastIndexOf('/'))
+      : '已保存至源文件同级目录';
+
+    const summaryTitle =
+      total === 1
+        ? `已将 ${queue.value[0].name} 处理完成`
+        : failedCount > 0
+        ? `已处理完成 ${successCount} 个文件 (另有 ${failedCount} 个失败)`
+        : `已成功批量处理 ${total} 个视频文件`;
+
+    successInfo.value = {
+      title: summaryTitle,
+      totalProcessed: successCount,
+      failedCount,
+      targetFormat: options.targetFormat || 'MKV',
+      outputDir,
+      lastOutputPath: lastOutput,
+    };
+
+    isSuccessModalOpen.value = true;
   };
 
   /** 调起原生资源管理器打开并高亮产物所在目录 */

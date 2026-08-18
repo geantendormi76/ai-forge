@@ -22,6 +22,7 @@
     "deploy/cloudflare/auth_worker.js",
     "src/bindings.ts",
     "src/bindings/**",
+    "src/assets/**",
 
     "package.json",
     "vite.config.ts",
@@ -33,22 +34,17 @@
     "src/main.ts",
     "src/style.css",
     "src/vite-env.d.ts",
-    "src/composables/useTauriWindow.ts",
-    "src/composables/useToolWorkflow.ts",
-    "src/components/layout/ToolWorkbenchLayout.vue",
-    "src/store/uiStore.ts",
+    "src/composables/**",
+    "src/store/**",
     "src/locales/**",
-    "src/components/layout/Sidebar.vue",
-    "src/components/effects/**",
-    "src/components/ui/**",
+    "src/components/**",
     "src/views/HomeView.vue",
     "src/views/VideoSubtitleView.vue",
-    
+
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
     "src-tauri/crates/core-onnx-infer/**",
-    
     "src-tauri/crates/services/service-asr/**",
     "src-tauri/crates/services/service-translation/**",
     "src-tauri/crates/tools/video-subtitle/**"

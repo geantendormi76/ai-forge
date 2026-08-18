@@ -38,6 +38,7 @@ impl TranslationService {
         PathBuf::from(r"C:\dev\ai-forge\models\service-translation\Hy-MT2-1.8B-Q4.gguf")
     }
 
+    /// 🛡️ 腾讯官方 Hy-MT2 1:1 锚定单句神经翻译引擎 (彻底消除 GGML_ASSERT 崩溃)
     fn translate_single_sentence(
         model: &LlamaModel,
         backend: &LlamaBackend,
@@ -49,8 +50,11 @@ impl TranslationService {
             return Ok(String::new());
         }
 
+        // 🌟 1. 上下文与 Batch 大小严格对齐至 4096，彻底消除 n_tokens_all <= cparams.n_batch 断言崩溃
         let ctx_params = LlamaContextParams::default()
-            .with_n_ctx(Some(NonZeroU32::new(2048).unwrap()));
+            .with_n_ctx(Some(NonZeroU32::new(4096).unwrap()))
+            .with_n_batch(4096);
+
         let mut ctx = model
             .new_context(backend, ctx_params)
             .context("创建 LlamaContext 失败")?;
@@ -59,13 +63,17 @@ impl TranslationService {
             .chat_template(None)
             .context("获取 Chat Template 失败")?;
 
-        let user_msg = LlamaChatMessage::new(
-            "user".to_string(),
+        // 🌟 2. 1:1 严格对齐腾讯官方 Hy-MT2 指令规范
+        let user_prompt = if clean_text.contains("参考下面的翻译：") {
+            clean_text.to_string()
+        } else {
             format!(
-                "Translate the following text into {}. Note that you should ONLY output the translated result without any additional explanation:\n\n{}",
+                "将以下文本翻译为 {}，注意只需要输出翻译后的结果，不要额外解释：\n\n{}",
                 target_lang, clean_text
-            ),
-        )?;
+            )
+        };
+
+        let user_msg = LlamaChatMessage::new("user".to_string(), user_prompt)?;
 
         let prompt = model
             .apply_chat_template(&tmpl, &[user_msg], true)
@@ -75,18 +83,26 @@ impl TranslationService {
             .str_to_token(&prompt, llama_cpp_2::model::AddBos::Never)
             .context("Prompt Tokenize 失败")?;
 
-        let mut batch = LlamaBatch::new(512, 1);
-        let last_idx = (tokens_list.len() - 1) as i32;
+        // 🌟 3. 施加 3800 安全上限截断，预留生成空间，绝不越过 4096 红线
+        let max_safe_tokens = 3800usize;
+        let token_count = tokens_list.len().min(max_safe_tokens);
+        if token_count == 0 {
+            return Ok(String::new());
+        }
 
-        for (i, token) in tokens_list.into_iter().enumerate() {
+        let mut batch = LlamaBatch::new(4096, 1);
+        let last_idx = (token_count - 1) as i32;
+
+        for (i, token) in tokens_list.iter().take(token_count).copied().enumerate() {
             let is_last = i as i32 == last_idx;
             batch.add(token, i as i32, &[0], is_last)?;
         }
 
         ctx.decode(&mut batch).context("llama_decode 失败")?;
 
+        // 🌟 4. 对齐腾讯官方推荐采样器：repetition_penalty = 1.05, temp = 0.1
         let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::penalties(model.n_vocab(), 64, 1.15, 0.0, 0.0),
+            LlamaSampler::penalties(model.n_vocab(), 64, 1.05, 0.0, 0.0),
             LlamaSampler::temp(0.1),
             LlamaSampler::greedy(),
         ]);
@@ -146,10 +162,22 @@ impl TranslationService {
                 .map_err(|e| format!("加载 GGUF 翻译模型失败: {e}"))?;
 
             let mut translations = Vec::with_capacity(texts.len());
-            for text in &texts {
-                let trans = Self::translate_single_sentence(&model, &backend, text, &target_lang)
-                    .map_err(|e| format!("单句神经翻译失败: {e}"))?;
-                translations.push(trans);
+
+            for (idx, text) in texts.iter().enumerate() {
+                // 🛡️ 工业级单句舱壁隔离：单句异常降级保留原句，绝不中断整部超长视频流水线
+                match Self::translate_single_sentence(&model, &backend, text, &target_lang) {
+                    Ok(trans) => {
+                        if trans.is_empty() {
+                            translations.push(text.clone());
+                        } else {
+                            translations.push(trans);
+                        }
+                    }
+                    Err(err) => {
+                        tracing::warn!("⚠️ [翻译单句容错 #{idx}] 翻译异常 ({err})，自动降级保留原句继续");
+                        translations.push(text.clone());
+                    }
+                }
             }
 
             Ok(translations)

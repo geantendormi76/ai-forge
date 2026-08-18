@@ -61,6 +61,7 @@ pub fn apply_class_margin(bbox: &BoundingBox, label: &str) -> BoundingBox {
     let (dx, dy) = match label.to_lowercase().as_str() {
         "formula" | "isolate_formula" | "display_formula" => (10.0, 10.0),
         "table" => (8.0, 8.0),
+        "figure" | "image" | "illustration" | "chart" => (12.0, 12.0),
         _ => (4.0, 4.0),
     };
     BoundingBox::from_coords(
@@ -69,6 +70,19 @@ pub fn apply_class_margin(bbox: &BoundingBox, label: &str) -> BoundingBox {
         bbox.x_max() + dx,
         bbox.y_max() + dy,
     )
+}
+
+fn is_chart_tick_noise(text: &str) -> bool {
+    let clean = text.trim();
+    if clean.is_empty() {
+        return false;
+    }
+    let total_chars = clean.chars().count();
+    let digit_or_pct_count = clean.chars().filter(|c| c.is_ascii_digit() || *c == '%' || *c == '.' || c.is_whitespace()).count();
+    if total_chars >= 3 && (digit_or_pct_count as f32 / total_chars as f32) > 0.85 {
+        return true;
+    }
+    false
 }
 
 fn map_label_to_sort_tag(label: &str, bbox: &BoundingBox, page_width: f32) -> 排序标签 {
@@ -255,7 +269,7 @@ impl DeepTrackEngine {
                     if final_text.is_none() && !vec_text.is_empty() {
                         final_text = Some(vec_text);
                     }
-                } else if matches!(label_lower.as_str(), "figure" | "image" | "illustration") {
+                } else if matches!(label_lower.as_str(), "figure" | "image" | "illustration" | "chart") {
                     let crop_x = x0.max(0.0) as u32;
                     let crop_y = y0.max(0.0) as u32;
                     let crop_w = (x1 - x0).max(1.0).min(img_w - crop_x as f32) as u32;
@@ -340,7 +354,7 @@ impl DeepTrackEngine {
 
         let mut image_boxes: Vec<(usize, BoundingBox)> = Vec::new();
         for elem in &raw_elements {
-            if matches!(elem.label.as_str(), "figure" | "image" | "illustration") {
+            if matches!(elem.label.as_str(), "figure" | "image" | "illustration" | "chart") {
                 if elem.bbox.len() >= 4 {
                     let p_idx = elem.page_index.unwrap_or(0);
                     let raw_box = BoundingBox::from_coords(elem.bbox[0], elem.bbox[1], elem.bbox[2], elem.bbox[3]);
@@ -353,8 +367,13 @@ impl DeepTrackEngine {
         let filtered_by_image: Vec<RawLayoutElement> = raw_elements
             .into_iter()
             .filter(|e| {
-                if matches!(e.label.as_str(), "figure" | "image" | "illustration") {
+                if matches!(e.label.as_str(), "figure" | "image" | "illustration" | "chart") {
                     return true;
+                }
+                if let Some(txt) = &e.text {
+                    if is_chart_tick_noise(txt) {
+                        return false;
+                    }
                 }
                 if e.bbox.len() >= 4 {
                     let elem_page = e.page_index.unwrap_or(0);
@@ -364,7 +383,7 @@ impl DeepTrackEngine {
                         if *img_page == elem_page {
                             let inter_area = text_box.intersection_area(img_box);
                             let text_area = text_box.area();
-                            if text_area > 0.0 && (inter_area / text_area) > 0.6 {
+                            if text_area > 0.0 && (inter_area / text_area) > 0.50 {
                                 return false;
                             }
                         }
@@ -443,7 +462,7 @@ impl DeepTrackEngine {
                     let label = e.label.to_lowercase();
                     let txt = e.text.as_deref().unwrap_or_default().trim();
 
-                    if matches!(label.as_str(), "figure" | "image" | "illustration") {
+                    if matches!(label.as_str(), "figure" | "image" | "illustration" | "chart") {
                         page_fig_candidates.push((e_idx, bbox));
                     } else if label == "figure_title" || txt.starts_with("Figure ") || txt.starts_with("Fig.") {
                         if !txt.is_empty() {
@@ -519,10 +538,15 @@ impl DeepTrackEngine {
                 let mut block_type = BlockType::from_label(&elem.label);
                 let trimmed_txt = txt.trim();
 
+                let is_subcaption = trimmed_txt.starts_with('(')
+                    && trimmed_txt.chars().nth(1).map_or(false, |c| c.is_ascii_alphabetic() || c.is_ascii_digit())
+                    && trimmed_txt.chars().nth(2) == Some(')');
+
                 if trimmed_txt.starts_with("Table ")
                     || trimmed_txt.starts_with("Tab.")
                     || trimmed_txt.starts_with("Figure ")
                     || trimmed_txt.starts_with("Fig.")
+                    || is_subcaption
                     || (trimmed_txt.starts_with('[') && trimmed_txt.chars().nth(1).map_or(false, |c| c.is_ascii_digit()))
                     || elem.label == "abstract"
                     || elem.label == "table_caption"
@@ -568,7 +592,7 @@ impl DeepTrackEngine {
                             is_display: true,
                         }
                     }
-                    "figure" | "image" | "illustration" => {
+                    "figure" | "image" | "illustration" | "chart" => {
                         let cap_text = fig_to_caption_map.get(&idx).cloned();
                         BlockContent::Figure {
                             image_path: txt.to_string(),
@@ -624,7 +648,7 @@ mod tests {
     #[tokio::test]
     async fn test_native_deeptrack_execution() {
         let pdf_path = Path::new(r"C:\dev\ai-forge\test\fixtures\1.pdf");
-        let fallback_path = Path::new(r"C:\dev\ai-forge\test\parse\pdf-parse-fast.pdf");
+        let fallback_path = Path::new(r"C:\dev\ai-forge\test\parse\1.pdf");
         let target_pdf = if pdf_path.exists() { pdf_path } else { fallback_path };
 
         let output_dir = Path::new(r"C:\dev\ai-forge\test\parse\outs");

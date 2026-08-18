@@ -15,11 +15,16 @@ export async function getHardwareFingerprint(): Promise<string> {
   return await invoke<string>("get_hardware_fingerprint");
 }
 
+export async function cancelCurrentTask(): Promise<boolean> {
+  return await invoke<boolean>("cancel_current_task");
+}
+
 // 3. 统一门面 RPC 命名空间 (Commands Facade)
 export const commands = {
   runFormatConvert,
   parsePdf,
   probeVideo,
   runVideoSubtitle,
+  cancelCurrentTask,
   getHardwareFingerprint,
 };

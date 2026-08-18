@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// 视频字幕分类形态：纯音频 ASR 识别流 / 内嵌软字幕流
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -122,7 +124,7 @@ impl VideoProbeService {
         }
     }
 
-    /// 毫秒级极速探针：10ms 内提取流结构并完成软字幕与生肉分类
+    /// 毫秒级极速探针：10ms 内提取流结构并完成软字幕与生肉分类（静默无窗）
     pub async fn probe(video_path: &Path) -> Result<VideoProbeResult, String> {
         let t0 = std::time::Instant::now();
         if !video_path.exists() {
@@ -130,7 +132,11 @@ impl VideoProbeService {
         }
 
         let ffprobe_bin = Self::resolve_ffprobe_bin();
-        let output = tokio::process::Command::new(ffprobe_bin)
+        let mut cmd = tokio::process::Command::new(ffprobe_bin);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let output = cmd
             .arg("-v")
             .arg("quiet")
             .arg("-print_format")

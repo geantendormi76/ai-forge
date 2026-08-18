@@ -12,7 +12,7 @@
     "includeFullDirectoryStructure": false
   },
   "include": [
-    "HANDOFF-UI.md",
+    "HANDOFF_UI.md",
     ".cargo/**",
     "src-tauri/.cargo/**",
     "src-tauri/Cargo.toml",
@@ -20,8 +20,6 @@
     "src-tauri/capabilities/**",
     "src-tauri/src/**",
     "deploy/cloudflare/auth_worker.js",
-    "src/bindings.ts",
-    "src/bindings/**",
 
     "package.json",
     "vite.config.ts",
@@ -29,18 +27,7 @@
     "tailwind.config.js",
     "index.html",
 
-    "src/App.vue",
-    "src/main.ts",
-    "src/style.css",
-    "src/vite-env.d.ts",
-    "src/composables/useTauriWindow.ts",
-    "src/store/uiStore.ts",
-    "src/locales/**",
-    "src/components/layout/Sidebar.vue",
-    "src/components/effects/**",
-    "src/components/ui/**",
-    "src/views/HomeView.vue",
-    "src/views/VideoSubtitleView.vue"
+    "src/**"
 
   ],
   "ignore": {

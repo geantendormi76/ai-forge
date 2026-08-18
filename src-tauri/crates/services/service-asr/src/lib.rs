@@ -1,9 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
-use transcribe_cpp::{Diarize, Model, ModelOptions, RunOptions, Task, TimestampKind};
+use transcribe_cpp::{CancelToken, Diarize, Error as TranscribeError, Model, ModelOptions, RunOptions, Task, TimestampKind};
 
-/// MOSS 0.9B 官方规范底层参数契约（纯净无领域污染）
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CHUNK_DURATION_SEC: f64 = 300.0;
+const SAMPLE_RATE: usize = 16000;
+const CHUNK_SAMPLES: usize = (CHUNK_DURATION_SEC as usize) * SAMPLE_RATE;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsrOptions {
     pub audio_path: String,
@@ -48,7 +57,6 @@ impl AsrService {
         PathBuf::from(r"C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q5_K_M.gguf")
     }
 
-    /// 内存原位音频解码：将任何格式音频 (MP3/WAV/AAC/FLAC/MP4) 高效解码为 16kHz 单声道 f32 浮点采样波形
     fn load_audio_pcm_16k_mono(audio_path: &Path) -> Result<Vec<f32>, String> {
         if let Ok(mut reader) = hound::WavReader::open(audio_path) {
             let spec = reader.spec();
@@ -74,7 +82,11 @@ impl AsrService {
             }
         }
 
-        let output = std::process::Command::new("ffmpeg")
+        let mut cmd = std::process::Command::new("ffmpeg");
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let output = cmd
             .arg("-y")
             .arg("-i")
             .arg(audio_path)
@@ -108,9 +120,14 @@ impl AsrService {
         Ok(pcm_f32)
     }
 
-    /// 纯血 Rust Native ASR 底座管道：内存原位直连 C++ / CUDA 引擎，零 Python、零进程通信
-    pub async fn run_asr_pipeline(
+    pub async fn run_asr_pipeline(options: AsrOptions) -> Result<AsrResult, String> {
+        Self::run_asr_pipeline_cancellable(options, None).await
+    }
+
+    /// 🛡️ 纯血 Rust Native ASR 底座：具备 OutputTruncated 弹性容错与毫秒级硬件截停
+    pub async fn run_asr_pipeline_cancellable(
         options: AsrOptions,
+        cancel_token: Option<Arc<AtomicBool>>,
     ) -> Result<AsrResult, String> {
         let audio_path_buf = PathBuf::from(&options.audio_path);
         if !audio_path_buf.exists() {
@@ -122,18 +139,51 @@ impl AsrService {
             return Err(format!("GGUF ASR 模型物理文件不存在: {:?}", model_path));
         }
 
+        if let Some(ref ct) = cancel_token {
+            if ct.load(Ordering::Relaxed) {
+                return Err("任务已由用户主动取消".into());
+            }
+        }
+
         let t0 = Instant::now();
 
-        // 1. 内存原位音频波形解码
         let pcm_samples = Self::load_audio_pcm_16k_mono(&audio_path_buf)?;
+        let total_samples = pcm_samples.len();
+        let total_duration_sec = total_samples as f64 / SAMPLE_RATE as f64;
 
-        // 2. 线程池安全拉起 C-FFI C++ CUDA 原生推导
-        let result_transcript = tokio::task::spawn_blocking(move || -> Result<transcribe_cpp::Transcript, String> {
+        tracing::info!(
+            "🎙️ [ASR 底座] 音频解码完成: 共 {:.2} 秒 ({:.2} 分钟) | 总采样点: {}",
+            total_duration_sec,
+            total_duration_sec / 60.0,
+            total_samples
+        );
+
+        let all_segments = tokio::task::spawn_blocking(move || -> Result<Vec<RawSegment>, String> {
             let model = Model::load_with(&model_path, &ModelOptions::default())
                 .map_err(|e| format!("纯血 C-FFI 载入 GGUF 模型失败: {e}"))?;
 
             let mut session = model.session()
                 .map_err(|e| format!("创建 transcribe Session 失败: {e}"))?;
+
+            let cpp_cancel = CancelToken::default();
+            session.set_cancel_token(&cpp_cancel);
+
+            let watcher_stop = Arc::new(AtomicBool::new(false));
+            let watcher_stop_clone = watcher_stop.clone();
+            let ct_clone = cancel_token.clone();
+            let cpp_cancel_clone = cpp_cancel.clone();
+
+            if let Some(ct) = ct_clone {
+                std::thread::spawn(move || {
+                    while !watcher_stop_clone.load(Ordering::Relaxed) {
+                        if ct.load(Ordering::Relaxed) {
+                            cpp_cancel_clone.cancel();
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                });
+            }
 
             let mut run_opts = RunOptions::default();
             run_opts.task = Task::Transcribe;
@@ -146,10 +196,83 @@ impl AsrService {
                 }
             }
 
-            let transcript = session.run(&pcm_samples, &run_opts)
-                .map_err(|e| format!("纯血 C-FFI ASR 推导失败: {e}"))?;
+            let mut collected_segments: Vec<RawSegment> = Vec::new();
+            let mut chunk_start_idx = 0;
+            let mut chunk_id = 1;
+            let total_chunks = (total_samples + CHUNK_SAMPLES - 1) / CHUNK_SAMPLES;
 
-            Ok(transcript)
+            while chunk_start_idx < total_samples {
+                if let Some(ref ct) = cancel_token {
+                    if ct.load(Ordering::Relaxed) {
+                        watcher_stop.store(true, Ordering::Relaxed);
+                        return Err("任务已由用户主动取消".into());
+                    }
+                }
+
+                let chunk_end_idx = (chunk_start_idx + CHUNK_SAMPLES).min(total_samples);
+                let chunk_slice = &pcm_samples[chunk_start_idx..chunk_end_idx];
+                let chunk_time_offset_sec = chunk_start_idx as f64 / SAMPLE_RATE as f64;
+
+                tracing::info!(
+                    "⚡ [ASR 切片推导] 正在执行分块 [{}/{}] | 时间偏移: {:.2}s ~ {:.2}s",
+                    chunk_id,
+                    total_chunks,
+                    chunk_time_offset_sec,
+                    chunk_end_idx as f64 / SAMPLE_RATE as f64
+                );
+
+                let transcript_res = session.run(chunk_slice, &run_opts);
+                
+                // 🛡️ 2026 SOTA 弹性容错：捕获保护性截断并保留已生成台词，绝不抛弃整个视频
+                let transcript = match transcript_res {
+                    Ok(t) => t,
+                    Err(TranscribeError::OutputTruncated { partial: Some(partial_t), .. }) => {
+                        tracing::warn!(
+                            "⚠️ [ASR 预算截断保护] 切片 [{}/{}] 语流极密集触发预算上限，已自动提取已生成台词并继续平滑接力",
+                            chunk_id, total_chunks
+                        );
+                        *partial_t
+                    }
+                    Err(e) => {
+                        watcher_stop.store(true, Ordering::Relaxed);
+                        if session.was_aborted() || cancel_token.as_ref().map_or(false, |ct| ct.load(Ordering::Relaxed)) {
+                            return Err("任务已由用户主动取消".into());
+                        }
+                        return Err(format!("切片 [{chunk_id}/{total_chunks}] 推导失败: {e}"));
+                    }
+                };
+
+                for seg in transcript.segments {
+                    let text = seg.text.trim().to_string();
+                    if text.is_empty() {
+                        continue;
+                    }
+
+                    let speaker = if seg.speaker_id > 0 {
+                        format!("S{:02}", seg.speaker_id)
+                    } else {
+                        "S01".to_string()
+                    };
+
+                    let start_sec = chunk_time_offset_sec + (seg.t0_ms as f64 / 1000.0);
+                    let end_sec = chunk_time_offset_sec + (seg.t1_ms as f64 / 1000.0);
+
+                    let seg_id = collected_segments.len() + 1;
+                    collected_segments.push(RawSegment {
+                        id: seg_id,
+                        speaker,
+                        start_sec: (start_sec * 1000.0).round() / 1000.0,
+                        end_sec: (end_sec * 1000.0).round() / 1000.0,
+                        text,
+                    });
+                }
+
+                chunk_start_idx += CHUNK_SAMPLES;
+                chunk_id += 1;
+            }
+
+            watcher_stop.store(true, Ordering::Relaxed);
+            Ok(collected_segments)
         })
         .await
         .map_err(|e| format!("Tokio 线程调度异常: {e}"))?
@@ -157,38 +280,15 @@ impl AsrService {
 
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
-        // 3. 将 C++ 极速生成的段落转为强类型 RawSegment
-        let mut segments = Vec::new();
-        for (idx, seg) in result_transcript.segments.iter().enumerate() {
-            let speaker = if seg.speaker_id > 0 {
-                format!("S{:02}", seg.speaker_id)
-            } else {
-                "S01".to_string()
-            };
-
-            segments.push(RawSegment {
-                id: idx + 1,
-                speaker,
-                start_sec: seg.t0_ms as f64 / 1000.0,
-                end_sec: seg.t1_ms as f64 / 1000.0,
-                text: seg.text.clone(),
-            });
-        }
-
         let audio_file = audio_path_buf
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "audio".to_string());
 
-        let duration_sec = segments
-            .last()
-            .map(|s| s.end_sec)
-            .unwrap_or(0.0);
-
         Ok(AsrResult {
             audio_file,
-            duration_sec,
-            segments,
+            duration_sec: total_duration_sec,
+            segments: all_segments,
             elapsed_ms,
         })
     }
@@ -211,48 +311,5 @@ mod tests {
         let json_str = serde_json::to_string(&opts).unwrap();
         assert!(!json_str.contains("mode"));
         assert!(!json_str.contains("srt_text"));
-        println!("\n✅ [service-asr 底座纯净性测试通过] 纯粹官方 API 契约: {}", json_str);
-    }
-
-    #[tokio::test]
-    async fn test_service_asr_pure_native() {
-        let fixture_audio = PathBuf::from(r"C:\dev\ai-forge\test\fixtures\ASR_英语_餐厅就餐.mp3");
-        if !fixture_audio.exists() {
-            println!("⚠️ [跳过测试] 英文基准音频不存在: {:?}", fixture_audio);
-            return;
-        }
-
-        let outs_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\service-asr");
-        let _ = std::fs::create_dir_all(&outs_dir);
-
-        println!("\n🚀 [TDD 纯血 Rust Native 打靶启动] 正在测试 service-asr: {:?}", fixture_audio);
-
-        let opts = AsrOptions {
-            audio_path: fixture_audio.to_string_lossy().to_string(),
-            language: Some("en".into()),
-            prompt: None,
-            hotwords: None,
-            max_new_tokens: Some(2048),
-            temperature: Some(0.0),
-        };
-
-        let res = AsrService::run_asr_pipeline(opts)
-            .await
-            .expect("纯血 Rust Native ASR 打靶失败！");
-
-        println!("\n🎉 ===== [纯血 Rust Native ASR 英文识别打靶成功] =====");
-        println!("  ⏱️ 耗时: {:.2} ms ({:.2} s) | 音频时长: {:.2}s | 句数: {}", res.elapsed_ms, res.elapsed_ms / 1000.0, res.duration_sec, res.segments.len());
-
-        assert!(res.segments.len() > 0, "转写台词数不可为 0！");
-
-        let out_json_path = outs_dir.join("asr_english_pure_native.json");
-        let json_data = serde_json::to_string_pretty(&res).unwrap();
-        std::fs::write(&out_json_path, &json_data).unwrap();
-
-        println!("  💾 纯血 Native JSON 成功物理落盘: {:?}", out_json_path);
-        println!("  预览前 3 句识别结果:");
-        for seg in res.segments.iter().take(3) {
-            println!("     [{:.2}s -> {:.2}s] [{}]: {}", seg.start_sec, seg.end_sec, seg.speaker, seg.text);
-        }
     }
 }

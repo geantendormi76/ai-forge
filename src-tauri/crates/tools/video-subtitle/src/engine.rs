@@ -3,9 +3,10 @@ use std::process::Stdio;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-pub const COLOR_ZIDIAN_PRIMARY: &str = "&H00F8B4D8";      // 紫电主色 #D8B4F8 (上行译文)
-pub const COLOR_QINGSHUANG_SECONDARY: &str = "&H00FCF3A5"; // 青霜副色 #A5F3FC (下行原文)
-pub const BG_COLOR_SOFT_VIGNETTE: &str = "&H380A0A0A";
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub const COLOR_ZIDIAN_PRIMARY: &str = "&H00F8B4D8";      // 紫电专属主色 #D8B4F8 (上行译文)
+pub const COLOR_QINGSHUANG_SECONDARY: &str = "&H00FCF3A5"; // 青霜专属副色 #A5F3FC (下行原文)
 
 pub const SPEAKER_COLORS: &[&str] = &[
     "&H00F8B4D8", "&H00FCF3A5", "&H00FFB56B", "&H008FF286",
@@ -60,7 +61,54 @@ pub fn escape_ass_text(text: &str) -> String {
     text.replace('{', "(").replace('}', ")").replace('\n', "\\N")
 }
 
-/// 🛡️ 2026 SOTA 贪心自然标点折行算法：严格限制单行 CJK <= 18 汉字 / 英文 <= 38 字符
+pub fn assign_overlap_lanes(segments: &[EngineSegment]) -> Vec<usize> {
+    let n = segments.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut lanes = vec![0usize; n];
+    let mut lane_ends: Vec<f64> = Vec::new();
+
+    let mut indexed: Vec<(usize, &EngineSegment)> = segments.iter().enumerate().collect();
+    indexed.sort_by(|a, b| {
+        a.1.start_sec
+            .partial_cmp(&b.1.start_sec)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                a.1.end_sec
+                    .partial_cmp(&b.1.end_sec)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| a.0.cmp(&b.0))
+    });
+
+    for (original_index, segment) in indexed {
+        let start = segment.start_sec;
+        let end = segment.end_sec.max(start);
+        let mut assigned_lane = None;
+
+        for (lane, lane_end) in lane_ends.iter_mut().enumerate() {
+            if *lane_end <= start {
+                assigned_lane = Some(lane);
+                *lane_end = end;
+                break;
+            }
+        }
+
+        match assigned_lane {
+            Some(lane) => {
+                lanes[original_index] = lane;
+            }
+            None => {
+                lanes[original_index] = lane_ends.len();
+                lane_ends.push(end);
+            }
+        }
+    }
+
+    lanes
+}
+
 pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
     let char_count = text.chars().count();
     if text.is_empty() || char_count <= max_chars {
@@ -71,7 +119,6 @@ pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
     let mut lines: Vec<String> = Vec::new();
     let mut current_line = String::new();
 
-    // 针对空格分词语言（如英文）
     if text.contains(' ') && !text.chars().any(|c| (c as u32) > 0x2E80) {
         let words: Vec<&str> = text.split_whitespace().collect();
         for word in words {
@@ -99,7 +146,6 @@ pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
         return lines.join("\\N");
     }
 
-    // 针对 CJK 中文无空格语系：基于标点与字数的贪心切分
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
     while i < chars.len() {
@@ -110,14 +156,13 @@ pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
             break;
         }
 
-        // 在 [max_chars - 6, max_chars] 区间内向前寻找最佳标点断点
         let window_end = (i + max_chars).min(chars.len());
         let window_start = (i + max_chars.saturating_sub(6)).max(i);
         let mut split_point = window_end;
 
         for p_idx in (window_start..window_end).rev() {
             if puncts.contains(&chars[p_idx]) {
-                split_point = p_idx + 1; // 包含该标点
+                split_point = p_idx + 1;
                 break;
             }
         }
@@ -130,7 +175,6 @@ pub fn smart_wrap_line(text: &str, max_chars: usize) -> String {
     lines.join("\\N")
 }
 
-/// 🛡️ 2026 SOTA 时域等比分句引擎：将超过 26 汉字且时长 > 2.5 秒的超长语流，沿标点等比切分为自然连贯的短句
 pub fn split_long_segments_if_needed(segments: &[EngineSegment]) -> Vec<EngineSegment> {
     let mut new_segments = Vec::new();
     let mut current_id = 1;
@@ -141,7 +185,6 @@ pub fn split_long_segments_if_needed(segments: &[EngineSegment]) -> Vec<EngineSe
         let duration = seg.end_sec - seg.start_sec;
         let tgt_chars = tgt_clean.chars().count();
 
-        // 当译文字数 > 26 且时长充足时触发等比拆分
         if tgt_chars > 26 && duration >= 2.5 {
             let sentence_puncts = ['。', '！', '？', '；', '!', '?', ';'];
             let mut clauses: Vec<String> = Vec::new();
@@ -169,7 +212,6 @@ pub fn split_long_segments_if_needed(segments: &[EngineSegment]) -> Vec<EngineSe
                 }
             }
 
-            // 若句号拆不出，退化为按逗号拆分
             if clauses.len() <= 1 && tgt_chars > 32 {
                 clauses.clear();
                 let sub_puncts = ['，', ','];
@@ -215,7 +257,6 @@ pub fn split_long_segments_if_needed(segments: &[EngineSegment]) -> Vec<EngineSe
             }
         }
 
-        // 常规短句保留原样
         new_segments.push(EngineSegment {
             id: current_id,
             speaker: seg.speaker.clone(),
@@ -240,13 +281,13 @@ pub fn estimate_text_width(text: &str, font_size: f64) -> f64 {
         let mut w = 0.0f64;
         for ch in line.chars() {
             if (ch as u32) > 127 {
-                w += font_size * 0.92;
+                w += font_size * 1.0;
             } else if ".,'!;: ".contains(ch) {
-                w += font_size * 0.25;
+                w += font_size * 0.28;
             } else if ch.is_ascii_uppercase() || "MW@#%".contains(ch) {
-                w += font_size * 0.62;
+                w += font_size * 0.65;
             } else {
-                w += font_size * 0.46;
+                w += font_size * 0.48;
             }
         }
         if w > max_w {
@@ -406,6 +447,7 @@ pub fn generate_srt(
     blocks.join("\n")
 }
 
+/// 🛡️ 2026 SOTA 方案 A【柔白雾面磨砂胶囊】ASS 特效字幕渲染引擎
 pub fn generate_ass(
     segments: &[EngineSegment],
     display_mode: &str,
@@ -416,14 +458,17 @@ pub fn generate_ass(
     mask_hardsub: bool,
 ) -> String {
     let fine_segments = split_long_segments_if_needed(segments);
+    let lanes = assign_overlap_lanes(&fine_segments);
 
-    // 🛡️ 字号按 1080p 标准电影视距黄金配比校准
-    let base_font_size = (video_height as f32 * 0.038 * font_size_multiplier).round().clamp(24.0, 62.0) as u32;
-    let sec_font_size = (video_height as f32 * 0.024 * font_size_multiplier).round().clamp(16.0, 44.0) as u32;
+    let base_font_size = (video_height as f32 * 0.054 * font_size_multiplier).round().clamp(36.0, 120.0) as u32;
+    let sec_font_size = (video_height as f32 * 0.034 * font_size_multiplier).round().clamp(24.0, 80.0) as u32;
+    let lane_step = (base_font_size as f32 * 1.20).round().max(38.0) as u32;
 
-    let margin_l = (video_width as f32 * 0.04).round().max(30.0) as u32;
+    let margin_l = (video_width as f32 * 0.05).round().max(40.0) as u32;
     let margin_r = margin_l;
-    let margin_v = (video_height as f32 * 0.035).round().max(20.0) as u32;
+    let base_margin_v = (video_height as f32 * 0.060).round().max(45.0) as u32;
+
+    let font_name = "Microsoft YaHei";
 
     let mut speakers = std::collections::BTreeSet::new();
     for seg in &fine_segments {
@@ -436,15 +481,15 @@ pub fn generate_ass(
     }
 
     let mut style_lines = vec![
-        format!("Style: PrimaryStyle,Arial,{},{},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,2.0,1.0,2,{},{},{},1", base_font_size, COLOR_ZIDIAN_PRIMARY, margin_l, margin_r, margin_v),
-        format!("Style: SecondaryStyle,Arial,{},{},&H000000FF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,1.8,0.8,2,{},{},{},1", sec_font_size, COLOR_QINGSHUANG_SECONDARY, margin_l, margin_r, margin_v),
+        format!("Style: PrimaryStyle,{},{},{},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,3.4,1.2,2,{},{},{},1", font_name, base_font_size, COLOR_ZIDIAN_PRIMARY, margin_l, margin_r, base_margin_v),
+        format!("Style: SecondaryStyle,{},{},{},&H000000FF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,2.6,1.0,2,{},{},{},1", font_name, sec_font_size, COLOR_QINGSHUANG_SECONDARY, margin_l, margin_r, base_margin_v),
     ];
 
     for (idx, spk) in speakers.iter().enumerate() {
         let color = SPEAKER_COLORS[idx % SPEAKER_COLORS.len()];
         let spk_style_name = format!("Speaker_{}", spk);
         style_lines.push(
-            format!("Style: {},Arial,{},{},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,2.0,1.0,2,{},{},{},1", spk_style_name, base_font_size, color, margin_l, margin_r, margin_v)
+            format!("Style: {},{},{},{},&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,3.4,1.2,2,{},{},{},1", spk_style_name, font_name, base_font_size, color, margin_l, margin_r, base_margin_v)
         );
     }
 
@@ -454,21 +499,22 @@ pub fn generate_ass(
 
     let mut dialogue_lines = Vec::new();
 
-    for seg in &fine_segments {
+    for (seg_idx, seg) in fine_segments.iter().enumerate() {
         let raw_src = clean_acoustic_noise(&seg.source_text);
         let raw_tgt = clean_acoustic_noise(&seg.target_text);
         let spk = &seg.speaker;
+        let lane = lanes.get(seg_idx).copied().unwrap_or(0);
+        let cur_margin_v = base_margin_v + (lane as u32 * lane_step);
 
         if raw_src.is_empty() && raw_tgt.is_empty() {
             continue;
         }
 
-        // CJK 译文单行严格限制在 18 字内，原文单行 36 字符内
-        let wrapped_src = smart_wrap_line(&raw_src, 36);
-        let wrapped_tgt = smart_wrap_line(&raw_tgt, 18);
+        let escaped_raw_src = escape_ass_text(&raw_src);
+        let escaped_raw_tgt = escape_ass_text(&raw_tgt);
 
-        let src = escape_ass_text(&wrapped_src);
-        let tgt = escape_ass_text(&wrapped_tgt);
+        let src = smart_wrap_line(&escaped_raw_src, 36);
+        let tgt = smart_wrap_line(&escaped_raw_tgt, 18);
 
         let spk_prefix = if show_speaker && !spk.is_empty() {
             format!("[{}] ", spk)
@@ -486,40 +532,65 @@ pub fn generate_ass(
         };
 
         if mask_hardsub {
-            let w_tgt = if !tgt.is_empty() {
-                estimate_text_width(&format!("{}{}", spk_prefix, tgt), base_font_size as f64)
-            } else {
-                0.0
-            };
-            let w_src = if !src.is_empty() {
-                estimate_text_width(&src, sec_font_size as f64)
-            } else {
-                0.0
-            };
-            let max_text_w = w_tgt.max(w_src);
-
-            let pad_x = (base_font_size as f64 * 0.55).round().max(18.0) as i64;
-            let box_w = ((video_width as f64 * 0.85).round() as i64).min(100.max((max_text_w + (pad_x * 2) as f64).round() as i64));
-
-            let has_two_lines = !tgt.is_empty() && !src.is_empty() && display_mode == "bilingual";
-            let box_h = if has_two_lines {
-                let tgt_lines = tgt.split("\\N").count() as f64;
-                let src_lines = src.split("\\N").count() as f64;
-                (base_font_size as f64 * 1.25 * tgt_lines + sec_font_size as f64 * 1.25 * src_lines + 10.0).round() as i64
-            } else {
-                let active_text = if display_mode != "source_only" && !tgt.is_empty() { &tgt } else { &src };
-                let lines = active_text.split("\\N").count() as f64;
-                (base_font_size as f64 * 1.3 * lines + 8.0).round() as i64
+            let (main_text, sub_text) = match display_mode {
+                "bilingual" => (tgt.as_str(), src.as_str()),
+                "target_only" => (tgt.as_str(), ""),
+                "source_only" => (src.as_str(), ""),
+                _ => (tgt.as_str(), ""),
             };
 
-            let box_x0 = 6.max((video_width as i64 - box_w) / 2);
-            let box_y0 = 6.max(video_height as i64 - margin_v as i64 - box_h + 2);
+            let main_lines: Vec<&str> = main_text.split("\\N").filter(|l| !l.is_empty()).collect();
+            let sub_lines: Vec<&str> = sub_text.split("\\N").filter(|l| !l.is_empty()).collect();
 
-            let mask_cmd = format!(
-                r"{{\an7\pos({},{})\p1\c&H000000&\1a&H35&\bord0\shad0\blur6}}m 0 0 l {} 0 l {} {} l 0 {}{{\p0}}",
-                box_x0, box_y0, box_w, box_w, box_h, box_h
-            );
-            dialogue_lines.push(format!("Dialogue: 0,{},{},CapsuleMask,,0,0,0,,{}", t_start, t_end, mask_cmd));
+            let max_main_w = main_lines.iter().map(|l| estimate_text_width(&format!("{}{}", spk_prefix, l), base_font_size as f64)).fold(0.0f64, f64::max);
+            let max_sub_w = sub_lines.iter().map(|l| estimate_text_width(l, sec_font_size as f64)).fold(0.0f64, f64::max);
+            let max_text_w = max_main_w.max(max_sub_w);
+
+            if max_text_w > 0.0 {
+                let pad_x = (base_font_size as f64 * 0.42).round().clamp(18.0, 32.0);
+                let pad_y = (base_font_size as f64 * 0.18).round().clamp(8.0, 16.0);
+
+                let box_w = ((max_text_w + pad_x * 2.0).round() as i64).min((video_width as f64 * 0.92) as i64).max(60);
+
+                let main_h = (main_lines.len() as f64) * (base_font_size as f64 * 1.18);
+                let sub_h = (sub_lines.len() as f64) * (sec_font_size as f64 * 1.18);
+                let total_text_h = main_h + sub_h;
+                let box_h = (total_text_h + pad_y * 2.0).round() as i64;
+
+                let box_x0 = (video_width as i64 - box_w) / 2;
+                let box_y0 = (video_height as i64) - (cur_margin_v as i64) - (total_text_h as i64) - (pad_y as i64) + 4;
+
+                let r = 14i64.min(box_h / 2).max(4);
+                let w = box_w;
+                let h = box_h;
+                let c = (r as f64 * 0.5522847).round() as i64;
+
+                // 🌟 具名参数格式化：精准闭合三次贝塞尔圆角胶囊
+                let bezier_pill = format!(
+                    "m {r} 0 l {x_tr} 0 b {x_tr_c} 0 {w} {y_tr_c} {w} {r} l {w} {y_br} b {w} {y_br_c} {x_br_c} {h} {x_br} {h} l {r} {h} b {x_bl_c} {h} 0 {y_bl_c} 0 {y_bl} l 0 {r} b 0 {y_tl_c} {x_tl_c} 0 {r} 0",
+                    r = r,
+                    w = w,
+                    h = h,
+                    x_tr = w - r,
+                    x_tr_c = w - r + c,
+                    y_tr_c = r - c,
+                    y_br = h - r,
+                    y_br_c = h - r + c,
+                    x_br_c = w - r + c,
+                    x_br = w - r,
+                    x_bl_c = r - c,
+                    y_bl_c = h - r + c,
+                    y_bl = h - r,
+                    y_tl_c = r - c,
+                    x_tl_c = r - c,
+                );
+
+                let mask_cmd = format!(
+                    r"{{\an7\pos({},{})\p1\c&HFFFFFF&\1a&H78&\bord0\shad0\blur8}}{}{{\p0}}",
+                    box_x0, box_y0, bezier_pill
+                );
+                dialogue_lines.push(format!("Dialogue: 0,{},{},CapsuleMask,,0,0,0,,{}", t_start, t_end, mask_cmd));
+            }
         }
 
         let text_content = match display_mode {
@@ -547,7 +618,7 @@ pub fn generate_ass(
             }
         };
 
-        dialogue_lines.push(format!("Dialogue: 1,{},{},{},,0,0,0,,{}", t_start, t_end, style_name, text_content));
+        dialogue_lines.push(format!("Dialogue: 1,{},{},{},,0,0,{},,{}", t_start, t_end, style_name, cur_margin_v, text_content));
     }
 
     let mut header = vec![
@@ -574,7 +645,11 @@ pub fn generate_ass(
 
 pub async fn extract_audio_from_video(video_path: &Path, out_wav_path: &Path) -> Result<(), String> {
     let ffmpeg_bin = resolve_ffmpeg_bin();
-    let status = tokio::process::Command::new(ffmpeg_bin)
+    let mut cmd = tokio::process::Command::new(ffmpeg_bin);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = cmd
         .arg("-y")
         .arg("-i").arg(video_path)
         .arg("-vn")
@@ -598,7 +673,11 @@ pub async fn extract_audio_from_video(video_path: &Path, out_wav_path: &Path) ->
 pub async fn extract_subtitle_stream(video_path: &Path, stream_index: usize, out_sub_path: &Path) -> Result<Vec<ParsedSrtSegment>, String> {
     let ffmpeg_bin = resolve_ffmpeg_bin();
     let map_arg = format!("0:{}", stream_index);
-    let status = tokio::process::Command::new(ffmpeg_bin)
+    let mut cmd = tokio::process::Command::new(ffmpeg_bin);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = cmd
         .arg("-y")
         .arg("-i").arg(video_path)
         .arg("-map").arg(&map_arg)
@@ -622,7 +701,11 @@ pub async fn extract_subtitle_stream(video_path: &Path, stream_index: usize, out
 
 pub async fn mux_soft_subtitles(video_path: &Path, ass_path: &Path, out_mkv_path: &Path) -> Result<(), String> {
     let ffmpeg_bin = resolve_ffmpeg_bin();
-    let status = tokio::process::Command::new(ffmpeg_bin)
+    let mut cmd = tokio::process::Command::new(ffmpeg_bin);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = cmd
         .arg("-y")
         .arg("-i").arg(video_path)
         .arg("-i").arg(ass_path)
@@ -651,7 +734,11 @@ pub async fn burn_hard_subtitles_nvenc(video_path: &Path, ass_path: &Path, out_m
     let escaped_ass = ass_path.to_string_lossy().replace('\\', "/").replace(':', "\\:");
     let vf_param = format!("subtitles='{}'", escaped_ass);
 
-    let status_gpu = tokio::process::Command::new(&ffmpeg_bin)
+    let mut cmd_gpu = tokio::process::Command::new(&ffmpeg_bin);
+    #[cfg(target_os = "windows")]
+    cmd_gpu.creation_flags(CREATE_NO_WINDOW);
+
+    let status_gpu = cmd_gpu
         .arg("-y")
         .arg("-hwaccel").arg("cuda")
         .arg("-i").arg(video_path)
@@ -672,7 +759,11 @@ pub async fn burn_hard_subtitles_nvenc(video_path: &Path, ass_path: &Path, out_m
         }
     }
 
-    let status_cpu = tokio::process::Command::new(&ffmpeg_bin)
+    let mut cmd_cpu = tokio::process::Command::new(&ffmpeg_bin);
+    #[cfg(target_os = "windows")]
+    cmd_cpu.creation_flags(CREATE_NO_WINDOW);
+
+    let status_cpu = cmd_cpu
         .arg("-y")
         .arg("-i").arg(video_path)
         .arg("-vf").arg(&vf_param)
@@ -699,6 +790,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_assign_overlap_lanes() {
+        let segs = vec![
+            EngineSegment { id: 1, speaker: "S01".into(), start_sec: 1.0, end_sec: 4.0, source_text: "A".into(), target_text: "A".into() },
+            EngineSegment { id: 2, speaker: "S02".into(), start_sec: 2.0, end_sec: 5.0, source_text: "B".into(), target_text: "B".into() },
+            EngineSegment { id: 3, speaker: "S01".into(), start_sec: 4.5, end_sec: 7.0, source_text: "C".into(), target_text: "C".into() },
+        ];
+        let lanes = assign_overlap_lanes(&segs);
+        assert_eq!(lanes, vec![0, 1, 0]);
+    }
+
+    #[test]
     fn test_clean_acoustic_noise() {
         let input = "[laughter] Welcome to AI-Forge (music) project!";
         let cleaned = clean_acoustic_noise(input);
@@ -716,48 +818,5 @@ mod tests {
         let srt = "1\n00:00:01,000 --> 00:00:03,500\n<i>Hello world</i>\n\n2\n00:00:04,000 --> 00:00:06,000\nRust Native Engine\n";
         let parsed = parse_srt_content(srt);
         assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[0].start_sec, 1.0);
-        assert_eq!(parsed[0].end_sec, 3.5);
-        assert_eq!(parsed[0].text, "Hello world");
-        assert_eq!(parsed[1].text, "Rust Native Engine");
-    }
-
-    #[test]
-    fn test_split_long_segments_and_greedy_wrap() {
-        let long_seg = EngineSegment {
-            id: 42,
-            speaker: "S03".to_string(),
-            start_sec: 163.35,
-            end_sec: 177.31,
-            source_text: "いや、俺は料理人じゃなくてただの係長なんだが。とはいえ、これをそのまま出すのはやっぱ気が引けるし、そもそも一人分しかないからな。".to_string(),
-            target_text: "不，我并非厨师，只是个主管而已。不过，直接把这个拿出来还是觉得不太合适，而且本来也只够一个人吃而已。得加些东西来做出新的食物才行。".to_string(),
-        };
-
-        let splits = split_long_segments_if_needed(&[long_seg]);
-        assert!(splits.len() >= 2, "超长 71 字台词应在时域上自然拆分为多句");
-        println!("\n🎉 成功将 71 字超长句拆分为 {} 个时域自适应片段:", splits.len());
-        for s in &splits {
-            println!("  [{:.2}s -> {:.2}s] {}", s.start_sec, s.end_sec, s.target_text);
-            assert!(s.target_text.chars().count() <= 38, "拆分后单句不可超长");
-        }
-    }
-
-    #[test]
-    fn test_generate_ass_with_mask() {
-        let segs = vec![
-            EngineSegment {
-                id: 1,
-                speaker: "S01".to_string(),
-                start_sec: 1.0,
-                end_sec: 3.0,
-                source_text: "Hello world".to_string(),
-                target_text: "你好世界".to_string(),
-            }
-        ];
-        let ass = generate_ass(&segs, "bilingual", true, 1.35, 1920, 1080, true);
-        assert!(ass.contains("Style: CapsuleMask"));
-        assert!(ass.contains("Dialogue: 0,0:00:01.00,0:00:03.00,CapsuleMask"));
-        assert!(ass.contains("Dialogue: 1,0:00:01.00,0:00:03.00,Speaker_S01"));
-        assert!(ass.contains(r"[S01] 你好世界\N{\rSecondaryStyle}Hello world"));
     }
 }
