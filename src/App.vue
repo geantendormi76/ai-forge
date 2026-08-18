@@ -1,39 +1,86 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useUIStore } from './store/uiStore'
-import { useTauriWindow } from './composables/useTauriWindow'
-import Sidebar from './components/layout/Sidebar.vue'
-import HomeView from './views/HomeView.vue'
-import FormatConverterView from './views/FormatConverterView.vue'
-import PdfParseView from './views/PdfParseView.vue'
-import VideoSubtitleView from './views/VideoSubtitleView.vue'
+import { onMounted } from 'vue';
+import { useUIStore } from './store/uiStore';
+import { useTauriWindow } from './composables/useTauriWindow';
+import Sidebar from './components/layout/Sidebar.vue';
+import HomeView from './views/HomeView.vue';
+import FormatConverterView from './views/FormatConverterView.vue';
+import PdfParseView from './views/PdfParseView.vue';
+import VideoSubtitleView from './views/VideoSubtitleView.vue';
 import {
-  Minus, Square, Copy, X, Check, AlertCircle, Info,
-  PanelLeftOpen
-} from 'lucide-vue-next'
+  Minus,
+  Square,
+  Copy,
+  X,
+  Check,
+  AlertCircle,
+  Info,
+  PanelLeftOpen,
+} from 'lucide-vue-next';
 
-const ui = useUIStore()
-const { 是否已最大化, 触发最小化, 触发最大化还原, 触发关闭 } = useTauriWindow()
+const ui = useUIStore();
+const { 是否已最大化, 触发最小化, 触发最大化还原, 触发关闭 } = useTauriWindow();
 
 onMounted(() => {
   if (!import.meta.env.DEV) {
-    window.addEventListener('contextmenu', (e) => e.preventDefault())
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
   }
-})
+});
 </script>
 
 <template>
-  <div class="h-screen w-full flex overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
+  <div class="h-screen w-full overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
     
-    <!-- 悬浮侧边栏展开按钮 (当侧边栏收起时显现) -->
+    <!-- 1. 全景沉浸主工作区 (铺满整个 100vw * 100vh 物理视窗，底座永不断层) -->
+    <main class="absolute inset-0 w-full h-full overflow-hidden z-0">
+      <HomeView v-if="ui.currentView === 'home'" />
+      <FormatConverterView v-else-if="ui.currentView === 'format'" />
+      <PdfParseView v-else-if="ui.currentView === 'pdf'" />
+      <VideoSubtitleView v-else-if="ui.currentView === 'asr'" />
+    </main>
+
+    <!-- 2. 无边框原生拖拽顶栏与物理窗口控制器 (透明悬浮于顶层) -->
+    <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-50 pointer-events-none">
+      <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto" style="-webkit-app-region: drag;"></div>
+      <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
+        <button
+          type="button"
+          @click="触发最小化"
+          class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+          title="最小化"
+        >
+          <Minus :size="13" class="stroke-[2.5]" />
+        </button>
+        <button
+          type="button"
+          @click="触发最大化还原"
+          class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+          :title="是否已最大化 ? '向下还原' : '最大化'"
+        >
+          <Square v-if="!是否已最大化" :size="11" class="stroke-[2.5]" />
+          <Copy v-else :size="11" class="stroke-[2.5]" />
+        </button>
+        <button
+          type="button"
+          @click="触发关闭"
+          class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer"
+          title="关闭"
+        >
+          <X :size="14" class="stroke-[2.5]" />
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. 悬浮侧边栏展开按钮 (当侧边栏收起时显现) -->
     <div
       v-if="ui.侧边栏收起"
-      class="fixed left-4 top-3 z-[100] pointer-events-auto group/expand"
+      class="fixed left-4 top-3.5 z-50 pointer-events-auto group/expand"
       style="-webkit-app-region: no-drag;"
     >
       <button
+        type="button"
         @click="ui.切换侧边栏"
-        class="h-9 w-9 rounded-xl bg-[#182022]/85 backdrop-blur-xl border border-white/10 text-[#8b999b] hover:text-white hover:bg-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
+        class="h-9 w-9 rounded-2xl bg-[#182022]/90 backdrop-blur-xl border border-white/10 text-[#8b999b] hover:text-[#02c3b4] hover:border-[#02c3b4]/50 hover:bg-white/[0.06] shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
         title="展开侧边栏"
       >
         <PanelLeftOpen :size="16" class="stroke-[2]" />
@@ -43,51 +90,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 悬浮暗黑胶囊侧边栏 -->
+    <!-- 4. 悬浮暗黑胶囊侧边栏 (独立绝对浮层 HUD) -->
     <Sidebar />
 
-    <!-- 主工作区内容容器 -->
-    <main class="flex-1 flex flex-col relative min-w-0">
-      
-      <!-- 无边框原生顶栏与物理窗口控制器 -->
-      <div class="h-12 w-full flex justify-between items-center shrink-0 absolute top-0 left-0 right-0 z-50 pointer-events-none">
-        <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto" style="-webkit-app-region: drag;"></div>
-        <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
-          <button
-            @click="触发最小化"
-            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-            title="最小化"
-          >
-            <Minus :size="13" class="stroke-[2.5]" />
-          </button>
-          <button
-            @click="触发最大化还原"
-            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-            :title="是否已最大化 ? '向下还原' : '最大化'"
-          >
-            <Square v-if="!是否已最大化" :size="11" class="stroke-[2.5]" />
-            <Copy v-else :size="11" class="stroke-[2.5]" />
-          </button>
-          <button
-            @click="触发关闭"
-            class="h-7 w-9 flex items-center justify-center text-[#8b999b] hover:text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer"
-            title="关闭"
-          >
-            <X :size="14" class="stroke-[2.5]" />
-          </button>
-        </div>
-      </div>
-
-      <!-- 视图路由分发区 -->
-      <div class="flex-1 w-full h-full overflow-hidden relative z-10 pt-12">
-        <HomeView v-if="ui.currentView === 'home'" />
-        <FormatConverterView v-else-if="ui.currentView === 'format'" />
-        <PdfParseView v-else-if="ui.currentView === 'pdf'" />
-        <VideoSubtitleView v-else-if="ui.currentView === 'asr'" />
-      </div>
-    </main>
-
-    <!-- 全局暗黑 Toast 提示气泡 -->
+    <!-- 5. 全局暗黑海青微光 Toast 提示气泡 -->
     <div v-if="ui.toast显示" class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
       <Transition
         appear
@@ -102,9 +108,9 @@ onMounted(() => {
           <div
             class="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
             :class="[
-              ui.toast类型 === 'success' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
-              ui.toast类型 === 'error' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' :
-              'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+              ui.toast类型 === 'success' ? 'bg-[#02c3b4]/20 text-[#02c3b4] border border-[#02c3b4]/40 shadow-[0_0_12px_rgba(2,195,180,0.3)]' :
+              ui.toast类型 === 'error' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+              'bg-blue-500/20 text-blue-400 border border-blue-500/30'
             ]"
           >
             <Check v-if="ui.toast类型 === 'success'" :size="12" class="stroke-[3]" />

@@ -1,44 +1,46 @@
 <script setup lang="ts">
-import { useUIStore } from '../../store/uiStore'
-import ShinyText from '../effects/ShinyText.vue'
+import { useUIStore } from '../../store/uiStore';
+import ShinyText from '../effects/ShinyText.vue';
 import {
-  Zap, FileText, Film,
-  Scan, Database, PanelLeftClose,
-  LayoutDashboard
-} from 'lucide-vue-next'
+  Zap,
+  FileText,
+  Film,
+  Scan,
+  Database,
+  PanelLeftClose,
+  LayoutDashboard,
+} from 'lucide-vue-next';
 
-const ui = useUIStore()
+const ui = useUIStore();
 
-// 核心工坊主力算子
 const menuGroup1 = [
   { id: 'home', label: '工坊主页', icon: LayoutDashboard },
   { id: 'format', label: '全能格式转换', icon: Zap },
   { id: 'pdf', label: 'PDF 智能解析', icon: FileText },
   { id: 'asr', label: '视频双语字幕', icon: Film },
-]
+];
 
-// 扩展算子与模型
 const menuGroup2 = [
   { id: 'super_res', label: '8K 视觉超分', icon: Scan },
   { id: 'knowledge', label: '本地离线知识库', icon: Database },
-]
+];
 
 const switchView = (id: string) => {
   if (['home', 'format', 'pdf', 'asr'].includes(id)) {
-    ui.currentView = id as 'home' | 'format' | 'pdf' | 'asr'
+    ui.currentView = id as 'home' | 'format' | 'pdf' | 'asr';
   } else {
-    ui.弹出提示("💡 该 AI 模块正在并网建设中...", "info")
+    ui.弹出提示('💡 该 AI 模块正在并网建设中...', 'info');
   }
-}
+};
 </script>
 
 <template>
   <aside
-    class="h-[calc(100vh-32px)] my-4 bg-[#182022]/85 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.4)] flex flex-col pt-6 pb-4 flex-shrink-0 z-20 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
-    :class="ui.侧边栏收起 ? 'w-0 opacity-0 ml-0 mr-0 my-0 py-0 px-0 overflow-hidden pointer-events-none' : 'w-[220px] ml-4'"
+    class="fixed left-4 top-4 bottom-4 w-[220px] bg-[#182022]/90 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.5)] flex flex-col pt-6 pb-4 z-40 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
+    :class="ui.侧边栏收起 ? '-translate-x-[260px] opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'"
     style="-webkit-app-region: drag;"
   >
-    <!-- 头部品牌标识与收起按钮 -->
+    <!-- 头部品牌标识 -->
     <div class="px-5 mb-6 flex items-center justify-between pointer-events-auto select-none" style="-webkit-app-region: no-drag;">
       <div
         @click="ui.currentView = 'home'"
@@ -59,6 +61,7 @@ const switchView = (id: string) => {
       </div>
 
       <button
+        type="button"
         @click="ui.切换侧边栏"
         class="w-7 h-7 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
         title="收起侧边栏"
@@ -75,23 +78,29 @@ const switchView = (id: string) => {
         v-for="item in menuGroup1"
         :key="item.id"
         @click="switchView(item.id)"
-        class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl cursor-pointer transition-all duration-150 border"
+        class="flex items-center justify-between px-3.5 py-2.5 rounded-2xl cursor-pointer transition-all duration-150 border select-none group"
         :class="[
           ui.currentView === item.id
-            ? 'bg-white/[0.08] border-white/15 text-white font-bold shadow-[0_4px_16px_rgba(0,0,0,0.3)]'
+            ? 'bg-white/[0.06] border-[#02c3b4]/30 text-white font-bold shadow-[0_4px_20px_rgba(2,195,180,0.12)]'
             : 'border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
         ]"
       >
-        <component
-          :is="item.icon"
-          :size="16"
-          :class="ui.currentView === item.id ? 'text-[#DCA54C] stroke-[2.5]' : 'text-[#8b999b] stroke-[2]'"
+        <div class="flex items-center gap-3">
+          <component
+            :is="item.icon"
+            :size="16"
+            :class="ui.currentView === item.id ? 'text-[#02c3b4] stroke-[2.5]' : 'text-[#8b999b] group-hover:text-white stroke-[2]'"
+          />
+          <span class="text-[13px] tracking-wide">{{ item.label }}</span>
+        </div>
+
+        <span
+          v-if="ui.currentView === item.id"
+          class="w-1.5 h-1.5 rounded-full bg-[#02c3b4] shadow-[0_0_8px_#02c3b4]"
         />
-        <span class="text-[13px] tracking-wide">{{ item.label }}</span>
       </div>
 
-      <!-- 分组标头 -->
-      <div class="pt-5 pb-1.5 px-3">
+      <div class="pt-5 pb-1.5 px-3.5">
         <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
       </div>
 
@@ -100,7 +109,7 @@ const switchView = (id: string) => {
         v-for="item in menuGroup2"
         :key="item.id"
         @click="switchView(item.id)"
-        class="flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-colors border border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium"
+        class="flex items-center justify-between px-3.5 py-2.5 rounded-2xl cursor-pointer transition-colors border border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium select-none"
       >
         <div class="flex items-center gap-3">
           <component :is="item.icon" :size="16" class="text-[#5b696b] stroke-[2]" />
@@ -112,8 +121,8 @@ const switchView = (id: string) => {
 
     <!-- 底部状态指示灯 -->
     <div class="px-5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-[#5b696b] pointer-events-auto" style="-webkit-app-region: no-drag;">
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="flex items-center gap-1.5 text-[#8b999b]">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
         RTX 3060 Ready
       </span>
       <span class="text-[10px]">v2.0</span>

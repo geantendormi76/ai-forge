@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n';
+import { useUIStore } from '../../store/uiStore';
 import { UploadCloud, X, Check, Loader2, FolderOpen, CheckCircle2, ArrowRight } from 'lucide-vue-next';
 import DotField from '../effects/DotField.vue';
+import GradientText from '../effects/GradientText.vue';
 import type { ToolWorkflowInstance } from '../../composables/useToolWorkflow';
 
 export interface GuideItem {
@@ -32,11 +33,7 @@ const emit = defineEmits<{
   (e: 'execute'): void;
 }>();
 
-const { locale } = useI18n();
-
-const toggleLanguage = () => {
-  locale.value = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN';
-};
+const ui = useUIStore();
 </script>
 
 <template>
@@ -65,30 +62,22 @@ const toggleLanguage = () => {
 
     <!-- 主工作区滚动容器 -->
     <div
-      class="relative z-10 flex-1 w-full overflow-y-auto custom-scrollbar px-6 sm:px-10 pb-10"
+      class="relative z-10 flex-1 w-full overflow-y-auto custom-scrollbar pt-12 pb-10 transition-all duration-300 ease-in-out"
+      :class="ui.侧边栏收起 ? 'px-6 sm:px-10 lg:px-14' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
       @dragover="workflow.handleDragOver"
       @dragleave="workflow.handleDragLeave"
       @drop="workflow.handleDrop"
     >
-      <div class="max-w-[1480px] mx-auto space-y-5 pt-1">
+      <div class="max-w-[1480px] w-full mx-auto space-y-5 pt-1">
 
-        <!-- 1. 顶部居中大标题与右上角极简语言切换 -->
-        <header class="relative flex items-center justify-center border-b border-white/[0.06] pb-3.5 pt-1">
-          <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight text-center">
-            {{ title }}
-          </h1>
-
-          <!-- 右上角中英切换 -->
-          <div class="absolute right-0 top-1/2 -translate-y-1/2 flex items-center">
-            <button
-              type="button"
-              @click="toggleLanguage"
-              class="bg-white/[0.03] border border-white/[0.08] hover:border-[#02c3b4]/50 hover:bg-white/[0.06] text-[#8b999b] hover:text-[#02c3b4] px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
-            >
-              <span>🌐</span>
-              <span>{{ locale === 'zh-CN' ? 'EN' : '中' }}</span>
-            </button>
-          </div>
+        <!-- 1. 顶部居中大标题 (装配专属紫电 GradientText 流光组件) -->
+        <header class="flex items-center justify-center border-b border-white/[0.06] pb-3.5 pt-1">
+          <GradientText
+            :text="title"
+            :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
+            :animation-speed="6"
+            class="text-2xl sm:text-3xl font-black tracking-tight text-center"
+          />
         </header>
 
         <!-- 🌟 2. 左右双翼 5 : 7 黄金栅格严格锁定 -->

@@ -15,7 +15,7 @@ import {
 const targetLang = ref<string>('Chinese');
 const displayMode = ref<SubtitleDisplayMode>('bilingual');
 const outputMode = ref<SubtitleOutputMode>('soft_mkv');
-const fontSizeMultiplier = ref<number>(1.8);
+const fontSizeMultiplier = ref<number>(1.35);
 const showSpeaker = ref<boolean>(false);
 const maskHardsub = ref<boolean>(false);
 const hotwords = ref<string>('');
@@ -108,7 +108,7 @@ const handleExecute = async () => {
 
 <template>
   <ToolWorkbenchLayout
-    :title="'视频一键双语字幕'"
+    :title="'视频字幕生成'"
     :steps="['添加视频', '定制选项', '完成交付']"
     :guides="optionGuides"
     :workflow="workflow"
@@ -251,7 +251,7 @@ const handleExecute = async () => {
               v-model="hotwords"
               type="text"
               placeholder="专有名词，逗号分隔 (如: DeepSeek, Rust, 町中華)"
-              class="w-full h-8 px-3.5 bg-white/[0.03] border border-white/[0.06] hover:border-white/15 focus:border-[#02c3b4]/70 focus:ring-1 focus:ring-[#02c3b4]/30 rounded-xl text-xs sm:text-sm text-[#f2f2ef] outline-none transition-all placeholder-[#5b696b]"
+              class="w-full h-8 px-3.5 bg-white/[0.03] border border-white/[0.06] hover:border-white/15 focus:border-[#02c3b4]/70 focus:ring-1 focus:ring-[#02c3b4]/30 rounded-xl text-xs sm:text-sm text-[#f5f5f3] outline-none transition-all placeholder-[#5b696b]"
             />
           </div>
         </div>
