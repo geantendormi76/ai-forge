@@ -11,8 +11,14 @@ const enableTable = ref<boolean>(true);
 const enableFigure = ref<boolean>(true);
 const enableRxycSort = ref<boolean>(true);
 
-// 2. 多任务工作流实例
-const workflow = useToolWorkflow<PdfParseResult>();
+// 2. 多任务工作流实例 (专属绑定 PDF 文件过滤器)
+const workflow = useToolWorkflow<PdfParseResult>({
+  dialogTitle: '选择待解析 PDF 文档',
+  dialogFilters: [
+    { name: 'PDF 文档 (*.pdf)', extensions: ['pdf'] },
+    { name: '全部文件 (*.*)', extensions: ['*'] },
+  ],
+});
 
 // 3. 左侧 6 大商业级技术配置指南
 const optionGuides: GuideItem[] = [
@@ -75,7 +81,6 @@ const handleExecute = async () => {
     :dropzone-subtitle="'支持学术论文、商业财报、书籍与扫描件，可多选批量排队'"
     @execute="handleExecute"
   >
-    <!-- 插槽：高定海青绿 rgb(2, 195, 180) 参数定制区 -->
     <template #options>
       <div class="space-y-3">
         <div class="flex items-center justify-between pb-1">
@@ -83,9 +88,7 @@ const handleExecute = async () => {
           <span class="text-[11px] font-mono text-[#02c3b4]">端侧全自动自适应分流</span>
         </div>
 
-        <!-- 4 大核心功能开关卡片群 -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <!-- 数学公式开关 -->
           <div
             @click="enableFormula = !enableFormula"
             class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
@@ -111,7 +114,6 @@ const handleExecute = async () => {
             </div>
           </div>
 
-          <!-- 复杂表格开关 -->
           <div
             @click="enableTable = !enableTable"
             class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
@@ -137,7 +139,6 @@ const handleExecute = async () => {
             </div>
           </div>
 
-          <!-- 视觉插图开关 -->
           <div
             @click="enableFigure = !enableFigure"
             class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
@@ -163,7 +164,6 @@ const handleExecute = async () => {
             </div>
           </div>
 
-          <!-- 双栏排序开关 -->
           <div
             @click="enableRxycSort = !enableRxycSort"
             class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"

@@ -45,13 +45,17 @@ const handleCardMove = (e: MouseEvent) => {
 </script>
 
 <template>
+  <!-- 🌟 2026 SOTA 流体等分栅格：无论容器多宽，卡片均等分流体撑满，永不意外折行 -->
   <div
-    :class="['relative w-full flex flex-wrap justify-center sm:justify-start items-stretch gap-4 select-none', className]"
+    :class="[
+      'relative w-full grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch select-none',
+      className
+    ]"
   >
     <article
       v-for="(c, i) in data"
       :key="i"
-      class="group relative flex flex-col w-full sm:w-[320px] lg:w-[335px] p-2.5 rounded-[22px] overflow-hidden border border-white/10 hover:border-[#02c3b4]/60 bg-[#182022]/85 hover:bg-[#182022]/95 backdrop-blur-2xl transition-all duration-300 shadow-[0_12px_36px_rgba(0,0,0,0.35)] hover:shadow-[0_16px_48px_rgba(2,195,180,0.18)] cursor-pointer"
+      class="group relative flex flex-col w-full min-w-0 p-2.5 rounded-[22px] overflow-hidden border border-white/10 hover:border-[#02c3b4]/60 bg-[#182022]/85 hover:bg-[#182022]/95 backdrop-blur-2xl transition-all duration-300 shadow-[0_12px_36px_rgba(0,0,0,0.35)] hover:shadow-[0_16px_48px_rgba(2,195,180,0.18)] cursor-pointer"
       :style="{
         '--mouse-x': '50%',
         '--mouse-y': '50%',
@@ -69,7 +73,7 @@ const handleCardMove = (e: MouseEvent) => {
         }"
       />
 
-      <!-- 🌟 第 1 层：黄金 16:10 视觉封面区 (70% 紧凑画幅) -->
+      <!-- 🌟 第 1 层：黄金 16:10 视觉封面区 (流体等比缩放) -->
       <div v-if="c.image" class="relative z-10 w-full aspect-[16/10] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#0a0f10]">
         <img
           :src="c.image"
@@ -81,17 +85,15 @@ const handleCardMove = (e: MouseEvent) => {
 
       <!-- 🌟 下半区文字容器 -->
       <div class="relative z-10 px-2 pt-2.5 pb-1 space-y-1 flex-1 flex flex-col justify-between">
-        <!-- 🌟 第 2 层：标题与行动导向区 -->
         <div class="flex items-center justify-between">
-          <h3 class="text-base sm:text-lg font-black text-white tracking-tight group-hover:text-[#02c3b4] transition-colors">
+          <h3 class="text-sm sm:text-base lg:text-lg font-black text-white tracking-tight group-hover:text-[#02c3b4] transition-colors truncate">
             {{ c.title }}
           </h3>
-          <span class="text-[#02c3b4] font-bold text-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200">
+          <span class="text-[#02c3b4] font-bold text-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200 shrink-0">
             ➔
           </span>
         </div>
 
-        <!-- 🌟 第 3 层：语义说明与微文案 -->
         <p class="m-0 text-[11px] sm:text-[12px] text-[#8b999b] leading-relaxed group-hover:text-[#d1dddf] transition-colors line-clamp-1">
           {{ c.subtitle }}
         </p>

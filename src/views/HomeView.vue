@@ -16,7 +16,7 @@ import {
 
 const ui = useUIStore();
 
-// 🌟 1. 上半区右翼：三层立体旗舰级已就绪算子群 (1:1 接入完美全景矢量 cover.svg)
+// 🌟 1. 上半区右翼：三层立体旗舰级已就绪算子群 (18 字内精炼文案)
 const flagshipTools: ChromaCardItem[] = [
   {
     id: 'pdf',
@@ -131,19 +131,21 @@ const handleChromaClick = (item: ChromaCardItem) => {
     </div>
 
     <div
-      class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar pt-12 pb-8 transition-all duration-300 ease-in-out pointer-events-auto"
-      :class="ui.侧边栏收起 ? 'px-8 sm:px-12 lg:px-14' : 'pl-[260px] pr-8 sm:pr-12 lg:pr-14'"
+      class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar pt-10 pb-8 transition-all duration-300 ease-in-out pointer-events-auto"
+      :class="ui.侧边栏收起 ? 'px-6 sm:px-10 lg:px-12' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-12'"
     >
-      <div class="max-w-[1580px] w-full mx-auto space-y-8 flex flex-col justify-between pt-2">
+      <div class="max-w-[1580px] w-full mx-auto space-y-6 flex flex-col justify-between pt-1">
 
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-2">
-          <div class="lg:col-span-5 flex flex-col justify-center space-y-3">
+        <!-- 🌟 上半区：5:7 黄金栅格，流体自适应并排 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          <!-- 左翼：紫电理念 (5 列) -->
+          <div class="lg:col-span-5 flex flex-col justify-center space-y-2.5">
             <div>
               <GradientText
                 text="紫电AI"
                 :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
                 :animation-speed="6"
-                class="text-6xl sm:text-7xl font-black tracking-tight"
+                class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight"
               />
             </div>
 
@@ -153,7 +155,8 @@ const handleChromaClick = (item: ChromaCardItem) => {
             </p>
           </div>
 
-          <div class="lg:col-span-7 flex flex-col justify-center">
+          <!-- 右翼：流体等分网格 (7 列，始终双卡并排) -->
+          <div class="lg:col-span-7 flex flex-col justify-center w-full min-w-0">
             <ChromaGrid
               :items="flagshipTools"
               @card-click="handleChromaClick"
@@ -161,7 +164,8 @@ const handleChromaClick = (item: ChromaCardItem) => {
           </div>
         </section>
 
-        <section id="tool-explorer-section" class="space-y-4 pt-1">
+        <!-- 🌟 下半区：全能工具导航矩阵 (自适应等宽流) -->
+        <section id="tool-explorer-section" class="space-y-4 pt-2">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
             <div>
               <h2 class="text-base sm:text-lg font-bold text-white tracking-wide">全能工具导航矩阵</h2>
@@ -194,12 +198,13 @@ const handleChromaClick = (item: ChromaCardItem) => {
             </div>
           </div>
 
-          <div v-if="filteredTools.length > 0" class="flex flex-wrap justify-center sm:justify-start items-stretch gap-5">
+          <!-- 🌟 下半区卡片网格：采用流体响应式栅格 -->
+          <div v-if="filteredTools.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             <article
               v-for="tool in filteredTools"
               :key="tool.id"
               @click="handleToolClick(tool)"
-              class="group relative flex flex-col w-full sm:w-[320px] lg:w-[335px] p-2.5 rounded-[22px] overflow-hidden border border-white/10 hover:border-[#02c3b4]/60 bg-[#182022]/85 hover:bg-[#182022]/95 backdrop-blur-2xl transition-all duration-300 shadow-[0_12px_36px_rgba(0,0,0,0.35)] hover:shadow-[0_16px_48px_rgba(2,195,180,0.18)] cursor-pointer select-none"
+              class="group relative flex flex-col w-full min-w-0 p-2.5 rounded-[22px] overflow-hidden border border-white/10 hover:border-[#02c3b4]/60 bg-[#182022]/85 hover:bg-[#182022]/95 backdrop-blur-2xl transition-all duration-300 shadow-[0_12px_36px_rgba(0,0,0,0.35)] hover:shadow-[0_16px_48px_rgba(2,195,180,0.18)] cursor-pointer select-none"
             >
               <div v-if="tool.image" class="relative z-10 w-full aspect-[16/10] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#0a0f10]">
                 <img
@@ -212,10 +217,10 @@ const handleChromaClick = (item: ChromaCardItem) => {
 
               <div class="relative z-10 px-2 pt-2.5 pb-1 space-y-1 flex-1 flex flex-col justify-between">
                 <div class="flex items-center justify-between">
-                  <h3 class="text-base sm:text-lg font-black text-white tracking-tight group-hover:text-[#02c3b4] transition-colors">
+                  <h3 class="text-sm sm:text-base font-black text-white tracking-tight group-hover:text-[#02c3b4] transition-colors truncate">
                     {{ tool.name }}
                   </h3>
-                  <span class="text-[#02c3b4] font-bold text-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200">
+                  <span class="text-[#02c3b4] font-bold text-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200 shrink-0">
                     ➔
                   </span>
                 </div>

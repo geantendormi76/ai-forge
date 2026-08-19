@@ -1,5 +1,4 @@
 // 🛡️ 紫电 AI 桌面工坊 - 工业级批量多任务工作流状态机母线 (useToolWorkflow.ts)
-// 100% 对齐 Tauri v2 原生文件系统交互契约 (plugin-dialog + webviewWindow drag-drop)
 
 import { ref, shallowRef, onMounted, onUnmounted } from 'vue';
 import { useUIStore } from '../store/uiStore';
@@ -9,11 +8,11 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { cancelCurrentTask } from '../bindings/index';
 
 export type WorkflowState =
-  | 'idle'      // 空闲：等待添加文件
-  | 'queued'    // 已排队：队列已有任务，等待开始
-  | 'running'   // 运行中：正在批量推导与渲染
-  | 'success'   // 成功：批处理全部交付完成
-  | 'error';    // 异常：运行中断或报错
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'success'
+  | 'error';
 
 export interface ToolFileMetadata {
   id: string;
@@ -32,6 +31,11 @@ export interface BatchSuccessPayload {
   targetFormat?: string;
   outputDir: string;
   lastOutputPath?: string;
+}
+
+export interface ToolWorkflowConfig {
+  dialogTitle?: string;
+  dialogFilters?: { name: string; extensions: string[] }[];
 }
 
 export function formatBytes(bytes: number, decimals = 1): string {
@@ -54,7 +58,7 @@ export function formatDuration(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function useToolWorkflow<TResult = any>() {
+export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
   const ui = useUIStore();
 
   const state = ref<WorkflowState>('idle');
@@ -67,7 +71,6 @@ export function useToolWorkflow<TResult = any>() {
   const errorMessage = ref('');
   const isCancelled = ref(false);
 
-  // 模态弹窗响应式状态
   const isProcessingModalOpen = ref(false);
   const isSuccessModalOpen = ref(false);
   const successInfo = ref<BatchSuccessPayload | null>(null);
@@ -77,7 +80,6 @@ export function useToolWorkflow<TResult = any>() {
 
   let unlistenDragDrop: (() => void) | null = null;
 
-  /** 直接注入 OS 物理绝对路径列表 */
   const addPaths = (paths: string[]) => {
     if (!paths || paths.length === 0) return;
     const newItems: ToolFileMetadata[] = [];
@@ -89,7 +91,6 @@ export function useToolWorkflow<TResult = any>() {
 
       const name = cleanPath.split(/[/\\]/).pop() || cleanPath;
 
-      // 查重：避免重复添加相同物理路径文件
       if (queue.value.some((q) => q.path === cleanPath)) {
         continue;
       }
@@ -111,17 +112,12 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 调起 Tauri v2 原生文件选取窗口 */
   const triggerFileSelect = async () => {
     try {
       const selected = await openDialog({
         multiple: true,
-        title: '选择待处理视频文件',
-        filters: [
-          {
-            name: '视频文件',
-            extensions: ['mp4', 'mkv', 'mov', 'avi', 'flv', 'wmv', 'webm', 'm4v'],
-          },
+        title: config?.dialogTitle || '选择待处理文件',
+        filters: config?.dialogFilters || [
           {
             name: '全部文件',
             extensions: ['*'],
@@ -139,7 +135,6 @@ export function useToolWorkflow<TResult = any>() {
     }
   };
 
-  /** 批量追加文件到队列 */
   const addFiles = async (files: FileList | File[] | { name: string; path?: string; size?: number }[]) => {
     const rawList = Array.isArray(files) ? files : Array.from(files);
     if (rawList.length === 0) return;
@@ -241,7 +236,7 @@ export function useToolWorkflow<TResult = any>() {
         }
       });
     } catch (e) {
-      console.warn('⚠️ 物理窗口原生拖拽监听未激活 (Web 预览环境):', e);
+      console.warn('⚠️ 物理窗口原生拖拽监听未激活:', e);
     }
   });
 
@@ -252,20 +247,18 @@ export function useToolWorkflow<TResult = any>() {
     }
   });
 
-  /** 🛡️ 2026 SOTA 毫秒级主动截停：向 Rust 网关发射硬件级熔断指令 */
   const cancelProcessing = async () => {
     isCancelled.value = true;
     isProcessingModalOpen.value = false;
     state.value = 'queued';
     try {
       await cancelCurrentTask();
-      ui.弹出提示('🛑 已成功截停当前任务，GPU 算力已释放', 'info');
+      ui.弹出提示('🛑 已成功截停当前任务，算力已释放', 'info');
     } catch (err) {
       console.warn('⚠️ 截停指令发送异常:', err);
     }
   };
 
-  /** 🛡️ 工业级舱壁隔离批处理调度母线 */
   const executeBatch = async (
     runner: (file: ToolFileMetadata, index: number, total: number) => Promise<TResult>,
     options: {
@@ -306,14 +299,12 @@ export function useToolWorkflow<TResult = any>() {
         successCount++;
 
         if (res && typeof res === 'object') {
-          if ('output_video_path' in res) lastOutput = (res as any).output_video_path;
+          if ('output_md_path' in res) lastOutput = (res as any).output_md_path;
+          else if ('output_video_path' in res) lastOutput = (res as any).output_video_path;
           else if ('output_path' in res) lastOutput = (res as any).output_path;
         }
       } catch (itemErr: any) {
-        if (isCancelled.value) {
-          console.info('ℹ️ 任务已被用户取消，跳过后续排队。');
-          break;
-        }
+        if (isCancelled.value) break;
         failedCount++;
         const msg = typeof itemErr === 'string' ? itemErr : itemErr?.message || String(itemErr);
         failureErrors.push(`${currentFile.name}: ${msg}`);
@@ -338,20 +329,20 @@ export function useToolWorkflow<TResult = any>() {
     state.value = 'success';
     const outputDir = lastOutput
       ? lastOutput.substring(0, lastOutput.lastIndexOf('\\')) || lastOutput.substring(0, lastOutput.lastIndexOf('/'))
-      : '已保存至源文件同级目录';
+      : '已保存至专属任务目录';
 
     const summaryTitle =
       total === 1
-        ? `已将 ${queue.value[0].name} 处理完成`
+        ? `已将 ${queue.value[0].name} 解析完成`
         : failedCount > 0
         ? `已处理完成 ${successCount} 个文件 (另有 ${failedCount} 个失败)`
-        : `已成功批量处理 ${total} 个视频文件`;
+        : `已成功批量处理 ${total} 个文件`;
 
     successInfo.value = {
       title: summaryTitle,
       totalProcessed: successCount,
       failedCount,
-      targetFormat: options.targetFormat || 'MKV',
+      targetFormat: options.targetFormat || 'Markdown',
       outputDir,
       lastOutputPath: lastOutput,
     };
@@ -359,7 +350,6 @@ export function useToolWorkflow<TResult = any>() {
     isSuccessModalOpen.value = true;
   };
 
-  /** 调起原生资源管理器打开并高亮产物所在目录 */
   const openFolder = async (dirOrFilePath?: string) => {
     const target = dirOrFilePath || successInfo.value?.lastOutputPath || successInfo.value?.outputDir;
     if (!target) return;
