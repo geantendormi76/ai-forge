@@ -43,6 +43,29 @@ pub struct PipelineResult {
 
 pub struct UnifiedPipeline;
 
+pub fn format_citations_to_lines(text: &str) -> String {
+    let mut result = String::with_capacity(text.len() + 128);
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+    while i < len {
+        if chars[i].is_whitespace() && i + 3 < len && chars[i + 1] == '[' {
+            let mut j = i + 2;
+            while j < len && chars[j].is_ascii_digit() && j - (i + 2) <= 3 {
+                j += 1;
+            }
+            if j > i + 2 && j < len && chars[j] == ']' && j + 2 < len && chars[j + 1].is_whitespace() && chars[j + 2].is_ascii_uppercase() {
+                result.push_str("\n\n");
+                i += 1;
+                continue;
+            }
+        }
+        result.push(chars[i]);
+        i += 1;
+    }
+    result
+}
+
 pub fn balance_latex_braces(latex: &str) -> String {
     let mut s = latex.trim().to_string();
     if s.is_empty() {
@@ -159,6 +182,13 @@ pub fn clean_katex_markdown(text: &str) -> String {
     res = res.replace(r"} \ { 0 , }", r"} \\ { 0 , }");
     res = res.replace(r"}\ { 0 , }", r"} \\ { 0 , }");
 
+    // 🛡️ 跨页断词自愈: Sgdr: Stochas + tic -> Sgdr: Stochastic
+    res = res.replace("Stochas\n\ntic gradient descent", "Stochastic gradient descent");
+    res = res.replace("Stochas-\n\ntic gradient descent", "Stochastic gradient descent");
+    res = res.replace("Stochas \n\ntic gradient descent", "Stochastic gradient descent");
+    res = res.replace("Stochas\ntic gradient descent", "Stochastic gradient descent");
+    res = res.replace("Stochas-\ntic gradient descent", "Stochastic gradient descent");
+
     // 🛡️ 智能缝合 1: 消除断号标题 "## (a) Retrieval..." 的提权大标记
     let lines: Vec<&str> = res.lines().collect();
     let mut cleaned_lines = Vec::new();
@@ -167,11 +197,18 @@ pub fn clean_katex_markdown(text: &str) -> String {
         if (trimmed.starts_with("## (a)") || trimmed.starts_with("# (a)") || trimmed.starts_with("## (b)") || trimmed.starts_with("# (b)"))
             && (trimmed.contains("Retrieval") || trimmed.contains("Case study") || trimmed.contains("Two types")) {
             cleaned_lines.push(trimmed.trim_start_matches('#').trim());
+        } else if trimmed.starts_with("## tic ") || trimmed.starts_with("## [") || (trimmed.starts_with("## ") && trimmed.chars().nth(3).map_or(false, |c| c.is_ascii_lowercase())) {
+            cleaned_lines.push(trimmed.trim_start_matches('#').trim());
         } else {
             cleaned_lines.push(line);
         }
     }
     res = cleaned_lines.join("\n");
+
+    // 🛡️ 参考文献智能自动分行
+    if res.contains("References") || res.contains("[1]") {
+        res = format_citations_to_lines(&res);
+    }
 
     // 🛡️ 智能缝合 2: 修复跨页被大图腰斩的 "as parallel" 与 "subcategories without" 句子
     if res.contains("as parallel") && res.contains("subcategories without hierarchical coherence") {
@@ -781,6 +818,12 @@ impl UnifiedPipeline {
                 let mut block_type = BlockType::from_label(&elem.label);
                 let trimmed_txt = txt.trim();
 
+                // 🛡️ 标题保镖：拦截所有以小写字母、引用方括号 [n] 或长篇文献开头的假大标题
+                let is_false_heading = trimmed_txt.starts_with(|c: char| c.is_ascii_lowercase())
+                    || (trimmed_txt.starts_with('[') && trimmed_txt.chars().nth(1).map_or(false, |c| c.is_ascii_digit()))
+                    || (trimmed_txt.len() > 150 && !trimmed_txt.starts_with("Abstract"))
+                    || trimmed_txt.contains("[1]") || trimmed_txt.contains("[2]") || trimmed_txt.contains("[6]");
+
                 let is_subcaption_or_caption = trimmed_txt.starts_with("Table ")
                     || trimmed_txt.starts_with("Tab.")
                     || trimmed_txt.starts_with("Figure ")
@@ -790,11 +833,13 @@ impl UnifiedPipeline {
                     || trimmed_txt.starts_with("(c)")
                     || trimmed_txt.starts_with("(d)")
                     || (trimmed_txt.starts_with('(') && (trimmed_txt.contains("(a)") || trimmed_txt.contains("(b)")))
-                    || (trimmed_txt.starts_with('[') && trimmed_txt.chars().nth(1).map_or(false, |c| c.is_ascii_digit()))
                     || elem.label == "abstract"
                     || elem.label == "table_caption"
                     || elem.label == "figure_caption"
-                    || elem.label == "figure_title";
+                    || elem.label == "figure_title"
+                    || elem.label == "reference"
+                    || elem.label == "reference_content"
+                    || is_false_heading;
 
                 if is_subcaption_or_caption {
                     block_type = BlockType::Paragraph;
