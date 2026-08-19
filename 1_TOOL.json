@@ -41,12 +41,10 @@
     "src/views/HomeView.vue",
 
 
-
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
     "src-tauri/crates/core-onnx-infer/**",
-          
 
     "src/views/PdfParseView.vue",
 
