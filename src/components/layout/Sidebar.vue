@@ -17,27 +17,27 @@ import {
 
 const ui = useUIStore();
 
-// 1. 已竣工主力工坊组 (正式并入 PDF 智能解析)
+// 1. 已竣工主力工坊组 (正式并入 全能格式转换)
 const mainWorkbenches = [
   { id: 'home', label: '工坊主页', icon: LayoutDashboard },
+  { id: 'format', label: '全能格式转换', icon: Zap },
   { id: 'pdf', label: 'PDF 智能解析', icon: FileText },
   { id: 'asr', label: '视频字幕生成', icon: Film },
 ];
 
 // 2. 本地算力扩展矩阵 (规划建设中的离线端侧算子)
 const extensionOperators = [
-  { id: 'format', label: '全能格式转换', icon: Zap },
   { id: 'super_res', label: '8K 视觉超分', icon: Scan },
   { id: 'knowledge', label: '本地离线知识库', icon: Database },
-  { id: 'audio_master', label: '音频解密与母带', icon: Music },
+  { id: 'audio_master', label: '音频母带增强', icon: Music },
   { id: 'table_clean', label: '多维表格清洗', icon: Table },
   { id: 'ebook_gen', label: '电子书重排排版', icon: BookOpen },
   { id: 'icon_craft', label: '原生多尺寸图标', icon: ImageIcon },
 ];
 
 const switchView = (id: string) => {
-  if (['home', 'asr', 'pdf'].includes(id)) {
-    ui.currentView = id as 'home' | 'asr' | 'pdf';
+  if (['home', 'format', 'asr', 'pdf'].includes(id)) {
+    ui.currentView = id as 'home' | 'format' | 'asr' | 'pdf';
   } else {
     const target = extensionOperators.find((o) => o.id === id);
     ui.弹出提示(`💡 [${target ? target.label : '算子'}] 正在端侧并网构建中，敬请期待...`, 'info');
@@ -114,7 +114,7 @@ const switchView = (id: string) => {
       <!-- 分隔线与标题 -->
       <div class="pt-4 pb-1.5 px-3 flex items-center justify-between">
         <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
-        <span class="text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded">7 算子</span>
+        <span class="text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded">6 算子</span>
       </div>
 
       <!-- 扩展算子矩阵组 -->

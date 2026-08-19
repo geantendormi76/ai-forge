@@ -6,10 +6,8 @@ import {
   X,
   Check,
   Loader2,
-  FolderOpen,
-  CheckCircle2,
   ArrowRight,
-  ArrowLeft,
+  ArrowLeft
 } from 'lucide-vue-next';
 import DotField from '../effects/DotField.vue';
 import GradientText from '../effects/GradientText.vue';
@@ -289,33 +287,34 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- 处理中 Modal -->
     <div
       v-if="workflow.isProcessingModalOpen.value"
       class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 select-none"
     >
-      <div class="max-w-[420px] w-full p-7 rounded-3xl bg-[#1c2426] border border-white/10 shadow-2xl text-center space-y-5 flex flex-col items-center">
-        <div class="w-14 h-14 rounded-2xl bg-[#02c3b4]/15 border border-[#02c3b4]/30 text-[#02c3b4] flex items-center justify-center shadow-lg animate-pulse">
-          <Loader2 :size="26" class="animate-spin" />
+      <div class="max-w-[400px] w-full p-7 rounded-[32px] bg-white border border-slate-100 shadow-2xl text-center space-y-4 flex flex-col items-center text-slate-900">
+        <div class="w-14 h-14 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg">
+          <Loader2 :size="24" class="animate-spin" />
         </div>
 
         <div class="space-y-1">
-          <h3 class="text-base font-bold text-white">
+          <h3 class="text-lg font-black text-slate-900">
             {{ workflow.statusText.value || '正在处理中...' }}
           </h3>
-          <p class="text-xs text-[#8b999b]">
-            端侧 GPU/CPU 运算中，请勿关闭窗口
+          <p class="text-xs text-slate-500 font-medium">
+            端侧极速运算中，请勿关闭窗口
           </p>
         </div>
 
-        <div class="w-full space-y-1.5">
-          <div class="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+        <div class="w-full space-y-1.5 pt-1">
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              class="h-full bg-[#02c3b4] transition-all duration-300 rounded-full shadow-[0_0_12px_#02c3b4]"
+              class="h-full bg-emerald-500 transition-all duration-300 rounded-full"
               :style="{ width: `${workflow.progress.value}%` }"
             ></div>
           </div>
-          <div class="flex justify-between text-xs font-mono text-[#5b696b]">
-            <span>PURE RUST NATIVE</span>
+          <div class="flex justify-between text-xs font-mono text-slate-400 font-bold">
+            <span>RUST NATIVE</span>
             <span>{{ workflow.progress.value }}%</span>
           </div>
         </div>
@@ -323,66 +322,83 @@ onUnmounted(() => {
         <button
           type="button"
           @click="workflow.cancelProcessing"
-          class="px-6 py-2 rounded-full border border-white/10 hover:border-white/20 text-xs text-[#8b999b] hover:text-white transition-colors cursor-pointer"
+          class="px-6 py-2 rounded-full border border-slate-200 hover:bg-slate-50 text-xs text-slate-500 font-bold transition-colors cursor-pointer mt-1"
         >
-          取消
+          取消处理
         </button>
       </div>
     </div>
 
+    <!-- 🌟 100% 对齐图二图三标准的现代化顶级成功 Modal -->
     <div
       v-if="workflow.isSuccessModalOpen.value && workflow.successInfo.value"
-      class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 select-none"
+      class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-150 select-none"
     >
-      <div class="max-w-[440px] w-full p-7 rounded-3xl bg-[#1c2426] border border-white/10 shadow-2xl text-center space-y-5 flex flex-col items-center">
-        <div class="w-14 h-14 rounded-full bg-[#02c3b4]/20 text-[#02c3b4] border border-[#02c3b4]/40 flex items-center justify-center shadow-lg shadow-teal-500/20">
-          <Check :size="26" class="stroke-[3]" />
+      <div class="max-w-[360px] sm:max-w-[380px] w-full p-6 sm:p-7 rounded-[32px] bg-white border border-slate-100 shadow-[0_25px_60px_rgba(0,0,0,0.35)] text-center space-y-4 flex flex-col items-center animate-in zoom-in-95 duration-150">
+        
+        <!-- 1. 经典翠绿实体立体徽标 (对齐图三) -->
+        <div class="w-14 h-14 rounded-full bg-[#10b981] text-white flex items-center justify-center shadow-[0_8px_20px_rgba(16,185,129,0.35)] shrink-0">
+          <Check :size="28" class="stroke-[3.5]" />
         </div>
 
-        <div class="space-y-1">
-          <h3 class="text-lg font-bold text-white">
-            解析完成
+        <!-- 2. 大标题与副标题 -->
+        <div class="space-y-1 w-full">
+          <h3 class="text-xl font-black text-slate-900 tracking-tight">
+            处理成功
           </h3>
-          <p class="text-xs text-[#8b999b]">
-            {{ workflow.successInfo.value.title }}
-          </p>
+          <div class="text-xs text-slate-400 font-medium space-y-0.5">
+            <span>已将</span>
+            <p class="text-xs text-slate-600 font-bold truncate max-w-[280px] mx-auto" :title="workflow.successInfo.value.title">
+              {{ workflow.successInfo.value.title.replace(/^已将\s*/, '').replace(/完成$/, '').replace(/成功$/, '') }}
+            </p>
+          </div>
         </div>
 
-        <div class="w-full bg-black/30 rounded-2xl p-4 text-xs font-mono text-left space-y-2 border border-white/[0.06]">
-          <div class="flex justify-between text-[#8b999b]">
-            <span>导出格式:</span>
-            <strong class="text-[#02c3b4] font-bold">{{ workflow.successInfo.value.targetFormat }}</strong>
+        <!-- 3. 极简浅灰信息卡片仓 (对齐图三) -->
+        <div class="w-full bg-[#f4f4f5]/90 border border-slate-200/50 rounded-2xl p-4 text-xs text-left space-y-2.5">
+          <div class="flex justify-between items-center text-slate-500">
+            <span class="font-medium">目标格式</span>
+            <strong class="font-mono text-slate-900 font-black uppercase text-[12.5px]">{{ workflow.successInfo.value.targetFormat }}</strong>
           </div>
-          <div class="flex justify-between text-[#8b999b]">
-            <span>处理数量:</span>
-            <strong class="text-white font-bold">{{ workflow.successInfo.value.totalProcessed }} 个</strong>
+
+          <div class="flex justify-between items-center text-slate-500">
+            <span class="font-medium">处理文件</span>
+            <strong class="font-mono text-slate-900 font-bold text-[12.5px]">{{ workflow.successInfo.value.totalProcessed }} 个</strong>
           </div>
-          <div class="flex justify-between items-center text-[#8b999b] gap-2">
-            <span class="shrink-0">存储路径:</span>
-            <span class="text-xs text-white/90 truncate font-medium" :title="workflow.successInfo.value.outputDir">
+
+          <div class="flex justify-between items-center text-slate-500">
+            <span class="font-medium">处理耗时</span>
+            <strong class="font-mono text-emerald-600 font-bold text-[12.5px]">
+              {{ workflow.successInfo.value.elapsedFormatted || `${((workflow.elapsedMs.value || 0) / 1000).toFixed(2)} 秒` }}
+            </strong>
+          </div>
+
+          <div class="flex justify-between items-center text-slate-500 gap-2 pt-0.5 border-t border-slate-200/60">
+            <span class="shrink-0 font-medium">保存路径</span>
+            <span class="font-mono text-slate-800 truncate text-[11px] font-semibold max-w-[190px]" :title="workflow.successInfo.value.outputDir">
               {{ workflow.successInfo.value.outputDir }}
             </span>
           </div>
         </div>
 
+        <!-- 4. 双胶囊操作按钮 (对齐图二图三) -->
         <div class="w-full flex items-center justify-center gap-3 pt-1">
           <button
             type="button"
             @click="workflow.openFolder()"
-            class="flex-1 py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-white font-bold text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+            class="flex-1 py-3 px-4 rounded-2xl bg-[#f4f4f5] hover:bg-[#e4e4e7] text-slate-800 font-bold text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
           >
-            <FolderOpen :size="15" />
-            <span>打开目录</span>
+            <span>打开文件夹</span>
           </button>
           <button
             type="button"
             @click="workflow.closeSuccessModal"
-            class="flex-1 py-2.5 px-4 rounded-xl bg-[#02c3b4]/20 hover:bg-[#02c3b4]/30 border border-[#02c3b4]/50 text-[#02c3b4] font-bold text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+            class="flex-1 py-3 px-4 rounded-2xl bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md"
           >
-            <CheckCircle2 :size="15" />
             <span>确定</span>
           </button>
         </div>
+
       </div>
     </div>
   </div>

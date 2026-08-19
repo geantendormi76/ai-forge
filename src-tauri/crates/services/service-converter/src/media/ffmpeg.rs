@@ -90,3 +90,34 @@ pub fn execute_ffmpeg_command(ffmpeg_bin: &Path, args: &[&str]) -> Result<(), St
 
     Ok(())
 }
+
+/// 🌟 2026 SOTA 内存管道：通过 FFmpeg stdout pipe 将任意图像转为 JPEG 字节流
+pub fn convert_image_to_jpeg_bytes(ffmpeg_bin: &Path, input_path: &Path) -> Result<Vec<u8>, String> {
+    let mut cmd = Command::new(ffmpeg_bin);
+    let in_str = input_path.to_str().ok_or("输入文件路径包含非法字符")?;
+    cmd.args(&[
+        "-y",
+        "-hide_banner",
+        "-i",
+        in_str,
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+    ]);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let output = cmd.output().map_err(|e| format!("启动 FFmpeg 进程失败: {}", e))?;
+    if !output.status.success() || output.stdout.is_empty() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("图像转码失败: {}", err_msg));
+    }
+
+    Ok(output.stdout)
+}

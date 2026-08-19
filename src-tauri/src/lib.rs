@@ -2,7 +2,7 @@ use core_security::{gatekeeper::Gatekeeper, DeviceFingerprint};
 use format_converter::{service::FormatConvertService, FormatConvertResult, FormatConvertTask};
 use pdf_parse::service::{PdfParseResult, PdfParseService};
 use shared_contracts::VramTokenGuard;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State};
@@ -39,9 +39,15 @@ async fn parse_pdf(
         );
     };
 
+    // 🌟 全系统统一铁律：解析产物直接就地输出至源 PDF 所在同级目录
+    let pdf_input_path = Path::new(&file_path);
+    let target_out_dir = pdf_input_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+
     PdfParseService::run_parse(
         &file_path,
-        &state.output_dir,
+        target_out_dir,
         Some(&state.vram_guard),
         Some(progress_cb),
     )
@@ -75,7 +81,7 @@ async fn run_video_subtitle(
     .await
 }
 
-/// 🛡️ 2026 SOTA 硬件级全局截停指令：一键通知底座与 GPU 算子熔断退出
+/// 🛡️ 硬件级全局截停指令
 #[tauri::command]
 fn cancel_current_task(state: State<'_, AppState>) -> Result<bool, String> {
     tracing::warn!("🛑 [IPC 截停专线] 收到前端紧急截停请求，正在中断底层算子与 GPU 推理...");

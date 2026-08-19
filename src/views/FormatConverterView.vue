@@ -1,451 +1,342 @@
-<template>
-  <div class="min-h-screen bg-slate-50 text-slate-800 p-8 font-sans relative overflow-hidden">
-    <!-- 顶部标语与算力指示区 -->
-    <div class="max-w-6xl mx-auto mb-8 border-b border-slate-200 pb-6 flex justify-between items-end relative z-10">
-      <div>
-        <h1 class="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-          <span class="p-2 bg-amber-50 text-[#DCA54C] rounded-xl border border-amber-100 shadow-sm">⚡</span>
-          全能格式转换工坊
-        </h1>
-        <p class="text-slate-500 mt-2 text-sm">
-          纯血 Rust 内存直推 ｜ 零显存占用 ｜ 全离线隐私安全 ｜ 涵盖音频母带、表格数据、电子书与原生图标
-        </p>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <div class="bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm text-xs flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span class="text-slate-600">计算中台: <strong class="text-slate-900 font-mono">CPU 内存直推 (0 MB 显存)</strong></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 主工作区卡片栅格 -->
-    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-      <!-- 左侧：双轨拖拽上传与任务排队 (7 栏) -->
-      <div class="lg:col-span-7 space-y-6">
-        <!-- 拖拽上传与弹窗挑选区 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h2 class="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            <span class="w-1.5 h-4 bg-[#DCA54C] rounded-full"></span>
-            选择待转换文件
-          </h2>
-
-          <div
-            @click="triggerNativeFilePicker"
-            class="border-2 border-dashed transition-all rounded-xl p-8 text-center cursor-pointer group select-none relative overflow-hidden"
-            :class="[
-              isDraggingOver
-                ? 'border-[#bc05ff] bg-purple-50/40 ring-4 ring-[#bc05ff]/15 scale-[1.01]'
-                : 'border-slate-200 hover:border-[#DCA54C] bg-slate-50/50 hover:bg-amber-50/20'
-            ]"
-          >
-            <div
-              class="w-12 h-12 bg-white border border-slate-200 text-[#DCA54C] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm group-hover:scale-110 transition-transform text-xl"
-              :class="isDraggingOver ? 'text-[#bc05ff] border-purple-200 animate-bounce' : ''"
-            >
-              📂
-            </div>
-            <p class="text-sm font-medium text-slate-700">
-              {{ isDraggingOver ? '松开鼠标立即投送至转换队列' : '点击打开系统选择器，或直接将文件拖拽至此处' }}
-            </p>
-            <p class="text-xs text-slate-400 mt-1">
-              支持 NCM / QMC / KGMA / KWM / CSV / TSV / JSON / XML / MD / TXT / MOBI / ICO / PNG / BMP / ZIP 等
-            </p>
-          </div>
-        </div>
-
-        <!-- 任务队列列表 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col min-h-[380px]">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-            <div class="flex items-center gap-2">
-              <h3 class="text-sm font-semibold text-slate-900">待转换任务队列</h3>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
-                {{ taskQueue.length }} 个任务
-              </span>
-            </div>
-            <div class="flex items-center gap-2">
-              <button
-                v-if="taskQueue.length > 0"
-                @click="clearAllTasks"
-                :disabled="isConverting"
-                class="text-xs text-slate-400 hover:text-rose-600 px-2 py-1 transition-colors disabled:opacity-40 cursor-pointer"
-              >
-                清空列表
-              </button>
-              <button
-                @click="startBatchConvert"
-                :disabled="taskQueue.length === 0 || isConverting"
-                class="bg-[#DCA54C] hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-black px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-1.5 cursor-pointer"
-              >
-                <span v-if="isConverting" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                <span>{{ isConverting ? '正在转换中...' : '🚀 开始全部转换' }}</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- 任务列表滚动区 -->
-          <div v-if="taskQueue.length > 0" class="flex-1 overflow-y-auto max-h-[420px] space-y-2.5 pr-1 custom-scrollbar">
-            <div
-              v-for="(item, index) in taskQueue"
-              :key="index"
-              class="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between transition-all hover:border-slate-300"
-            >
-              <div class="flex items-center gap-3 overflow-hidden mr-3">
-                <span class="text-lg shrink-0">{{ getCategoryIcon(item.ext) }}</span>
-                <div class="overflow-hidden">
-                  <p class="text-xs font-bold text-slate-800 truncate" :title="item.filePath">
-                    {{ item.fileName }}
-                  </p>
-                  <p class="text-[11px] text-slate-400 font-mono mt-0.5 truncate" :title="item.filePath">
-                    {{ item.filePath }}
-                  </p>
-                </div>
-              </div>
-
-              <!-- 右侧控制项：格式选择与状态徽章 -->
-              <div class="flex items-center gap-3 shrink-0">
-                <select
-                  v-if="item.status === 'idle'"
-                  v-model="item.targetFormat"
-                  class="bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg px-2 py-1 outline-none focus:border-[#DCA54C] cursor-pointer"
-                >
-                  <option
-                    v-for="opt in getAvailableTargetFormats(item.ext)"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
-
-                <!-- 状态徽章 -->
-                <span
-                  v-if="item.status === 'idle'"
-                  class="text-[11px] font-bold text-slate-400 bg-slate-200/60 px-2 py-0.5 rounded-md"
-                >
-                  等待中
-                </span>
-                <span
-                  v-else-if="item.status === 'converting'"
-                  class="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md flex items-center gap-1"
-                >
-                  <span class="inline-block w-2.5 h-2.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></span>
-                  转换中
-                </span>
-                <span
-                  v-else-if="item.status === 'success'"
-                  class="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1"
-                >
-                  ✓ 完成 ({{ item.elapsedMs }}ms)
-                </span>
-                <span
-                  v-else-if="item.status === 'error'"
-                  class="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md"
-                  :title="item.errorMessage"
-                >
-                  失败: {{ item.errorMessage }}
-                </span>
-
-                <!-- 删除按钮 -->
-                <button
-                  v-if="!isConverting"
-                  @click="removeTask(index)"
-                  class="text-slate-400 hover:text-rose-500 p-1 transition-colors cursor-pointer"
-                  title="移除任务"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 空任务提示 -->
-          <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-400 py-16">
-            <div class="text-4xl mb-2">⚡</div>
-            <p class="text-xs">暂无待转换任务，请在上方选择或拖入文件</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧：转换产物与功能指引 (5 栏) -->
-      <div class="lg:col-span-5 space-y-6">
-        <!-- 转换产物看板 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h2 class="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            <span class="w-1.5 h-4 bg-emerald-500 rounded-full"></span>
-            转换产物交付
-          </h2>
-
-          <div v-if="completedTasks.length > 0" class="space-y-3 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
-            <div
-              v-for="(task, idx) in completedTasks"
-              :key="idx"
-              class="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2"
-            >
-              <div class="flex justify-between items-start">
-                <span class="text-xs font-bold text-slate-800 truncate block max-w-[200px]" :title="task.fileName">
-                  {{ task.fileName }}
-                </span>
-                <span class="text-[10px] font-mono text-emerald-600 font-black bg-emerald-100/60 px-1.5 py-0.5 rounded">
-                  .{{ task.resultFormat }}
-                </span>
-              </div>
-
-              <div class="text-[11px] font-mono text-slate-500 bg-white p-2 rounded border border-slate-200/60 truncate select-all" :title="task.outputPath">
-                {{ task.outputPath }}
-              </div>
-
-              <div class="flex justify-end gap-2 pt-1">
-                <button
-                  @click="copyToClipboard(task.outputPath)"
-                  class="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
-                >
-                  复制路径
-                </button>
-                <button
-                  v-if="task.outputPath"
-                  @click="openOutputFolder(task.outputPath)"
-                  class="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
-                >
-                  打开所在目录
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="text-center text-slate-400 py-12">
-            <div class="text-3xl mb-2">📦</div>
-            <p class="text-xs">转换成功后，产物路径将自动汇聚在此</p>
-          </div>
-        </div>
-
-        <!-- 引擎能力矩阵说明 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-3">
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">原生支持特性矩阵</h3>
-          <div class="grid grid-cols-2 gap-2 text-xs text-slate-600">
-            <div class="p-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-1.5">
-              <span>🎵</span> <strong>音频解密:</strong> NCM/QMC/KGM
-            </div>
-            <div class="p-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-1.5">
-              <span>📊</span> <strong>表格清洗:</strong> CSV/JSON/TSV
-            </div>
-            <div class="p-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-1.5">
-              <span>📚</span> <strong>电子书排版:</strong> EPUB/DOCX/MOBI
-            </div>
-            <div class="p-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-1.5">
-              <span>🖼️</span> <strong>图标合成:</strong> ICO/PNG/BMP
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { commands, type FormatConvertTask, type FormatConvertResult } from '../bindings';
-import { open } from '@tauri-apps/plugin-dialog';
-import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { ref, computed, watch } from 'vue';
+import { useUIStore } from '../store/uiStore';
+import { useToolWorkflow } from '../composables/useToolWorkflow';
+import { runFormatConvert, type FormatConvertTask, type FormatConvertResult } from '../bindings/index';
+import ToolWorkbenchLayout, { type GuideItem } from '../components/layout/ToolWorkbenchLayout.vue';
 
-interface ConvertQueueItem {
-  filePath: string;
-  fileName: string;
-  ext: string;
-  targetFormat: string;
-  status: 'idle' | 'converting' | 'success' | 'error';
-  outputPath?: string;
-  resultFormat?: string;
-  errorMessage?: string;
-  elapsedMs?: number;
+const ui = useUIStore();
+
+// 1. 全域支持格式白名单
+const SUPPORTED_EXTS = [
+  'ncm', 'mflac', 'mgg', 'qmc0', 'qmc3', 'qmcflac', 'qmcogg', 'kgma', 'vpr', 'kgg', 'kwm', 'av3a', 'm4a', 'mp3', 'wav', 'flac', 'ogg', 'aac',
+  'csv', 'tsv', 'json', 'xml',
+  'md', 'txt', 'mobi', 'html',
+  'ico', 'png', 'jpg', 'jpeg', 'bmp', 'heic', 'heif',
+  'zip'
+];
+
+// 2. 初始化通用多任务排队工作流 (极简 6 字提示)
+const workflow = useToolWorkflow<FormatConvertResult>({
+  dialogTitle: '选择待转换文件 (支持多选)',
+  allowedExtensions: SUPPORTED_EXTS,
+  unsupportedPrompt: () => '格式暂不支持',
+  dialogFilters: [
+    {
+      name: '支持的全部全能格式',
+      extensions: SUPPORTED_EXTS
+    },
+    { name: '音频文件 (解密/转码)', extensions: ['ncm', 'mflac', 'mgg', 'qmc0', 'qmc3', 'qmcflac', 'qmcogg', 'kgma', 'vpr', 'kgg', 'kwm', 'av3a', 'mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac'] },
+    { name: '表格与结构化数据', extensions: ['csv', 'tsv', 'json', 'xml'] },
+    { name: '文档与电子书', extensions: ['md', 'txt', 'mobi', 'html'] },
+    { name: '图像与图标', extensions: ['ico', 'png', 'jpg', 'jpeg', 'bmp', 'heic', 'heif'] },
+    { name: '归档压缩包', extensions: ['zip'] }
+  ]
+});
+
+// 3. 状态配置项
+const qualityPreference = ref<'lossless' | 'compatible'>('lossless');
+const selectedTargetFormat = ref<string>('auto');
+
+// 4. 5 大领域格式字典与规则映射中枢
+interface TargetOption {
+  format: string;
+  label: string;
+  badge?: string;
+  desc: string;
 }
 
-const taskQueue = ref<ConvertQueueItem[]>([]);
-const isConverting = ref(false);
-const isDraggingOver = ref(false);
-let unlisteners: UnlistenFn[] = [];
+interface FormatCategorySpec {
+  id: string;
+  name: string;
+  extensions: string[];
+  getTargets: (exts: string[]) => TargetOption[];
+}
 
-const FORMAT_OPTIONS_MAP: Record<string, Array<{ label: string; value: string }>> = {
-  ncm: [{ label: '自动音频解密 (FLAC/MP3)', value: 'auto' }],
-  qmc0: [{ label: '自动音频解密', value: 'auto' }],
-  qmc3: [{ label: '自动音频解密', value: 'auto' }],
-  qmcflac: [{ label: '无损 FLAC', value: 'auto' }],
-  qmcogg: [{ label: 'OGG 音频', value: 'auto' }],
-  mflac: [{ label: 'FLAC 音频', value: 'auto' }],
-  mgg: [{ label: 'OGG 音频', value: 'auto' }],
-  kgma: [{ label: '自动音频解密 (FLAC/MP3)', value: 'auto' }],
-  vpr: [{ label: '自动音频解密', value: 'auto' }],
-  kwm: [{ label: '自动音频解密', value: 'auto' }],
-  av3a: [{ label: '提取 AV3A 裸流 (.av3a)', value: 'av3a' }],
-  csv: [
-    { label: 'JSON 对象数组 (.json)', value: 'json' },
-    { label: 'Markdown 语法表格 (.md)', value: 'md' },
-  ],
-  tsv: [{ label: '标准 CSV 表格 (.csv)', value: 'csv' }],
-  json: [{ label: '扁平化 CSV 表格 (.csv)', value: 'csv' }],
-  xml: [{ label: 'JSON 数据树 (.json)', value: 'json' }],
-  md: [
-    { label: 'Word 文档 (.docx)', value: 'docx' },
-    { label: 'EPUB 电子书 (.epub)', value: 'epub' },
-  ],
-  txt: [
-    { label: 'EPUB 电子书 (.epub)', value: 'epub' },
-    { label: 'Word 文档 (.docx)', value: 'docx' },
-  ],
-  mobi: [
-    { label: '纯文本 (.txt)', value: 'txt' },
-    { label: '网页源码 (.html)', value: 'html' },
-  ],
-  ico: [{ label: '最优 PNG 帧 (.png)', value: 'png' }],
-  png: [{ label: 'Windows 图标 (.ico)', value: 'ico' }],
-  jpg: [{ label: 'Windows 图标 (.ico)', value: 'ico' }],
-  jpeg: [{ label: 'Windows 图标 (.ico)', value: 'ico' }],
-  bmp: [{ label: '纯流式 PDF (.pdf)', value: 'pdf' }],
-  zip: [{ label: '解压至同名目录', value: 'extract' }],
-};
-
-const getAvailableTargetFormats = (ext: string) => {
-  return FORMAT_OPTIONS_MAP[ext.toLowerCase()] || [{ label: '默认转换', value: 'default' }];
-};
-
-const getCategoryIcon = (ext: string): string => {
-  const e = ext.toLowerCase();
-  if (['ncm', 'qmc0', 'qmc3', 'qmcflac', 'qmcogg', 'mflac', 'mgg', 'kgma', 'vpr', 'kwm', 'av3a'].includes(e)) return '🎵';
-  if (['csv', 'tsv', 'json', 'xml'].includes(e)) return '📊';
-  if (['md', 'txt', 'mobi', 'epub', 'docx'].includes(e)) return '📚';
-  if (['ico', 'png', 'jpg', 'jpeg', 'bmp', 'pdf'].includes(e)) return '🖼️';
-  if (['zip'].includes(e)) return '📦';
-  return '📄';
-};
-
-const completedTasks = computed(() => {
-  return taskQueue.value.filter(t => t.status === 'success' && t.outputPath);
-});
-
-// 🛡️ 核心：双轨单点汇聚中台 (处理真物理路径)
-const addFilesToQueue = (paths: string[]) => {
-  for (const rawPath of paths) {
-    if (!rawPath || typeof rawPath !== 'string') continue;
-    if (taskQueue.value.some(t => t.filePath === rawPath && t.status === 'idle')) continue;
-
-    const normalized = rawPath.replace(/\\/g, '/');
-    const fileName = normalized.split('/').pop() || rawPath;
-    const ext = fileName.includes('.') ? fileName.split('.').pop() || '' : '';
-    const available = getAvailableTargetFormats(ext);
-    const defaultTarget = available.length > 0 ? available[0].value : 'default';
-
-    taskQueue.value.push({
-      filePath: rawPath,
-      fileName,
-      ext: ext.toLowerCase(),
-      targetFormat: defaultTarget,
-      status: 'idle',
-    });
-  }
-};
-
-// 轨道一：原生系统级文件选择对话框
-const triggerNativeFilePicker = async () => {
-  try {
-    const selected = await open({
-      multiple: true,
-      title: '选择待转换文件'
-    });
-    if (selected) {
-      const paths = Array.isArray(selected) ? selected : [selected];
-      addFilesToQueue(paths);
+const CATEGORY_SPECS: FormatCategorySpec[] = [
+  {
+    id: 'audio',
+    name: '音频母带与转码',
+    extensions: ['ncm', 'mflac', 'mgg', 'qmc0', 'qmc3', 'qmcflac', 'qmcogg', 'kgma', 'vpr', 'kgg', 'kwm', 'av3a', 'm4a', 'mp3', 'wav', 'flac', 'ogg', 'aac'],
+    getTargets: (exts) => {
+      const isPlainAudio = exts.every(e => ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac'].includes(e));
+      if (isPlainAudio) {
+        return [
+          { format: 'flac', label: 'FLAC 无损', badge: '最高音质', desc: '转为无损 FLAC 音频' },
+          { format: 'mp3', label: 'MP3 兼容', desc: '转为标准 MP3 格式' },
+          { format: 'wav', label: 'WAV 波形', desc: '未压缩原始波形音频' }
+        ];
+      }
+      return [
+        { format: 'auto', label: '自动还原', badge: '推荐', desc: '自动嗅探无损 FLAC 或高保真 MP3' },
+        { format: 'flac', label: 'FLAC 无损', desc: '100% 还原原始高保真无损音轨' },
+        { format: 'mp3', label: 'MP3 兼容', desc: '适合车载与通用移动设备播放' },
+        { format: 'av3a', label: 'AV3A 裸流', desc: '纯血 M4A 容器内音频裸流提取' }
+      ];
     }
-  } catch (err) {
-    console.error('打开原生文件选择器失败:', err);
-  }
-};
-
-// 轨道二：系统级拖拽雷达监听
-onMounted(async () => {
-  try {
-    const u1 = await listen('tauri://drag-enter', () => {
-      isDraggingOver.value = true;
-    });
-    const u2 = await listen('tauri://drag-leave', () => {
-      isDraggingOver.value = false;
-    });
-    const u3 = await listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
-      isDraggingOver.value = false;
-      if (event.payload.paths && event.payload.paths.length > 0) {
-        addFilesToQueue(event.payload.paths);
+  },
+  {
+    id: 'table',
+    name: '表格与结构化数据',
+    extensions: ['csv', 'tsv', 'json', 'xml'],
+    getTargets: (exts) => {
+      const isXml = exts.every(e => e === 'xml');
+      const isJson = exts.every(e => e === 'json');
+      if (isXml) {
+        return [{ format: 'json', label: 'JSON 结构数据', badge: '标准', desc: '保留 CDATA 属性与层级数组' }];
       }
-    });
-    unlisteners = [u1, u2, u3];
-  } catch (e) {
-    console.error('挂载拖拽雷达失败:', e);
+      if (isJson) {
+        return [
+          { format: 'csv', label: 'CSV 扁平表格', badge: 'RFC4180', desc: '智能展平多层级键值与数组' },
+          { format: 'md', label: 'Markdown 预览表格', desc: 'GFM 兼容美化表格' }
+        ];
+      }
+      return [
+        { format: 'json', label: 'JSON 对象数组', badge: '首选', desc: '表格行转换为标准 JSON 数组' },
+        { format: 'md', label: 'Markdown 表格', desc: '渲染为美观的 Markdown 语法表格' },
+        { format: 'csv', label: 'CSV 标准表格', desc: 'TSV 制表符归一化为逗号表格' }
+      ];
+    }
+  },
+  {
+    id: 'document',
+    name: '文档排版与电子书',
+    extensions: ['md', 'txt', 'mobi', 'html'],
+    getTargets: (exts) => {
+      const isMobi = exts.some(e => e === 'mobi');
+      if (isMobi) {
+        return [
+          { format: 'txt', label: 'TXT 纯文本', badge: '精简', desc: '提取 Kindle MOBI 正文文本' },
+          { format: 'html', label: 'HTML 网页', desc: '提取完整富文本排版' },
+          { format: 'docx', label: 'Word DOCX', desc: '转为带样式的 Word 文档' }
+        ];
+      }
+      return [
+        { format: 'epub', label: 'EPUB 电子书', badge: '自动分章', desc: '生成带 TOC 目录的精美电子书' },
+        { format: 'docx', label: 'Word DOCX', badge: 'OpenXML', desc: '纯原生样式、标题与段落排版' }
+      ];
+    }
+  },
+  {
+    id: 'image',
+    name: '原生图像与全尺寸图标',
+    extensions: ['ico', 'png', 'jpg', 'jpeg', 'bmp', 'heic', 'heif'],
+    getTargets: (exts) => {
+      const isIco = exts.every(e => e === 'ico');
+      if (isIco) {
+        return [
+          { format: 'png', label: 'PNG 高清帧提取', badge: '最高分辨率', desc: '提取图标内最大位深 PNG' },
+          { format: 'bmp', label: 'BMP 位图', desc: '解包为标准未压缩位图' }
+        ];
+      }
+      return [
+        { format: 'pdf', label: 'PDF 图像文档', badge: '极速直出', desc: '原生极速直封 PDF' },
+        { format: 'ico', label: 'Windows ICO', desc: '生成 256x256 高清多分辨率图标' }
+      ];
+    }
+  },
+  {
+    id: 'archive',
+    name: '归档与解压',
+    extensions: ['zip'],
+    getTargets: () => [
+      { format: 'extract', label: '解压至专属文件夹', badge: '安全防穿越', desc: '内存流式安全净化解压' }
+    ]
   }
+];
+
+// 5. 智能多模态分类与动态格式推荐状态机
+const currentExts = computed(() => {
+  return Array.from(
+    new Set(
+      workflow.queue.value
+        .map(f => f.name.split('.').pop()?.toLowerCase() || '')
+        .filter(Boolean)
+    )
+  );
 });
 
-onUnmounted(() => {
-  unlisteners.forEach(fn => fn());
-  unlisteners = [];
-});
+const detectedCategory = computed(() => {
+  const exts = currentExts.value;
+  if (exts.length === 0) return null;
 
-const removeTask = (index: number) => {
-  taskQueue.value.splice(index, 1);
-};
-
-const clearAllTasks = () => {
-  taskQueue.value = [];
-};
-
-const startBatchConvert = async () => {
-  if (isConverting.value || taskQueue.value.length === 0) return;
-  isConverting.value = true;
-
-  for (const item of taskQueue.value) {
-    if (item.status === 'success') continue;
-
-    item.status = 'converting';
-    const startTime = performance.now();
-
-    const task: FormatConvertTask = {
-      input_path: item.filePath,
-      target_format: item.targetFormat,
-      output_dir: null,
-    };
-
-    try {
-      const res: FormatConvertResult = await commands.runFormatConvert(task);
-      const elapsed = Math.round(performance.now() - startTime);
-
-      if (res.success && res.output_path) {
-        item.status = 'success';
-        item.outputPath = res.output_path;
-        item.resultFormat = res.detected_format;
-        item.elapsedMs = elapsed;
-      } else {
-        item.status = 'error';
-        item.errorMessage = res.message || '转换失败';
-      }
-    } catch (err: any) {
-      item.status = 'error';
-      item.errorMessage = String(err);
+  for (const spec of CATEGORY_SPECS) {
+    if (exts.some(e => spec.extensions.includes(e))) {
+      return spec;
     }
   }
+  return null;
+});
 
-  isConverting.value = false;
-};
-
-const copyToClipboard = (text?: string) => {
-  if (!text) return;
-  navigator.clipboard.writeText(text);
-  alert('✅ 路径已复制至剪贴板:\n' + text);
-};
-
-const openOutputFolder = async (outputPath?: string) => {
-  if (!outputPath) return;
-  try {
-    await revealItemInDir(outputPath);
-  } catch (e) {
-    alert('无法直接打开目录，路径已复制: ' + outputPath);
+const availableTargets = computed<TargetOption[]>(() => {
+  if (!detectedCategory.value) {
+    return [
+      { format: 'auto', label: '智能自适应转换', badge: 'AI 嗅探', desc: '根据源文件类型自动匹配最优输出格式' },
+      { format: 'flac', label: 'FLAC / MP3', desc: '音频默认' },
+      { format: 'pdf', label: 'PDF 图像文档', desc: '图片极速直出' },
+      { format: 'json', label: 'JSON / CSV', desc: '表格数据互转' },
+      { format: 'docx', label: 'DOCX / EPUB', desc: '文档电子书排版' },
+      { format: 'extract', label: 'ZIP 解压', desc: '归档安全提取' }
+    ];
   }
+  return detectedCategory.value.getTargets(currentExts.value);
+});
+
+watch(availableTargets, (newTargets) => {
+  if (newTargets.length > 0 && !newTargets.some(t => t.format === selectedTargetFormat.value)) {
+    selectedTargetFormat.value = newTargets[0].format;
+  }
+}, { immediate: true });
+
+// 6. 批处理执行中枢 (就地原则)
+const handleExecuteConvert = async () => {
+  if (workflow.queue.value.length === 0) {
+    ui.弹出提示('请先添加待转换文件', 'info');
+    return;
+  }
+
+  const targetFormat = selectedTargetFormat.value;
+
+  await workflow.executeBatch(
+    async (file) => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      
+      let finalFormat = targetFormat;
+      if (finalFormat === 'auto') {
+        if (['ncm', 'mflac', 'mgg', 'qmc0', 'qmc3', 'qmcflac', 'qmcogg', 'kgma', 'vpr', 'kgg', 'kwm'].includes(ext)) {
+          finalFormat = qualityPreference.value === 'lossless' ? 'flac' : 'mp3';
+        } else if (ext === 'mp3') finalFormat = 'flac';
+        else if (['jpg', 'jpeg', 'bmp', 'png'].includes(ext)) finalFormat = 'pdf';
+        else if (ext === 'csv') finalFormat = 'json';
+        else if (ext === 'tsv') finalFormat = 'csv';
+        else if (ext === 'json') finalFormat = 'csv';
+        else if (ext === 'xml') finalFormat = 'json';
+        else if (ext === 'md' || ext === 'txt') finalFormat = 'epub';
+        else if (ext === 'mobi') finalFormat = 'docx';
+        else if (ext === 'ico') finalFormat = 'png';
+        else if (ext === 'zip') finalFormat = 'extract';
+        else finalFormat = 'flac';
+      }
+
+      const task: FormatConvertTask = {
+        input_path: file.path,
+        target_format: finalFormat,
+        output_dir: null
+      };
+
+      const result = await runFormatConvert(task);
+      if (!result.success) {
+        throw new Error(result.message || '转换未能生成有效产物');
+      }
+      return result;
+    },
+    {
+      targetFormat: selectedTargetFormat.value.toUpperCase(),
+      statusPrefix: '正在极速转换'
+    }
+  );
 };
+
+// 🌟 7. 左翼 1-4 极简配置指南 (单行紧凑不折行)
+const guideItems: GuideItem[] = [
+  {
+    title: '1. 支持格式',
+    tag: '全能多模态',
+    desc: '支持加密音频、数据表格、电子书、图片与压缩包。'
+  },
+  {
+    title: '2. 目标格式',
+    tag: '智能推荐',
+    desc: '系统自动嗅探源文件，仅展示可转换的合法格式。'
+  },
+  {
+    title: '3. 转换质量',
+    tag: '无损 / 兼容',
+    desc: '默认优先保留原始无损母带与高清图像画质。'
+  },
+  {
+    title: '4. 交付位置',
+    tag: '同级目录',
+    desc: '产物保存在源文件同级目录，可随时一键打开。'
+  }
+];
 </script>
+
+<template>
+  <ToolWorkbenchLayout
+    title="全能格式转换工坊"
+    :workflow="workflow"
+    :guides="guideItems"
+    dropzone-title="把需要转换的文件拖放到这里"
+    dropzone-subtitle="支持多选批量排队，本地离线极速处理"
+    upload-button-text="选择待转换文件"
+    queue-title="待转换文件队列"
+    action-button-text="开始一键极速转换"
+    @execute="handleExecuteConvert"
+  >
+    <template #options>
+      <!-- 🌟 右翼极简模块化选项矩阵 -->
+      <div class="space-y-4 select-none">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <!-- 目标输出格式 -->
+          <div class="p-4 bg-white/[0.02] border border-white/[0.04] rounded-2xl space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white">目标输出格式</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-0.5">
+              <button
+                v-for="target in availableTargets"
+                :key="target.format"
+                type="button"
+                @click="selectedTargetFormat = target.format"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none"
+                :class="[
+                  selectedTargetFormat === target.format
+                    ? 'bg-[#02c3b4]/15 border border-[#02c3b4]/60 text-[#02c3b4] shadow-[0_0_12px_rgba(2,195,180,0.2)]'
+                    : 'bg-white/[0.03] border border-white/[0.06] text-[#8b999b] hover:text-white hover:bg-white/[0.06]'
+                ]"
+              >
+                {{ target.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 质量与转换策略 -->
+          <div class="p-4 bg-white/[0.02] border border-white/[0.04] rounded-2xl space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white">质量与输出策略</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-0.5">
+              <button
+                type="button"
+                @click="qualityPreference = 'lossless'"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none"
+                :class="[
+                  qualityPreference === 'lossless'
+                    ? 'bg-[#02c3b4]/15 border border-[#02c3b4]/60 text-[#02c3b4] shadow-[0_0_12px_rgba(2,195,180,0.2)]'
+                    : 'bg-white/[0.03] border border-white/[0.06] text-[#8b999b] hover:text-white hover:bg-white/[0.06]'
+                ]"
+              >
+                无损母带 / 原质
+              </button>
+              <button
+                type="button"
+                @click="qualityPreference = 'compatible'"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none"
+                :class="[
+                  qualityPreference === 'compatible'
+                    ? 'bg-[#02c3b4]/15 border border-[#02c3b4]/60 text-[#02c3b4] shadow-[0_0_12px_rgba(2,195,180,0.2)]'
+                    : 'bg-white/[0.03] border border-white/[0.06] text-[#8b999b] hover:text-white hover:bg-white/[0.06]'
+                ]"
+              >
+                通用兼容 / 精简
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </template>
+  </ToolWorkbenchLayout>
+</template>

@@ -19,7 +19,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
 shared-contracts = { path = "crates/shared-contracts" }
-tool-pdf-parse = { path = "crates/tools/tool-pdf-parse" }
 pdf-parse = { path = "crates/tools/pdf-parse" }
 core-security = { path = "crates/core-security" }
 service-asr = { path = "crates/services/service-asr" }
@@ -49,7 +48,6 @@ members = [
     "crates/services/service-doc-parse",
     "crates/services/service-pdfium",
     "crates/services/service-converter",
-    "crates/tools/tool-pdf-parse",
     "crates/tools/pdf-parse",
     "crates/tools/format-converter",
     "crates/tools/video-subtitle",

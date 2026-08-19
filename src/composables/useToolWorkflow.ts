@@ -1,6 +1,6 @@
 // 🛡️ 紫电 AI 桌面工坊 - 工业级批量多任务工作流状态机母线 (useToolWorkflow.ts)
 
-import { ref, shallowRef, onMounted, onUnmounted } from 'vue';
+import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue';
 import { useUIStore } from '../store/uiStore';
 import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -31,11 +31,17 @@ export interface BatchSuccessPayload {
   targetFormat?: string;
   outputDir: string;
   lastOutputPath?: string;
+  elapsedMs?: number;
+  elapsedFormatted?: string;
 }
 
 export interface ToolWorkflowConfig {
   dialogTitle?: string;
   dialogFilters?: { name: string; extensions: string[] }[];
+  /** 🌟 支持扩展名白名单 (如 ['png', 'jpg', 'ncm', 'mp3']) */
+  allowedExtensions?: string[];
+  /** 🌟 定制未支持格式提示文案回调 */
+  unsupportedPrompt?: (rejectedNames: string[]) => string;
 }
 
 export function formatBytes(bytes: number, decimals = 1): string {
@@ -80,9 +86,19 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
 
   let unlistenDragDrop: (() => void) | null = null;
 
+  // 🌟 1. 白名单检索集合
+  const allowedSet = computed(() => {
+    if (!config?.allowedExtensions || config.allowedExtensions.length === 0 || config.allowedExtensions.includes('*')) {
+      return null;
+    }
+    return new Set(config.allowedExtensions.map((e) => e.toLowerCase().trim().replace(/^\./, '')));
+  });
+
+  // 🌟 2. 核心路径添加入口 (含全物理事件层拦截)
   const addPaths = (paths: string[]) => {
     if (!paths || paths.length === 0) return;
     const newItems: ToolFileMetadata[] = [];
+    const rejectedNames: string[] = [];
 
     for (const rawPath of paths) {
       if (!rawPath || typeof rawPath !== 'string') continue;
@@ -90,6 +106,13 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       if (!cleanPath) continue;
 
       const name = cleanPath.split(/[/\\]/).pop() || cleanPath;
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+
+      // 🛡️ 核心白名单拦截判定
+      if (allowedSet.value && (!ext || !allowedSet.value.has(ext))) {
+        rejectedNames.push(name);
+        continue;
+      }
 
       if (queue.value.some((q) => q.path === cleanPath)) {
         continue;
@@ -104,6 +127,11 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       };
 
       newItems.push(item);
+    }
+
+    if (rejectedNames.length > 0) {
+      const promptText = config?.unsupportedPrompt ? config.unsupportedPrompt(rejectedNames) : '格式暂不支持';
+      ui.弹出提示(promptText, 'info');
     }
 
     if (newItems.length > 0) {
@@ -153,10 +181,18 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     }
 
     const newItems: ToolFileMetadata[] = [];
+    const rejectedNames: string[] = [];
+
     for (const f of rawList) {
       const path = (f as any).path || f.name;
       const name = f.name;
       const sizeBytes = f.size || 0;
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+
+      if (allowedSet.value && (!ext || !allowedSet.value.has(ext))) {
+        rejectedNames.push(name);
+        continue;
+      }
 
       if (queue.value.some((q) => q.path === path)) {
         continue;
@@ -169,6 +205,11 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
         sizeBytes,
         sizeFormatted: formatBytes(sizeBytes),
       });
+    }
+
+    if (rejectedNames.length > 0) {
+      const promptText = config?.unsupportedPrompt ? config.unsupportedPrompt(rejectedNames) : '格式暂不支持';
+      ui.弹出提示(promptText, 'info');
     }
 
     if (newItems.length > 0) {
@@ -315,8 +356,9 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
 
     if (isCancelled.value) return;
 
+    const totalElapsed = Math.round(performance.now() - t0);
+    elapsedMs.value = totalElapsed;
     progress.value = 100;
-    elapsedMs.value = Math.round(performance.now() - t0);
     isProcessingModalOpen.value = false;
 
     if (successCount === 0 && failedCount > 0) {
@@ -329,22 +371,28 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     state.value = 'success';
     const outputDir = lastOutput
       ? lastOutput.substring(0, lastOutput.lastIndexOf('\\')) || lastOutput.substring(0, lastOutput.lastIndexOf('/'))
-      : '已保存至专属任务目录';
+      : '源文件同级目录';
 
     const summaryTitle =
       total === 1
-        ? `已将 ${queue.value[0].name} 解析完成`
+        ? `已将 ${queue.value[0].name} 转换完成`
         : failedCount > 0
         ? `已处理完成 ${successCount} 个文件 (另有 ${failedCount} 个失败)`
         : `已成功批量处理 ${total} 个文件`;
+
+    // 🌟 精确耗时格式化
+    const elapsedFormatted =
+      totalElapsed < 1000 ? `${totalElapsed} ms` : `${(totalElapsed / 1000).toFixed(2)} 秒`;
 
     successInfo.value = {
       title: summaryTitle,
       totalProcessed: successCount,
       failedCount,
-      targetFormat: options.targetFormat || 'Markdown',
+      targetFormat: options.targetFormat || '产物',
       outputDir,
       lastOutputPath: lastOutput,
+      elapsedMs: totalElapsed,
+      elapsedFormatted,
     };
 
     isSuccessModalOpen.value = true;

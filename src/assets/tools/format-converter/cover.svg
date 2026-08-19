@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <!-- 极夜深空背景渐变 -->
+    <linearGradient id="fcBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121819" />
+      <stop offset="50%" stop-color="#182224" />
+      <stop offset="100%" stop-color="#0c1112" />
+    </linearGradient>
+
+    <!-- 紫金核心聚光晕 -->
+    <radialGradient id="fcCenterGlow" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#bc05ff" stop-opacity="0.25" />
+      <stop offset="45%" stop-color="#DCA54C" stop-opacity="0.10" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- 格式流转渐变 -->
+    <linearGradient id="fcFlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffa9" />
+      <stop offset="30%" stop-color="#00d2ff" />
+      <stop offset="70%" stop-color="#bc05ff" />
+      <stop offset="100%" stop-color="#DCA54C" />
+    </linearGradient>
+
+    <!-- 柔和辉光滤镜 -->
+    <filter id="fcNeonBlur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- 1. 底板画卷 (16:10 黄金比例) -->
+  <rect width="800" height="500" fill="url(#fcBgGrad)" />
+
+  <!-- 2. 核心光学聚光层 -->
+  <rect width="800" height="500" fill="url(#fcCenterGlow)" />
+
+  <!-- 3. 背景几何矩阵点阵 -->
+  <g opacity="0.15" fill="#00ffa9">
+    <circle cx="100" cy="80" r="1.5" /><circle cx="250" cy="80" r="1.5" /><circle cx="400" cy="80" r="1.5" /><circle cx="550" cy="80" r="1.5" /><circle cx="700" cy="80" r="1.5" />
+    <circle cx="100" cy="180" r="1.5" /><circle cx="250" cy="180" r="1.5" /><circle cx="400" cy="180" r="1.5" /><circle cx="550" cy="180" r="1.5" /><circle cx="700" cy="180" r="1.5" />
+    <circle cx="100" cy="280" r="1.5" /><circle cx="250" cy="280" r="1.5" /><circle cx="400" cy="280" r="1.5" /><circle cx="550" cy="280" r="1.5" /><circle cx="700" cy="280" r="1.5" />
+    <circle cx="100" cy="380" r="1.5" /><circle cx="250" cy="380" r="1.5" /><circle cx="400" cy="380" r="1.5" /><circle cx="550" cy="380" r="1.5" /><circle cx="700" cy="380" r="1.5" />
+  </g>
+
+  <!-- 4. 双向流转循环轨道 (莫比乌斯流光) -->
+  <g filter="url(#fcNeonBlur)" opacity="0.85">
+    <path d="M 180 250 C 180 160, 320 160, 400 250 C 480 340, 620 340, 620 250 C 620 160, 480 160, 400 250 C 320 340, 180 340, 180 250 Z" 
+          fill="none" stroke="url(#fcFlowGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- 5. 核心格式浮动徽章卡片群 -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="16" text-anchor="middle">
+    <!-- 音频节点 (左侧) -->
+    <g transform="translate(180, 250)">
+      <circle r="42" fill="#182224" stroke="#00ffa9" stroke-width="2" opacity="0.9" />
+      <text y="6" fill="#00ffa9" font-size="14">AUDIO</text>
+    </g>
+
+    <!-- 电子书/文档节点 (中枢) -->
+    <g transform="translate(400, 250)">
+      <circle r="52" fill="#1b1c24" stroke="#bc05ff" stroke-width="2.5" opacity="0.95" />
+      <text y="7" fill="#ffffff" font-size="17">CONVERT</text>
+    </g>
+
+    <!-- 数据与图像节点 (右侧) -->
+    <g transform="translate(620, 250)">
+      <circle r="42" fill="#241e18" stroke="#DCA54C" stroke-width="2" opacity="0.9" />
+      <text y="6" fill="#DCA54C" font-size="14">DATA</text>
+    </g>
+  </g>
+
+  <!-- 6. 顶部全息副标 -->
+  <text x="400" y="90" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+        font-size="28" 
+        font-weight="900" 
+        text-anchor="middle" 
+        letter-spacing="4" 
+        opacity="0.95">UNIVERSAL FORMAT CONVERTER</text>
+
+  <!-- 7. 底部算力声明 -->
+  <text x="400" y="430" 
+        fill="#8b999b" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+        font-size="13" 
+        font-weight="600" 
+        text-anchor="middle" 
+        letter-spacing="2">PURE RUST IN-STREAM · 0 VRAM OVERHEAD · FULLY OFFLINE</text>
+</svg>
