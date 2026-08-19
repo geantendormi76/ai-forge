@@ -1,166 +1,196 @@
-<template>
-  <div class="min-h-screen bg-slate-50 text-slate-800 p-8 font-sans">
-    <!-- 头部标语区 -->
-    <div class="max-w-6xl mx-auto mb-8 border-b border-slate-200 pb-6 flex justify-between items-end">
-      <div>
-        <h1 class="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-          <span class="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">📄</span>
-          {{ t('pdf.title') }}
-        </h1>
-        <p class="text-slate-500 mt-2 text-sm">{{ t('pdf.subtitle') }}</p>
-      </div>
-
-      <!-- 语言切换与显存守卫小挂件 -->
-      <div class="flex items-center gap-4">
-        <div class="bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm text-xs flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span class="text-slate-600">{{ t('pdf.vramAvailable') }}: <strong class="text-slate-900 font-mono">11,000 MB</strong></span>
-        </div>
-        <button 
-          @click="toggleLanguage" 
-          class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm text-xs font-medium transition-all"
-        >
-          🌐 {{ currentLang === 'zh-CN' ? 'English' : '简体中文' }}
-        </button>
-      </div>
-    </div>
-
-    <!-- 主工作区卡片 (RPA 纯白精细卡片风格) -->
-    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-      
-      <!-- 左侧控制面板 (5 栏) -->
-      <div class="lg:col-span-5 space-y-6">
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h2 class="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            <span class="w-1.5 h-4 bg-blue-600 rounded-full"></span>
-            文件选择与排队
-          </h2>
-
-          <!-- 拖拽上传区 -->
-          <div 
-            @click="triggerFileSelect"
-            @dragover.prevent
-            @drop.prevent="handleFileDrop"
-            class="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 transition-all rounded-xl p-8 text-center cursor-pointer group"
-          >
-            <div class="w-12 h-12 bg-white border border-slate-200 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm group-hover:scale-110 transition-transform">
-              📂
-            </div>
-            <p class="text-sm font-medium text-slate-700">{{ selectedFilePath ? selectedFileName : t('pdf.dropzone') }}</p>
-            <p class="text-xs text-slate-400 mt-1">支持 .pdf / .png / .jpg 格式</p>
-          </div>
-
-          <!-- 解析控制按钮 -->
-          <button 
-            @click="executeParse" 
-            :disabled="!selectedFilePath || isParsing"
-            class="w-full mt-6 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-medium py-3 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm"
-          >
-            <span v-if="isParsing" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            {{ isParsing ? t('pdf.parsing') : t('pdf.startParse') }}
-          </button>
-        </div>
-
-        <!-- 任务路由提示面板 -->
-        <div v-if="parseResult" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">分流路由与性能</h3>
-          <div class="text-xs font-medium text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-3">
-            {{ parseResult.route_label }}
-          </div>
-          <div class="flex justify-between text-xs text-slate-500">
-            <span>总耗时: <strong class="text-slate-900 font-mono">{{ parseResult.elapsed_ms }} ms</strong></span>
-            <span>状态: <strong class="text-emerald-600">解析成功</strong></span>
-          </div>
-
-          <!-- 打包 Zip 下载按钮 -->
-          <a 
-            v-if="parseResult.download_zip_url" 
-            :href="parseResult.download_zip_url"
-            target="_blank"
-            class="mt-4 w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 px-4 rounded-lg text-xs transition-all flex items-center justify-center gap-2 block text-center shadow-sm"
-          >
-            📦 {{ t('pdf.downloadZip') }}
-          </a>
-        </div>
-      </div>
-
-      <!-- 右侧 Markdown 实时渲染预览 (7 栏) -->
-      <div class="lg:col-span-7">
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm min-h-[600px] flex flex-col">
-          <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-            <h2 class="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <span class="w-1.5 h-4 bg-emerald-500 rounded-full"></span>
-              {{ t('pdf.previewTitle') }}
-            </h2>
-            <span class="text-xs text-slate-400">GFM Markdown</span>
-          </div>
-
-          <!-- Markdown 预览主框 -->
-          <div 
-            v-if="renderedMarkdownHtml" 
-            class="prose prose-slate max-w-none text-sm leading-relaxed overflow-y-auto max-h-[700px] p-2"
-            v-html="renderedMarkdownHtml"
-          ></div>
-          <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-400 py-24">
-            <div class="text-4xl mb-3">📑</div>
-            <p class="text-sm">暂无解析预览，请在左侧上传 PDF 并开始解析</p>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useI18n } from 'vue-i18n';
-import { invoke } from '@tauri-apps/api/core';
-import { marked } from 'marked';
+import { ref } from 'vue';
+import { Sigma, Table, Image as ImageIcon, Sparkles } from 'lucide-vue-next';
+import { useToolWorkflow } from '../composables/useToolWorkflow';
+import ToolWorkbenchLayout, { type GuideItem } from '../components/layout/ToolWorkbenchLayout.vue';
+import { parsePdf, type PdfParseResult } from '../bindings/tools/pdf-parse';
 
-const { t, locale } = useI18n();
+// 1. 核心多模态能力开关状态机
+const enableFormula = ref<boolean>(true);
+const enableTable = ref<boolean>(true);
+const enableFigure = ref<boolean>(true);
+const enableRxycSort = ref<boolean>(true);
 
-const currentLang = ref<'zh-CN' | 'en-US'>('zh-CN');
-const selectedFilePath = ref<string>('/home/zhz/ai-forge/test/fixtures/tool-pdf-parse-deep.pdf');
-const selectedFileName = ref<string>('tool-pdf-parse-deep.pdf');
-const isParsing = ref<boolean>(false);
-const parseResult = ref<any>(null);
+// 2. 多任务工作流实例
+const workflow = useToolWorkflow<PdfParseResult>();
 
-const toggleLanguage = () => {
-  currentLang.value = currentLang.value === 'zh-CN' ? 'en-US' : 'zh-CN';
-  locale.value = currentLang.value;
+// 3. 左侧 6 大商业级技术配置指南
+const optionGuides: GuideItem[] = [
+  {
+    title: '1. 双轨自适应分流引擎',
+    tag: '智能全自动调度',
+    desc: '毫秒级自动判别原生数字矢量流与扫描位图，动态分配最优算力。',
+  },
+  {
+    title: '2. 神经数学公式识别',
+    tag: 'LaTeX 语法',
+    desc: '端侧深度转写行内与行间复杂公式，输出标准 KaTeX 格式。',
+  },
+  {
+    title: '3. 多维表格结构语义还原',
+    tag: 'HTML 语义重建',
+    desc: '高保真解析复杂嵌套表格与跨页合并单元格，输出标准 HTML。',
+  },
+  {
+    title: '4. 高清视觉资产无损提取',
+    tag: '无损独立切片',
+    desc: '独立提取原片插图与矢量图表，以相对路径高保真嵌入文档。',
+  },
+  {
+    title: '5. 拓扑排版流智能重构',
+    tag: '自然阅读序',
+    desc: '双栏、多栏与学术复杂排版智能防跳读，恢复自然阅读顺序。',
+  },
+  {
+    title: '6. 本地物理原生物理交付',
+    tag: 'Markdown + images',
+    desc: '纯本地运算与物理文件直出，0 数据上传，彻底守护隐私安全。',
+  },
+];
+
+// 4. 执行批量解析流水线
+const handleExecute = async () => {
+  await workflow.executeBatch(
+    async (file) => {
+      return await parsePdf(file.path);
+    },
+    {
+      targetFormat: 'Markdown',
+      statusPrefix: '正在智能多模态解析',
+    }
+  );
 };
-
-const triggerFileSelect = () => {
-  // 提示：默认演示预填测试集文件路径
-};
-
-const handleFileDrop = (e: DragEvent) => {
-  const files = e.dataTransfer?.files;
-  if (files && files.length > 0) {
-    const file = files[0];
-    selectedFileName.value = file.name;
-    selectedFilePath.value = (file as any).path || file.name;
-  }
-};
-
-const executeParse = async () => {
-  if (!selectedFilePath.value) return;
-  isParsing.value = true;
-  parseResult.value = null;
-
-  try {
-    const res: any = await invoke('parse_pdf', { filePath: selectedFilePath.value });
-    parseResult.value = res;
-  } catch (err: any) {
-    alert('🚨 解析失败: ' + err);
-  } finally {
-    isParsing.value = false;
-  }
-};
-
-const renderedMarkdownHtml = computed(() => {
-  if (!parseResult.value || !parseResult.value.markdown) return '';
-  return marked.parse(parseResult.value.markdown);
-});
 </script>
+
+<template>
+  <ToolWorkbenchLayout
+    :title="'PDF 智能解析'"
+    :steps="['添加文档', '定制选项', '完成交付']"
+    :guides="optionGuides"
+    :workflow="workflow"
+    :upload-button-text="'选择 PDF 文件'"
+    :queue-title="'待解析 PDF 队列'"
+    :action-button-text="'开始智能多模态解析'"
+    :dropzone-title="'把需要解析的 PDF 文档拖放到这里'"
+    :dropzone-subtitle="'支持学术论文、商业财报、书籍与扫描件，可多选批量排队'"
+    @execute="handleExecute"
+  >
+    <!-- 插槽：高定海青绿 rgb(2, 195, 180) 参数定制区 -->
+    <template #options>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between pb-1">
+          <span class="text-xs font-bold text-white/90">多模态解析能力定制</span>
+          <span class="text-[11px] font-mono text-[#02c3b4]">端侧全自动自适应分流</span>
+        </div>
+
+        <!-- 4 大核心功能开关卡片群 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- 数学公式开关 -->
+          <div
+            @click="enableFormula = !enableFormula"
+            class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
+            :class="enableFormula ? 'border border-[#02c3b4]/50 shadow-[0_0_16px_rgba(2,195,180,0.12)]' : 'border border-transparent'"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div
+                class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                :class="enableFormula ? 'bg-[#02c3b4]/20 text-[#02c3b4]' : 'bg-white/[0.04] text-[#8b999b]'"
+              >
+                <Sigma :size="15" />
+              </div>
+              <span class="text-xs sm:text-sm font-bold text-white">数学公式转写 (LaTeX)</span>
+            </div>
+            <div
+              class="w-9 h-5 rounded-full p-0.5 transition-colors shrink-0"
+              :class="enableFormula ? 'bg-[#02c3b4] shadow-[0_0_10px_rgba(2,195,180,0.5)]' : 'bg-white/15'"
+            >
+              <div
+                class="w-4 h-4 rounded-full bg-black shadow-sm transform transition-transform"
+                :class="enableFormula ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </div>
+          </div>
+
+          <!-- 复杂表格开关 -->
+          <div
+            @click="enableTable = !enableTable"
+            class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
+            :class="enableTable ? 'border border-[#02c3b4]/50 shadow-[0_0_16px_rgba(2,195,180,0.12)]' : 'border border-transparent'"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div
+                class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                :class="enableTable ? 'bg-[#02c3b4]/20 text-[#02c3b4]' : 'bg-white/[0.04] text-[#8b999b]'"
+              >
+                <Table :size="15" />
+              </div>
+              <span class="text-xs sm:text-sm font-bold text-white">表格结构解析 (HTML)</span>
+            </div>
+            <div
+              class="w-9 h-5 rounded-full p-0.5 transition-colors shrink-0"
+              :class="enableTable ? 'bg-[#02c3b4] shadow-[0_0_10px_rgba(2,195,180,0.5)]' : 'bg-white/15'"
+            >
+              <div
+                class="w-4 h-4 rounded-full bg-black shadow-sm transform transition-transform"
+                :class="enableTable ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </div>
+          </div>
+
+          <!-- 视觉插图开关 -->
+          <div
+            @click="enableFigure = !enableFigure"
+            class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
+            :class="enableFigure ? 'border border-[#02c3b4]/50 shadow-[0_0_16px_rgba(2,195,180,0.12)]' : 'border border-transparent'"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div
+                class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                :class="enableFigure ? 'bg-[#02c3b4]/20 text-[#02c3b4]' : 'bg-white/[0.04] text-[#8b999b]'"
+              >
+                <ImageIcon :size="15" />
+              </div>
+              <span class="text-xs sm:text-sm font-bold text-white">插图独立切片</span>
+            </div>
+            <div
+              class="w-9 h-5 rounded-full p-0.5 transition-colors shrink-0"
+              :class="enableFigure ? 'bg-[#02c3b4] shadow-[0_0_10px_rgba(2,195,180,0.5)]' : 'bg-white/15'"
+            >
+              <div
+                class="w-4 h-4 rounded-full bg-black shadow-sm transform transition-transform"
+                :class="enableFigure ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </div>
+          </div>
+
+          <!-- 双栏排序开关 -->
+          <div
+            @click="enableRxycSort = !enableRxycSort"
+            class="p-3.5 bg-white/[0.02] rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 select-none hover:bg-white/[0.04]"
+            :class="enableRxycSort ? 'border border-[#02c3b4]/50 shadow-[0_0_16px_rgba(2,195,180,0.12)]' : 'border border-transparent'"
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div
+                class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                :class="enableRxycSort ? 'bg-[#02c3b4]/20 text-[#02c3b4]' : 'bg-white/[0.04] text-[#8b999b]'"
+              >
+                <Sparkles :size="15" />
+              </div>
+              <span class="text-xs sm:text-sm font-bold text-white">学术双栏防跳读</span>
+            </div>
+            <div
+              class="w-9 h-5 rounded-full p-0.5 transition-colors shrink-0"
+              :class="enableRxycSort ? 'bg-[#02c3b4] shadow-[0_0_10px_rgba(2,195,180,0.5)]' : 'bg-white/15'"
+            >
+              <div
+                class="w-4 h-4 rounded-full bg-black shadow-sm transform transition-transform"
+                :class="enableRxycSort ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </template>
+  </ToolWorkbenchLayout>
+</template>

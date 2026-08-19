@@ -30,12 +30,16 @@ withDefaults(
     uploadButtonText?: string;
     queueTitle?: string;
     actionButtonText?: string;
+    dropzoneTitle?: string;
+    dropzoneSubtitle?: string;
   }>(),
   {
-    steps: () => ['添加视频', '定制选项', '完成交付'],
-    uploadButtonText: '选择视频文件',
-    queueTitle: '待转写视频队列',
-    actionButtonText: '开始转写',
+    steps: () => ['添加文件', '定制选项', '完成交付'],
+    uploadButtonText: '选择文件',
+    queueTitle: '待处理文件队列',
+    actionButtonText: '开始处理',
+    dropzoneTitle: '把需要处理的文件拖放到这里',
+    dropzoneSubtitle: '支持多选批量排队，本地离线极速处理',
   }
 );
 
@@ -45,7 +49,6 @@ const emit = defineEmits<{
 
 const ui = useUIStore();
 
-// 🌟 SOTA 原生快捷键：按下 ESC 键秒级返回工坊主页
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && !ui.toast显示) {
     ui.currentView = 'home';
@@ -63,7 +66,6 @@ onUnmounted(() => {
 
 <template>
   <div class="relative w-full h-full overflow-hidden bg-[#20292b] text-[#f5f5f3] select-none font-sans flex flex-col">
-    <!-- 原生隐藏文件选择器 -->
     <input
       type="file"
       multiple
@@ -72,7 +74,6 @@ onUnmounted(() => {
       @change="workflow.handleFileChange"
     />
 
-    <!-- 海青绿 rgb(2, 195, 180) 霓虹点阵微光 -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-30">
       <DotField
         :dot-radius="1.2"
@@ -85,7 +86,6 @@ onUnmounted(() => {
       />
     </div>
 
-    <!-- 主工作区滚动容器 -->
     <div
       class="relative z-10 flex-1 w-full overflow-y-auto custom-scrollbar pt-12 pb-10 transition-all duration-300 ease-in-out"
       :class="ui.侧边栏收起 ? 'px-6 sm:px-10 lg:px-14' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
@@ -95,9 +95,7 @@ onUnmounted(() => {
     >
       <div class="max-w-[1480px] w-full mx-auto space-y-5 pt-1">
 
-        <!-- 🌟 1. 2026 SOTA 顶栏：回退胶囊 (左) + 居中流光标题 (中) + ESC 快捷指示 (右) -->
         <header class="relative flex items-center justify-between border-b border-white/[0.06] pb-3.5 pt-1">
-          <!-- 左侧：磨砂玻璃回退胶囊 -->
           <button
             type="button"
             @click="ui.currentView = 'home'"
@@ -108,7 +106,6 @@ onUnmounted(() => {
             <span>返回主页</span>
           </button>
 
-          <!-- 中间：绝对居中紫电 GradientText 流光标题 -->
           <div class="absolute left-1/2 -translate-x-1/2 pointer-events-none">
             <GradientText
               :text="title"
@@ -118,7 +115,6 @@ onUnmounted(() => {
             />
           </div>
 
-          <!-- 右侧：ESC 键盘流微标 -->
           <div
             @click="ui.currentView = 'home'"
             class="flex items-center gap-1.5 text-[11px] font-mono text-[#5b696b] hover:text-[#8b999b] cursor-pointer transition-colors select-none"
@@ -129,13 +125,10 @@ onUnmounted(() => {
           </div>
         </header>
 
-        <!-- 🌟 2. 左右双翼 5 : 7 黄金栅格严格锁定 -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch w-full">
 
-          <!-- 🌟 左侧配置指南栏 (精准锁定 5 列 / 41.7%) -->
           <aside class="lg:col-span-5 w-full min-w-0 bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 space-y-5 shadow-xl backdrop-blur-xl flex flex-col justify-between">
             <div class="space-y-4">
-              <!-- 标头 -->
               <div class="flex items-center justify-between pb-2.5 border-b border-white/[0.04]">
                 <span class="text-sm font-bold text-[#02c3b4] font-mono tracking-wider flex items-center gap-1.5">
                   <span>⚙️ 选项配置指南</span>
@@ -143,7 +136,6 @@ onUnmounted(() => {
                 <span class="text-[#5b696b] text-xs font-mono">直观选型参考</span>
               </div>
 
-              <!-- 6 大选项指南卡片群 -->
               <div v-if="guides && guides.length > 0" class="space-y-3">
                 <div
                   v-for="(g, idx) in guides"
@@ -163,7 +155,6 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- 精简 3 步流程胶囊行 -->
             <div v-if="steps && steps.length > 0" class="pt-2">
               <div class="grid grid-cols-3 gap-2.5">
                 <div
@@ -180,10 +171,8 @@ onUnmounted(() => {
             </div>
           </aside>
 
-          <!-- 🌟 右侧多任务工作台 (精准锁定 7 列 / 58.3%) -->
           <main class="lg:col-span-7 w-full min-w-0 flex flex-col justify-between space-y-4 min-h-full">
 
-            <!-- 卡片 1 (置顶)：大号拖拽上传与待转写队列一体化卡片 -->
             <div
               class="flex-1 flex flex-col justify-between bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 shadow-lg backdrop-blur-xl space-y-4 min-h-[220px] transition-all"
               :class="workflow.isDragging.value ? 'border-[#02c3b4]/60 bg-[#02c3b4]/5' : ''"
@@ -191,7 +180,6 @@ onUnmounted(() => {
               @dragleave.stop="workflow.handleDragLeave"
               @drop.stop="workflow.handleDrop"
             >
-              <!-- 队列头部 -->
               <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
                 <h4 class="text-sm font-bold text-white flex items-center gap-2">
                   <span>{{ queueTitle }}</span>
@@ -204,7 +192,7 @@ onUnmounted(() => {
                     @click.stop="workflow.triggerFileSelect"
                     class="text-xs font-mono text-[#02c3b4] hover:underline cursor-pointer flex items-center gap-1 font-bold"
                   >
-                    <span>+ 继续添加视频</span>
+                    <span>+ 继续添加</span>
                   </button>
                   <button
                     v-if="workflow.queue.value.length > 0"
@@ -217,7 +205,6 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <!-- 队列有文件时展示列表 -->
               <div v-if="workflow.queue.value.length > 0" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1 flex-1">
                 <div
                   v-for="(item, idx) in workflow.queue.value"
@@ -232,7 +219,7 @@ onUnmounted(() => {
                       {{ item.name }}
                     </span>
                     <span class="text-xs font-mono text-[#5b696b] shrink-0 hidden sm:inline">
-                      {{ item.durationFormatted ? `${item.durationFormatted} · ` : '' }}{{ item.sizeFormatted }}
+                      {{ item.sizeFormatted }}
                     </span>
                   </div>
 
@@ -246,7 +233,6 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <!-- 队列为空时：大号气派居中拖拽区域 + 大号海青绿发光按钮 -->
               <div
                 v-else
                 @click="workflow.triggerFileSelect"
@@ -254,10 +240,10 @@ onUnmounted(() => {
               >
                 <div class="space-y-1 text-center">
                   <h3 class="text-base font-bold text-white tracking-tight group-hover:text-[#02c3b4] transition-colors">
-                    把需要生成双语字幕的视频拖放到这里
+                    {{ dropzoneTitle }}
                   </h3>
                   <p class="text-xs text-[#8b999b]">
-                    支持 MP4, MKV, MOV, AVI 等格式，可一次性多选批量排队
+                    {{ dropzoneSubtitle }}
                   </p>
                 </div>
 
@@ -271,12 +257,10 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- 卡片 2 (居中)：6 大参数定制选项 -->
             <div v-if="$slots.options" class="bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 shadow-lg backdrop-blur-xl space-y-4 shrink-0">
               <slot name="options" />
             </div>
 
-            <!-- 卡片 3 (底部)：独立行动栏 -->
             <div class="p-5 rounded-3xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-4 shadow-xl backdrop-blur-xl shrink-0">
               <span class="text-xs text-[#8b999b] font-medium">
                 纯血 Rust 端侧离线推理 · 零数据上传 · 隐私安全
@@ -305,7 +289,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 模态遮罩 1：处理中 -->
     <div
       v-if="workflow.isProcessingModalOpen.value"
       class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 select-none"
@@ -320,7 +303,7 @@ onUnmounted(() => {
             {{ workflow.statusText.value || '正在处理中...' }}
           </h3>
           <p class="text-xs text-[#8b999b]">
-            端侧 GPU 运算中，请勿关闭窗口
+            端侧 GPU/CPU 运算中，请勿关闭窗口
           </p>
         </div>
 
@@ -347,7 +330,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 模态遮罩 2：完成交付 -->
     <div
       v-if="workflow.isSuccessModalOpen.value && workflow.successInfo.value"
       class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 select-none"
@@ -359,7 +341,7 @@ onUnmounted(() => {
 
         <div class="space-y-1">
           <h3 class="text-lg font-bold text-white">
-            转写完成
+            解析完成
           </h3>
           <p class="text-xs text-[#8b999b]">
             {{ workflow.successInfo.value.title }}
@@ -368,7 +350,7 @@ onUnmounted(() => {
 
         <div class="w-full bg-black/30 rounded-2xl p-4 text-xs font-mono text-left space-y-2 border border-white/[0.06]">
           <div class="flex justify-between text-[#8b999b]">
-            <span>封装格式:</span>
+            <span>导出格式:</span>
             <strong class="text-[#02c3b4] font-bold">{{ workflow.successInfo.value.targetFormat }}</strong>
           </div>
           <div class="flex justify-between text-[#8b999b]">

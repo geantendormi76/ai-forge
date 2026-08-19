@@ -35,15 +35,15 @@ impl PdfParseService {
             return Err(format!("物理文件不存在: {:?}", pdf_path));
         }
 
-        // 🛡️ 端侧显存防爆评估
+        // 🛡️ 端侧显存防爆评估与并发锁保护
         let _permit = if let Some(guard) = vram_guard {
             match guard.try_acquire(TaskWeight::Medium) {
                 Some(permit) => {
-                    tracing::info!("🎮 [GPU 显存安全] 成功锁定 3,000MB 显存 Token，分配 GPU 推理");
+                    tracing::info!("🎮 [GPU 显存安全] 成功锁定 3,000MB 显存 Token");
                     Some(permit)
                 }
                 None => {
-                    tracing::warn!("⚠️ [显存紧张/不足] 显存守卫拦截，自动降级为 CPU 安全模式运行");
+                    tracing::warn!("⚠️ [显存不足] 显存守卫拦截，自动降级为 CPU 安全模式运行");
                     None
                 }
             }
@@ -75,7 +75,7 @@ impl PdfParseService {
                 let images_dir_str = task_out_dir.join("images").to_string_lossy().to_string();
 
                 let route_label = format!(
-                    "🧠 智能分流: CPU 矢量轨 ({}页) + GPU 视觉轨 ({}页)",
+                    "🧠 智能分流: 矢量轨 ({}页) + 扫描轨 ({}页)",
                     res.fast_pages_count, res.deep_pages_count
                 );
 
