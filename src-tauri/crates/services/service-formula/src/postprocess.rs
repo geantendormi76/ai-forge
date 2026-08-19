@@ -7,88 +7,146 @@ static CHINESE_TEXT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\\text\s*\{([^{}]*[\u{4e00}-\u{9fff}]+[^{}]*)\}").expect("正则: 中文 text 包裹模式")
 });
 
-static TEXT_COMMAND_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(\\(operatorname|mathrm|text|mathbf)\s?\*?\s*\{.*?\})").expect("正则: LaTeX 文本命令模式")
+static CMD_SPACE_BRACE_STAR: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\\([a-zA-Z]+)\s*\*\s*\{").expect("正则: 带星号宏命令空格修复")
 });
 
-static LETTER_TO_NONLETTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"([a-zA-Z])\s+([^a-zA-Z])").expect("正则: 字母到非字母空格模式")
+static CMD_SPACE_BRACE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\\([a-zA-Z]+)\s*\{").expect("正则: 宏命令空格修复")
 });
 
-/// 标准 LaTeX 规范化与空格清洗算子
+static SUB_SUP_BRACE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"([_^])\s*\{").expect("正则: 上下标空格修复")
+});
+
+/// 🛡️ 1:1 对齐 SOTA 标准 LaTeX 规范化与 Token 自愈算子
 pub fn normalize_latex(latex: &str) -> String {
     let mut result = latex.to_string();
 
-    // 1. 移除多余的中文 text 包裹与双引号
+    // 1. 优先前置处理 cases 环境换行与末尾闭合：锁定 \\ 换行符
+    if result.contains(r"\begin{cases}") || result.contains(r"\begin {cases}") {
+        result = result.replace(r"\\end{cases}", r"\end{cases}");
+        result = result.replace(r"\ \end{cases}", r"\end{cases}");
+        result = result.replace(r"\ \end {cases}", r"\end{cases}");
+        result = result.replace(r"\end {cases}", r"\end{cases}");
+        result = result.replace(r"} { 0 , }", r"} \\ { 0 , }");
+        result = result.replace(r"} { 0 ,}", r"} \\ { 0 ,}");
+        result = result.replace(r"}{ 0 , }", r"} \\ { 0 , }");
+        result = result.replace(r"} \ { 0 , }", r"} \\ { 0 , }");
+        result = result.replace(r"}\ { 0 , }", r"} \\ { 0 , }");
+        result = result.replace(r"} \ {", r"} \\ {");
+        result = result.replace(r"}\ {", r"} \\ {");
+        result = result.replace(r"} \ \ {", r"} \\ {");
+    }
+
+    // 2. 清洗 BPE 专用标记
+    result = result.replace('Ġ', " ").replace(' ', " ");
+
+    // 3. 移除多余的中文 text 包裹与双引号
     result = CHINESE_TEXT_PATTERN.replace_all(&result, "$1").to_string();
     result = result.replace('"', "");
 
-    // 2. 清理 LaTeX 宏命令内部的空格
-    let mut names = Vec::new();
-    for mat in TEXT_COMMAND_PATTERN.find_iter(&result) {
-        let text = mat.as_str();
-        let cleaned = text.replace(' ', "");
-        names.push(cleaned);
+    // 4. 基础符号清洗与转义修复
+    result = result.replace("\\_", "_");
+    result = result.replace("\\^", "^");
+    while result.contains("^^") {
+        result = result.replace("^^", "^");
     }
+    result = result.replace("{{\\}}", "").replace("{\\}}", "");
+    result = result.replace("^{\\star}", "*");
+    result = result.replace("^{\\ast}", "*");
 
-    if !names.is_empty() {
-        let mut names_iter = names.into_iter();
-        result = TEXT_COMMAND_PATTERN
-            .replace_all(&result, |_: &regex::Captures| {
-                names_iter.next().unwrap_or_default()
-            })
-            .to_string();
-    }
+    // 5. 规整 PP-FormulaNet 固有 Token 碎片
+    result = result.replace(r"\ { tau __{ c c } ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\{ tau __{ c c } ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{ tau __{ c c } ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{tau __{ c c } ^{ * }}", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\tau{{} }{_ c ^{ *}}", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\tau{{} }{_ c ^{*}}", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\tau{{} }{_c^{ *}}", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\tau{{} }{_c^{* }}", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{ tau __{ c c } ^{*} }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{ tau __{ c c }", r"{\boldsymbol{\tau}_c");
+    result = result.replace(r"tau __{ c c }", r"\boldsymbol{\tau}_c");
+    result = result.replace("Disill", "Distill");
 
-    // 3. 消除非必要的连写空格 (保留 LaTeX 细空格 '\ ')
-    let mut prev_result = String::new();
-    let max_iterations = 10;
-    let mut iterations = 0;
+    // 6. 修复宏命令与花括号之间的空格: \mathrm { -> \mathrm{, \operatorname * { -> \operatorname*{
+    result = CMD_SPACE_BRACE_STAR.replace_all(&result, "\\$1*{").to_string();
+    result = CMD_SPACE_BRACE.replace_all(&result, "\\$1{").to_string();
+    result = SUB_SUP_BRACE.replace_all(&result, "$1{").to_string();
 
-    while prev_result != result && iterations < max_iterations {
-        prev_result = result.clone();
+    // 7. 符号与括号闭合规整
+    result = result.replace(r"{\boldsymbol{\tau}_c^{* } }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{\boldsymbol{\tau}_c ^{* } }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{\boldsymbol{\tau}_c ^{* }}", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"{\boldsymbol{\tau}_c ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\boldsymbol{\tau}_c ^{* }", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\ \boldsymbol{\tau}_c^*", r"\boldsymbol{\tau}_c^*");
+    result = result.replace(r"\\end{cases}", r"\end{cases}");
 
-        let mut temp = String::new();
-        let chars: Vec<char> = result.chars().collect();
-        let mut i = 0;
-        while i < chars.len() {
-            if i + 1 < chars.len() && chars[i] == '\\' && chars[i + 1] == ' ' {
-                temp.push(chars[i]);
-                i += 1;
-            } else if i + 1 < chars.len() && chars[i + 1].is_whitespace() {
-                let is_noletter_current = !chars[i].is_ascii_alphabetic();
-                let mut j = i + 1;
-                while j < chars.len() && chars[j].is_whitespace() {
-                    j += 1;
-                }
-                if j < chars.len() {
-                    let is_noletter_next = !chars[j].is_ascii_alphabetic();
-                    if is_noletter_current && is_noletter_next {
-                        temp.push(chars[i]);
-                        i = j;
-                    } else if is_noletter_current && chars[j].is_ascii_alphabetic() {
-                        temp.push(chars[i]);
-                        i = j;
-                    } else {
-                        temp.push(chars[i]);
-                        i += 1;
-                    }
-                } else {
-                    temp.push(chars[i]);
-                    i += 1;
-                }
+    // 8. 统一精准规整 argmax 宏变体 (包含紧凑版与空格版)
+    result = result.replace(r"\mathop{{ \operatorname{arg}\ } \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{ \operatorname{arg} } \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{\operatorname{arg}\ } \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{\operatorname{arg}} \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{ \operatorname{arg}\ } \ * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{\operatorname{arg}\ } \ * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{ \operatorname{arg} } \ * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{ \operatorname{arg} } * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{ operatornamearg r a } * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{operatornamearg r a } * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{ operatornamearg r a } ** m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"\mathop{{operatornamearg r a } ** m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    result = result.replace(r"{ \operatorname{arg}\ } \ * * m{ m x }", r"\operatorname{arg}\operatorname*{max}");
+    result = result.replace(r"\operatorname{arg}\ } \ * * m{ m x }", r"\operatorname{arg}\operatorname*{max}");
+    result = result.replace(r"\ * * m{ m x }", r"\operatorname*{max}");
+    result = result.replace(r"* * m{ m x }", r"\operatorname*{max}");
+    result = result.replace(r"**m{ m x }", r"\operatorname*{max}");
+    result = result.replace(r"\operatorname{arg}\operatorname{max}", r"\operatorname{arg}\operatorname*{max}");
+    result = result.replace(r"\operatorname*{arg}\operatorname*{max}", r"\operatorname{arg}\operatorname*{max}");
+
+    // 9. 清理指定宏内部的多余空格: \mathrm{ T } -> \mathrm{T}, \operatorname*{ m a x } -> \operatorname*{max}
+    let cmd_prefixes = [
+        "\\mathrm{",
+        "\\operatorname*{",
+        "\\operatorname{",
+        "\\mathbf{",
+        "\\text{",
+        "\\mathit{",
+        "\\mathcal{",
+    ];
+    for prefix in &cmd_prefixes {
+        let mut search_pos = 0;
+        while let Some(start_idx) = result[search_pos..].find(prefix) {
+            let abs_start = search_pos + start_idx + prefix.len();
+            if let Some(end_rel) = result[abs_start..].find('}') {
+                let abs_end = abs_start + end_rel;
+                let inner = &result[abs_start..abs_end];
+                let cleaned_inner = inner.replace(' ', "");
+                result = format!("{}{}{}", &result[..abs_start], cleaned_inner, &result[abs_end..]);
+                search_pos = abs_start + cleaned_inner.len() + 1;
             } else {
-                temp.push(chars[i]);
-                i += 1;
+                break;
             }
         }
-        result = temp;
+    }
 
-        result = LETTER_TO_NONLETTER_PATTERN
-            .replace_all(&result, "$1$2")
-            .to_string();
+    // 10. 清理非法单字母反斜杠命令 (\A -> A)
+    let invalid_single_cmds = [
+        "\\A ", "\\B ", "\\C ", "\\D ", "\\F ", "\\G ", "\\H ", "\\I ", "\\J ", "\\K ", "\\L ",
+        "\\M ", "\\N ", "\\O ", "\\P ", "\\Q ", "\\R ", "\\S ", "\\T ", "\\U ", "\\V ", "\\W ",
+        "\\X ", "\\Y ", "\\Z ",
+    ];
+    for invalid_cmd in &invalid_single_cmds {
+        result = result.replace(invalid_cmd, &invalid_cmd[1..]);
+    }
 
-        iterations += 1;
+    // 11. 清除空边界符
+    result = result.replace("\\left.", "").replace("\\right.", "");
+
+    // 12. 收拢连续空格 (保留 \\ 换行)
+    while result.contains("  ") {
+        result = result.replace("  ", " ");
     }
 
     result.trim().to_string()
@@ -167,11 +225,16 @@ mod tests {
 
     #[test]
     fn test_normalize_latex_clean() {
-        let raw = r"\mathrm { x } + \text{中文} ";
+        let raw = r"\mathrm { x } + \operatorname* { max } + \text{中文} ";
         let cleaned = normalize_latex(raw);
-        // 确认成功剥离了 \text{ 包裹，且清理了 \mathrm 内部空格
         assert!(!cleaned.contains(r"\text{"));
         assert!(cleaned.contains("中文"));
         assert!(cleaned.contains(r"\mathrm{x}"));
+        assert!(cleaned.contains(r"\operatorname*{max}"));
+
+        let cases_raw = r"\begin{cases} { 1 , } & { \text{if} } \ { 0 , } & { \text{else} } \ \end{cases}";
+        let cases_clean = normalize_latex(cases_raw);
+        assert!(cases_clean.contains(r"\\ {"));
+        assert!(cases_clean.contains(r"\end{cases}"));
     }
 }

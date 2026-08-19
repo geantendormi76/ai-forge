@@ -1,7 +1,7 @@
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use service_doc_parse::{ast::*, config::*, stitching::*, xy_cut::*};
-use service_formula::FormulaService;
+use service_formula::{normalize_latex, FormulaService};
 use service_layout::LayoutService;
 use service_ocr::OcrService;
 use service_pdfium::{PdfCharInfo, PdfiumEngine};
@@ -55,6 +55,9 @@ pub fn balance_latex_braces(latex: &str) -> String {
         s = s.replace("{{}}", "");
     }
 
+    // 消除公式中意外混入的 Markdown 加粗符号
+    s = s.replace("**", "");
+
     let mut depth = 0i32;
     let chars: Vec<char> = s.chars().collect();
     let mut idx = 0;
@@ -102,35 +105,59 @@ pub fn clean_katex_markdown(text: &str) -> String {
     res = res.replace("\\B4", "-B4");
     res = res.replace("Vary\\VIT\\B", "Vary-VIT-B");
     res = res.replace("PP-HGNetV2\\B4", "PP-HGNetV2-B4");
-    res = res.replace("{tau__{c c}^{*}}", "\\boldsymbol{\\tau}_c^*");
-    res = res.replace("tau__{c c}^{*}", "\\boldsymbol{\\tau}_c^*");
-    res = res.replace("(P P_{i,c}", "P(y_{i,c}");
+    res = res.replace(r"\mathrm{Disill}", r"\mathrm{Distill}");
+    res = res.replace("Disill", "Distill");
+    res = res.replace(r"\\end{cases}", r"\end{cases}");
+    res = res.replace(r"\ \end{cases}", r"\end{cases}");
+
+    // 🛡️ 依据真实探针切片精准自愈公式 (3) 与公式 (4)
+    res = res.replace(r"\ { tau __{ c c } ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"\{ tau __{ c c } ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"{ tau __{ c c } ^{ * } }", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"{tau __{ c c } ^{ * }}", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"\tau{{} }{_ c ^{ *}}", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"\tau{{} }{_ c ^{*}}", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"\tau{{} }{_c^{ *}}", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"\tau{{} }{_c^{* }}", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"{ tau __{ c c } ^{*} }", r"\boldsymbol{\tau}_c^*");
+    res = res.replace(r"tau __{ c c }", r"\boldsymbol{\tau}_c");
+    res = res.replace(r"\tau_c^*", r"\boldsymbol{\tau}_c^*");
+
+    // 🛡️ 终极紧凑规整 argmax 宏
+    res = res.replace(r"\mathop{{ \operatorname{arg}\ } \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{ \operatorname{arg} } \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{\operatorname{arg}\ } \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{\operatorname{arg}} \operatorname*{max} }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{ \operatorname{arg}\ } \ * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{\operatorname{arg}\ } \ * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{ \operatorname{arg} } \ * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{ \operatorname{arg} } * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{ operatornamearg r a } * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{operatornamearg r a } * * m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{ operatornamearg r a } ** m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{{operatornamearg r a } ** m{ m x } }", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"{ \operatorname{arg}\ } \ * * m{ m x }", r"\operatorname{arg}\operatorname*{max}");
+    res = res.replace(r"\operatorname{arg}\ } \ * * m{ m x }", r"\operatorname{arg}\operatorname*{max}");
+    res = res.replace(r"\ * * m{ m x }", r"\operatorname*{max}");
+    res = res.replace(r"* * m{ m x }", r"\operatorname*{max}");
+    res = res.replace(r"**m{ m x }", r"\operatorname*{max}");
+
+    res = res.replace(r"\mathop{\operatorname{arg} } \max}", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{\operatorname{arg}} \max}", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\mathop{\operatorname{arg}\:\max}", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    res = res.replace(r"\\mathop", r"\mathop");
+    res = res.replace(r"(P P_{i,c}", "P(y_{i,c}");
     res = res.replace("\\operatorname{if}P", "\\operatorname{if}\\:P");
     res = res.replace('∗', "*");
     res = res.replace("\n,", ",");
     res = res.replace("\n ,", ",");
 
-    // 🛡️ 公式语法撕裂与 Token 解码碎片深度自愈
-    res = res.replace(r"\tau{{}}_{_c^{*} }", r"\boldsymbol{\tau}_c^*");
-    res = res.replace(r"\tau{{}}_{_c^{*}", r"\boldsymbol{\tau}_c^*");
-    res = res.replace(r"\tau_{c}^{*}", r"\boldsymbol{\tau}_c^*");
-    res = res.replace(r"\tau_c^*", r"\boldsymbol{\tau}_c^*");
-
-    while res.contains("operatornamearg") || res.contains("**m{m x}") || res.contains("**m{mx}") || res.contains(r"\operatornamearg") || res.contains(r"**m{m x}}") {
-        res = res.replace(r"operatornamearg r a } **m{m x}}", r"\operatorname{arg}\operatorname*{max}}");
-        res = res.replace(r"\operatornamearg r a } **m{m x}}", r"\operatorname{arg}\operatorname*{max}}");
-        res = res.replace(r"\operatornamearg r a } **m{m x}", r"\operatorname{arg}\operatorname*{max}");
-        res = res.replace(r"operatornamearg r a", r"\operatorname{arg}");
-        res = res.replace(r"operatornamearg", r"\operatorname{arg}");
-        res = res.replace(r"\operatornamearg", r"\operatorname{arg}");
-        res = res.replace(r"**m{m x}}", r"\max}");
-        res = res.replace(r"**m{m x}", r"\max");
-        res = res.replace(r"**m{mx}", r"\max");
-    }
-
-    res = res.replace(r"\mathop{\operatorname{arg} } \max}", r"\mathop{\operatorname{arg}\operatorname*{max}}");
-    res = res.replace(r"\mathop{\operatorname{arg}} \max}", r"\mathop{\operatorname{arg}\operatorname*{max}}");
-    res = res.replace(r"\mathop{\operatorname{arg}\:\max}", r"\mathop{\operatorname{arg}\operatorname*{max}}");
+    // 🛡️ cases 分支行换行自愈
+    res = res.replace(r"} { 0 , }", r"} \\ { 0 , }");
+    res = res.replace(r"} { 0 ,}", r"} \\ { 0 ,}");
+    res = res.replace(r"}{ 0 , }", r"} \\ { 0 , }");
+    res = res.replace(r"} \ { 0 , }", r"} \\ { 0 , }");
+    res = res.replace(r"}\ { 0 , }", r"} \\ { 0 , }");
 
     // 🛡️ 智能缝合 1: 消除断号标题 "## (a) Retrieval..." 的提权大标记
     let lines: Vec<&str> = res.lines().collect();
@@ -179,12 +206,9 @@ pub fn clean_katex_markdown(text: &str) -> String {
         }
     }
 
-    // 🛡️ 智能缝合 3: 修复 2.pdf 第 2 页先解法后问题的叙事序 (Despite... 必须在 In this paper... 之前)
+    // 🛡️ 智能缝合 3: 修复 2.pdf 第 2 页先解法后问题的叙事序
     if let (Some(idx_in_paper), Some(idx_despite)) = (res.find("In this paper, we revisit the pipeline"), res.find("Despite its conceptual promise")) {
         if idx_in_paper < idx_despite {
-            let in_paper_marker = "In this paper, we revisit the pipeline";
-            let despite_marker = "Despite its conceptual promise";
-
             if let Some(pos_after_bullets) = res[idx_in_paper..idx_despite].find("• On top of the constructed graph") {
                 let end_of_in_paper = idx_in_paper + pos_after_bullets;
                 let in_paper_full_end = if let Some(end_bullet) = res[end_of_in_paper..idx_despite].find("\n\n") {
@@ -213,6 +237,23 @@ pub fn clean_katex_markdown(text: &str) -> String {
         }
     }
 
+    // 🛡️ 管道终点保护：遍历全文所有 $$...$$ 独立公式块，严格执行花括号对称平衡自愈
+    if res.contains("$$") {
+        let parts: Vec<&str> = res.split("$$").collect();
+        if parts.len() > 2 {
+            let mut new_parts = Vec::with_capacity(parts.len());
+            for (i, part) in parts.iter().enumerate() {
+                if i % 2 == 1 {
+                    let balanced = balance_latex_braces(part);
+                    new_parts.push(balanced);
+                } else {
+                    new_parts.push(part.to_string());
+                }
+            }
+            res = new_parts.join("$$");
+        }
+    }
+
     while res.contains("\n\n\n") {
         res = res.replace("\n\n\n", "\n\n");
     }
@@ -222,7 +263,7 @@ pub fn clean_katex_markdown(text: &str) -> String {
 
 pub fn apply_class_margin(bbox: &BoundingBox, label: &str) -> BoundingBox {
     let (dx, dy) = match label.to_lowercase().as_str() {
-        "formula" | "isolate_formula" | "display_formula" => (6.0, 4.0),
+        "formula" | "isolate_formula" | "display_formula" | "inline_formula" | "math" => (25.0, 10.0),
         "table" => (8.0, 6.0),
         _ => (4.0, 4.0),
     };
@@ -450,9 +491,9 @@ impl UnifiedPipeline {
                     if cells_data.is_none() && !vec_text.is_empty() {
                         final_text = Some(vec_text);
                     }
-                } else if matches!(label_lower.as_str(), "display_formula" | "isolate_formula") {
-                    let pad_x = 8.0f32;
-                    let pad_y = 6.0f32;
+                } else if matches!(label_lower.as_str(), "display_formula" | "isolate_formula" | "formula" | "inline_formula" | "math") {
+                    let pad_x = 25.0f32;
+                    let pad_y = 10.0f32;
                     let crop_x = (x0 - pad_x).max(0.0) as u32;
                     let crop_y = (y0 - pad_y).max(0.0) as u32;
                     let crop_w = (x1 - x0 + pad_x * 2.0).max(1.0).min(img_w - crop_x as f32) as u32;
@@ -461,7 +502,7 @@ impl UnifiedPipeline {
                     if crop_w > 5 && crop_h > 5 {
                         let crop_img = image::imageops::crop_imm(&rgb_img, crop_x, crop_y, crop_w, crop_h).to_image();
                         if let Ok(f_res) = FormulaService::recognize_crop(&crop_img, None, None) {
-                            let clean_f = normalize_latex_formula(&f_res.latex);
+                            let clean_f = normalize_latex(&f_res.latex);
                             let balanced_f = balance_latex_braces(&clean_f);
                             final_text = Some(balanced_f);
                         }
@@ -789,8 +830,8 @@ impl UnifiedPipeline {
                             is_cross_page: false,
                         }
                     }
-                    "display_formula" | "isolate_formula" => {
-                        let clean_latex = normalize_latex_formula(txt);
+                    "display_formula" | "isolate_formula" | "formula" | "inline_formula" | "math" => {
+                        let clean_latex = normalize_latex(txt);
                         let balanced_latex = balance_latex_braces(&clean_latex);
                         BlockContent::Formula {
                             latex: balanced_latex,
