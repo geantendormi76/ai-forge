@@ -8,7 +8,7 @@ name = "core_onnx_infer"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["cuda"]
 cuda = ["ort/cuda"]
 directml = ["ort/directml"]
 coreml = ["ort/coreml"]

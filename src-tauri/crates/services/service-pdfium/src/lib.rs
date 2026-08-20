@@ -48,20 +48,30 @@ pub struct PdfiumEngine {
 }
 
 impl PdfiumEngine {
-    /// 自动寻找并绑定 pdfium.dll
+    /// 自动寻找并绑定 pdfium.dll (优先 bin/ 目录与运行同级目录)
     pub fn resolve_dll_path() -> Option<PathBuf> {
-        let candidates = [
+        let mut candidates = vec![
+            PathBuf::from(r"C:\dev\ai-forge\bin\pdfium.dll"),
+            PathBuf::from(r"C:\dev\ai-forge\src-tauri\bin\pdfium.dll"),
             PathBuf::from(r"C:\dev\ai-forge\models\pdfium.dll"),
-            PathBuf::from(r"C:\dev\ai-forge\src-tauri\pdfium.dll"),
-            PathBuf::from(r"C:\dev\rpa\pdfium.dll"),
+            PathBuf::from("bin/pdfium.dll"),
+            PathBuf::from("../bin/pdfium.dll"),
             PathBuf::from("pdfium.dll"),
         ];
+
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                candidates.push(exe_dir.join("pdfium.dll"));
+                candidates.push(exe_dir.join("bin").join("pdfium.dll"));
+            }
+        }
+
         candidates.into_iter().find(|p| p.exists())
     }
 
     pub fn init() -> PdfiumEngineResult<Self> {
         let bindings = if let Some(dll_path) = Self::resolve_dll_path() {
-            tracing::info!("🌐 [service-pdfium] 绑定指定路径 pdfium.dll: {:?}", dll_path);
+            tracing::info!("🌐 [service-pdfium] 成功绑定物理路径 pdfium.dll: {:?}", dll_path);
             Pdfium::bind_to_library(&dll_path)
                 .map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?
         } else {
@@ -77,7 +87,7 @@ impl PdfiumEngine {
 
     pub fn global() -> PdfiumEngineResult<&'static Mutex<PdfiumEngine>> {
         let mutex = PDFIUM_INSTANCE.get_or_init(|| {
-            let engine = Self::init().expect("🚨 [service-pdfium] 绑定初始化失败，请确保 pdfium.dll 存在于 C:\\dev\\ai-forge\\models\\pdfium.dll");
+            let engine = Self::init().expect("🚨 [service-pdfium] 绑定初始化失败，请确保 pdfium.dll 存在于 C:\\dev\\ai-forge\\bin\\pdfium.dll");
             Mutex::new(engine)
         });
         Ok(mutex)

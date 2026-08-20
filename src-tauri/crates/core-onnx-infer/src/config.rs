@@ -1,6 +1,39 @@
 use crate::errors::OrtInferError;
 use ort::ep::ExecutionProviderDispatch;
 use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
+use std::path::Path;
+use std::sync::Once;
+
+static INIT_CUDA_DLL_DIR: Once = Once::new();
+
+/// 🛡️ Windows Native 专属：自动探测并向进程注入 bin/cuda12 动态链接库搜索目录
+pub fn ensure_cuda_dll_registered() {
+    INIT_CUDA_DLL_DIR.call_once(|| {
+        #[cfg(target_os = "windows")]
+        {
+            let candidates = [
+                r"C:\dev\ai-forge\bin\cuda12",
+                r"bin\cuda12",
+                r"..\bin\cuda12",
+                r"..\..\bin\cuda12",
+            ];
+            for c in candidates {
+                let p = Path::new(c);
+                if p.exists() {
+                    if let Ok(abs_p) = p.canonicalize() {
+                        let abs_str = abs_p.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+                        let current_path = std::env::var("PATH").unwrap_or_default();
+                        if !current_path.contains(&abs_str) {
+                            std::env::set_var("PATH", format!("{};{}", abs_str, current_path));
+                            tracing::info!("🎮 [CUDA DLL 自动并网成功] 已将动态库目录注入进程 PATH: {}", abs_str);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    });
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OrtExecutionProvider {
@@ -30,7 +63,7 @@ impl Default for OrtSessionConfig {
             inter_threads: None,
             parallel_execution: Some(false),
             optimization_level: Some(GraphOptimizationLevel::Level3),
-            enable_memory_pattern: Some(false), // 🛡️ 关闭静态模板，消除动态切块显存抖动
+            enable_memory_pattern: Some(false),
         }
     }
 }
@@ -78,6 +111,7 @@ pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferErr
 }
 
 impl OrtSessionConfig {
+    /// 🛡️ 为自回归控制流模型定制的安全配置
     pub fn for_control_flow() -> Self {
         Self {
             execution_providers: vec![OrtExecutionProvider::CPU],
@@ -90,6 +124,9 @@ impl OrtSessionConfig {
     }
 
     pub fn build_session_builder(&self) -> Result<SessionBuilder, OrtInferError> {
+        // 1. 自动挂载注册 Windows CUDA 动态库寻址目录
+        ensure_cuda_dll_registered();
+
         let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
             path: "ONNX SessionBuilder".into(),
             context: format!("Failed to create builder: {e}"),
@@ -143,7 +180,6 @@ impl OrtSessionConfig {
                 OrtExecutionProvider::CUDA { device_id } => {
                     use ort::ep::cuda::ConvAlgorithmSearch;
                     let mut cuda_ep = ort::ep::CUDA::default().with_device_id(*device_id);
-                    // 🚀 官方最新规范：启用 cuDNN 启发式 Mode A 满血加速，杜绝 Fallback 慢速模式
                     cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Heuristic);
                     dispatches.push(cuda_ep.build());
                 }

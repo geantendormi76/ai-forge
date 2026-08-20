@@ -1,0 +1,93 @@
+[
+  {
+    "relative_path": "service-asr/MOSS-Transcribe-Diarize-Q5_K_M.gguf",
+    "size_bytes": 700313760,
+    "size_mb": 667.87,
+    "sha256": "52deaeff931272f3d49eb437f0f4916e42fce9f42e68db250047408241cf473c",
+    "download_url": "https://assets.geantendormi.top/models/service-asr/MOSS-Transcribe-Diarize-Q5_K_M.gguf"
+  },
+  {
+    "relative_path": "service-formula/manifest.json",
+    "size_bytes": 639,
+    "size_mb": 0.0,
+    "sha256": "ad2b17acc58c32ea9651963ea86d9a56391f57f0644e06768df8e6958f9a5289",
+    "download_url": "https://assets.geantendormi.top/models/service-formula/manifest.json"
+  },
+  {
+    "relative_path": "service-formula/PP-FormulaNet-S.onnx",
+    "size_bytes": 231878904,
+    "size_mb": 221.14,
+    "sha256": "9fbcf2d7b5d7534e4c596e241f5c60be482a4d24d6a9625f2e79e140c7522877",
+    "download_url": "https://assets.geantendormi.top/models/service-formula/PP-FormulaNet-S.onnx"
+  },
+  {
+    "relative_path": "service-formula/tokenizer.json",
+    "size_bytes": 2240079,
+    "size_mb": 2.14,
+    "sha256": "23d8fa64d068f450b61d6581dac0fe234441770365d64ba39ba74e34079bc022",
+    "download_url": "https://assets.geantendormi.top/models/service-formula/tokenizer.json"
+  },
+  {
+    "relative_path": "service-layout/PP-DocLayoutV3.onnx",
+    "size_bytes": 130502049,
+    "size_mb": 124.46,
+    "sha256": "45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba",
+    "download_url": "https://assets.geantendormi.top/models/service-layout/PP-DocLayoutV3.onnx"
+  },
+  {
+    "relative_path": "service-ocr/PP-OCRv6_small/pp-ocrv6_small_det.onnx",
+    "size_bytes": 9880512,
+    "size_mb": 9.42,
+    "sha256": "d73e0058b7a8086bbd57f3d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e",
+    "download_url": "https://assets.geantendormi.top/models/service-ocr/PP-OCRv6_small/pp-ocrv6_small_det.onnx"
+  },
+  {
+    "relative_path": "service-ocr/PP-OCRv6_small/pp-ocrv6_small_rec.onnx",
+    "size_bytes": 21159378,
+    "size_mb": 20.18,
+    "sha256": "5435fd747c9e0efe15a96d0b378d5bd157e9492ed8fd80edf08f30d02fa24634",
+    "download_url": "https://assets.geantendormi.top/models/service-ocr/PP-OCRv6_small/pp-ocrv6_small_rec.onnx"
+  },
+  {
+    "relative_path": "service-ocr/PP-OCRv6_small/ppocrv6_dict.txt",
+    "size_bytes": 93655,
+    "size_mb": 0.09,
+    "sha256": "769e7fa79bb297b5f18d8dbd149e364a45bc61f2b3f574e5ea836f0b261c23a6",
+    "download_url": "https://assets.geantendormi.top/models/service-ocr/PP-OCRv6_small/ppocrv6_dict.txt"
+  },
+  {
+    "relative_path": "service-table/model.onnx",
+    "size_bytes": 7781309,
+    "size_mb": 7.42,
+    "sha256": "e48a401a4ebcddd47fe3822427db24d867a557324f58e438692f588bbe9231de",
+    "download_url": "https://assets.geantendormi.top/models/service-table/model.onnx"
+  },
+  {
+    "relative_path": "service-table/SLANet_plus.onnx",
+    "size_bytes": 7781309,
+    "size_mb": 7.42,
+    "sha256": "e48a401a4ebcddd47fe3822427db24d867a557324f58e438692f588bbe9231de",
+    "download_url": "https://assets.geantendormi.top/models/service-table/SLANet_plus.onnx"
+  },
+  {
+    "relative_path": "service-table/table_structure_dict.txt",
+    "size_bytes": 624,
+    "size_mb": 0.0,
+    "sha256": "e43477e1819efb450e33a2a37d78ba408951bb1c1357901eb62f35dbfa382652",
+    "download_url": "https://assets.geantendormi.top/models/service-table/table_structure_dict.txt"
+  },
+  {
+    "relative_path": "service-translation/Hy-MT2-1.8B-Q4.gguf",
+    "size_bytes": 1133080736,
+    "size_mb": 1080.59,
+    "sha256": "d17d2b8d0b1abac7dd8b15dfc3a50998aa4be2735987341c49a5a0b4d3b5b2ee",
+    "download_url": "https://assets.geantendormi.top/models/service-translation/Hy-MT2-1.8B-Q4.gguf"
+  },
+  {
+    "relative_path": "service-upscale/RealESRGAN_x4plus.onnx",
+    "size_bytes": 33754215,
+    "size_mb": 32.19,
+    "sha256": "c61f3c947c46af0c3ae188364923b3050b1d0089cc1e8394c8ce8306def2ce25",
+    "download_url": "https://assets.geantendormi.top/models/service-upscale/RealESRGAN_x4plus.onnx"
+  }
+]
