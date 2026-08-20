@@ -21,6 +21,7 @@
     "ogl": "^1.0.11",
     "pinia": "^2.2.4",
     "tailwind-merge": "^2.5.4",
+    "three": "^0.185.1",
     "vue": "^3.5.12",
     "vue-i18n": "^9.14.1"
   },
@@ -28,6 +29,7 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tauri-apps/cli": "^2.1.0",
     "@types/node": "^22.7.5",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-vue": "^5.1.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",

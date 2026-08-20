@@ -86,7 +86,7 @@ onUnmounted(() => {
 
     <div
       class="relative z-10 flex-1 w-full overflow-y-auto custom-scrollbar pt-12 pb-10 transition-all duration-300 ease-in-out"
-      :class="ui.侧边栏收起 ? 'pl-[84px] pr-6 sm:pr-10' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
+      :class="ui.侧边栏收起 ? 'pl-[104px] pr-6 sm:pr-10' : 'pl-[276px] pr-6 sm:pr-10 lg:pr-14'"
       @dragover="workflow.handleDragOver"
       @dragleave="workflow.handleDragLeave"
       @drop="workflow.handleDrop"
@@ -329,7 +329,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 成功 Modal -->
+    <!-- 🌟 处理成功 Modal (已加入本次消耗展示) -->
     <div
       v-if="workflow.isSuccessModalOpen.value && workflow.successInfo.value"
       class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-150 select-none"
@@ -367,6 +367,14 @@ onUnmounted(() => {
             <span class="font-medium">处理耗时</span>
             <strong class="font-mono text-emerald-600 font-bold text-[12.5px]">
               {{ workflow.successInfo.value.elapsedFormatted || `${((workflow.elapsedMs.value || 0) / 1000).toFixed(2)} 秒` }}
+            </strong>
+          </div>
+
+          <!-- 🌟 本次消耗 Tokens -->
+          <div class="flex justify-between items-center text-slate-500">
+            <span class="font-medium">本次消耗</span>
+            <strong class="font-mono text-[#02c3b4] font-black text-[12.5px]">
+              -{{ workflow.successInfo.value.tokensConsumed || 2 }} Tokens
             </strong>
           </div>
 

@@ -33,14 +33,13 @@ export interface BatchSuccessPayload {
   lastOutputPath?: string;
   elapsedMs?: number;
   elapsedFormatted?: string;
+  tokensConsumed?: number;
 }
 
 export interface ToolWorkflowConfig {
   dialogTitle?: string;
   dialogFilters?: { name: string; extensions: string[] }[];
-  /** 🌟 支持扩展名白名单 (如 ['png', 'jpg', 'ncm', 'mp3']) */
   allowedExtensions?: string[];
-  /** 🌟 定制未支持格式提示文案回调 */
   unsupportedPrompt?: (rejectedNames: string[]) => string;
 }
 
@@ -86,7 +85,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
 
   let unlistenDragDrop: (() => void) | null = null;
 
-  // 🌟 1. 白名单检索集合
   const allowedSet = computed(() => {
     if (!config?.allowedExtensions || config.allowedExtensions.length === 0 || config.allowedExtensions.includes('*')) {
       return null;
@@ -94,7 +92,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     return new Set(config.allowedExtensions.map((e) => e.toLowerCase().trim().replace(/^\./, '')));
   });
 
-  // 🌟 2. 核心路径添加入口 (含全物理事件层拦截)
   const addPaths = (paths: string[]) => {
     if (!paths || paths.length === 0) return;
     const newItems: ToolFileMetadata[] = [];
@@ -108,7 +105,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       const name = cleanPath.split(/[/\\]/).pop() || cleanPath;
       const ext = name.split('.').pop()?.toLowerCase() || '';
 
-      // 🛡️ 核心白名单拦截判定
       if (allowedSet.value && (!ext || !allowedSet.value.has(ext))) {
         rejectedNames.push(name);
         continue;
@@ -305,6 +301,7 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     options: {
       targetFormat?: string;
       statusPrefix?: string;
+      tokensPerItem?: number;
     } = {}
   ) => {
     if (queue.value.length === 0) {
@@ -319,6 +316,7 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     errorMessage.value = '';
     latestResults.value = [];
 
+    const beforeUsed = ui.quota.used_today;
     const total = queue.value.length;
     const t0 = performance.now();
     let lastOutput = '';
@@ -354,6 +352,9 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       }
     }
 
+    // 🌟 立即刷新云端状态
+    await ui.refreshQuota();
+
     if (isCancelled.value) return;
 
     const totalElapsed = Math.round(performance.now() - t0);
@@ -380,9 +381,10 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
         ? `已处理完成 ${successCount} 个文件 (另有 ${failedCount} 个失败)`
         : `已成功批量处理 ${total} 个文件`;
 
-    // 🌟 精确耗时格式化
     const elapsedFormatted =
       totalElapsed < 1000 ? `${totalElapsed} ms` : `${(totalElapsed / 1000).toFixed(2)} 秒`;
+
+    const deltaTokens = Math.max(0, ui.quota.used_today - beforeUsed);
 
     successInfo.value = {
       title: summaryTitle,
@@ -393,6 +395,7 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       lastOutputPath: lastOutput,
       elapsedMs: totalElapsed,
       elapsedFormatted,
+      tokensConsumed: deltaTokens > 0 ? deltaTokens : (options.tokensPerItem ? options.tokensPerItem * successCount : 2),
     };
 
     isSuccessModalOpen.value = true;

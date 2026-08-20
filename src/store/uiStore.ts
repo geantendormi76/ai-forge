@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { getQuotaStatus, type QuotaStatus } from '../bindings/index';
 
 const USAGE_STORAGE_KEY = 'zidian_tool_usage_counts';
 
-// 🌟 对齐冷启动基线权重 (upscale: 12, asr: 10, pdf: 8, format: 6)
 const DEFAULT_INITIAL_COUNTS: Record<string, number> = {
   upscale: 12,
   asr: 10,
@@ -21,6 +21,29 @@ export const useUIStore = defineStore('ui', () => {
 
   const 侧边栏收起 = ref(false);
   let toast定时器: number | null = null;
+
+  // 算力 HUD 状态
+  const showQuotaModal = ref(false);
+  const quota = ref<QuotaStatus>({
+    success: true,
+    device_fingerprint: 'local_device',
+    stage: 'beta',
+    daily_limit: 600,
+    used_today: 0,
+    bonus_points: 0,
+    remaining_points: 600,
+    status: 'active',
+    is_offline_pro: false,
+  });
+
+  const refreshQuota = async () => {
+    try {
+      const res = await getQuotaStatus();
+      quota.value = res;
+    } catch (e) {
+      console.warn('⚠️ 获取云端算力状态异常:', e);
+    }
+  };
 
   const 弹出提示 = (消息: string, 类型: 'success' | 'error' | 'info' = 'success') => {
     toast消息.value = 消息;
@@ -79,5 +102,8 @@ export const useUIStore = defineStore('ui', () => {
     切换侧边栏,
     toolUsageCounts,
     recordToolUsage,
+    showQuotaModal,
+    quota,
+    refreshQuota,
   };
 });

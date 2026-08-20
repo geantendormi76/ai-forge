@@ -1,0 +1,11 @@
+name = "ai-toolkit-relay"
+main = "auth_worker.js"
+compatibility_date = "2024-09-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zidian-db"
+database_id = "ab86d430-c3c9-4b16-934a-717aa4024fea"
+
+[vars]
+RELAY_SECRET = "ai-forge-commercial-secret-2026"

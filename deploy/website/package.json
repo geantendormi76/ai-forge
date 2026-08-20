@@ -1,0 +1,29 @@
+{
+  "name": "zidian-website",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "deploy": "pnpm build && npx wrangler pages deploy dist --project-name=ai-toolkit --commit-dirty=true",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.447.0",
+    "tailwind-merge": "^2.6.1",
+    "three": "^0.185.1",
+    "vue": "^3.5.41"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.9",
+    "vue-tsc": "^2.1.6"
+  }
+}

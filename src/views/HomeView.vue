@@ -22,7 +22,7 @@ import {
 
 const ui = useUIStore();
 
-// 🌟 1. 全库工具注册表
+// 1. 全库工具注册表
 interface ToolItem {
   id: string;
   name: string;
@@ -72,7 +72,7 @@ const masterToolList: ToolItem[] = [
   },
 ];
 
-// 🌟 2. Top 3 旗舰卡片流
+// 2. Top 3 旗舰卡片流
 const flagshipTools = computed<ChromaCardItem[]>(() => {
   const sorted = [...masterToolList].sort((a, b) => {
     const countA = ui.toolUsageCounts[a.id] || 0;
@@ -89,7 +89,7 @@ const flagshipTools = computed<ChromaCardItem[]>(() => {
   }));
 });
 
-// 🌟 3. 分类与搜索
+// 3. 分类与搜索
 const searchQuery = ref('');
 const activeCategory = ref('all');
 
@@ -172,20 +172,18 @@ const triggerFeedbackModal = () => {
       />
     </div>
 
-    <!-- 视窗容器 (根据双态边栏自适应留白: 收起 84px / 展开 256px) -->
+    <!-- 🌟 视窗容器 (已增大左侧留白间距，营造黄金呼吸感) -->
     <div
       class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar pt-10 pb-8 transition-all duration-300 ease-in-out pointer-events-auto"
-      :class="ui.侧边栏收起 ? 'pl-[84px] pr-6 sm:pr-10' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-12'"
+      :class="ui.侧边栏收起 ? 'pl-[112px] pr-8 sm:pr-12' : 'pl-[280px] pr-8 sm:pr-12'"
     >
       <div class="max-w-[1580px] w-full mx-auto space-y-8 flex flex-col justify-between pt-1">
 
-        <!-- 🌟 上半区：4:8 黄金栅格 -->
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <!-- 上半区：4:8 黄金栅格 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           
-          <!-- 🌟 左翼：超大字标、舒展金句与大气胶囊按钮 -->
-          <div class="lg:col-span-5 flex flex-col justify-center space-y-5">
-            
-            <!-- 旗舰大字标 -->
+          <!-- 左翼：大字标、理念与大胶囊按钮 (增加轻微内边距) -->
+          <div class="lg:col-span-5 flex flex-col justify-center space-y-5 pl-1 sm:pl-2">
             <div>
               <GradientText
                 text="紫电AI"
@@ -195,13 +193,11 @@ const triggerFeedbackModal = () => {
               />
             </div>
 
-            <!-- 核心理念金句 -->
             <p class="text-slate-200 text-sm sm:text-[15px] leading-[1.7] max-w-md font-sans">
               <span class="block text-slate-300">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
               <span class="block text-slate-100 mt-1">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
             </p>
 
-            <!-- 升级版大气实体大胶囊按钮组 -->
             <div class="flex items-center gap-3.5 pt-2 flex-wrap">
               <button
                 type="button"
@@ -223,10 +219,9 @@ const triggerFeedbackModal = () => {
                 <span>意见反馈</span>
               </button>
             </div>
-
           </div>
 
-          <!-- 🌟 右翼：Top 3 旗舰卡片流 -->
+          <!-- 右翼：Top 3 旗舰卡片流 -->
           <div class="lg:col-span-7 flex flex-col justify-center w-full min-w-0">
             <ChromaGrid
               :items="flagshipTools"
@@ -235,7 +230,7 @@ const triggerFeedbackModal = () => {
           </div>
         </section>
 
-        <!-- 🌟 下半区：全能工具导航矩阵 -->
+        <!-- 下半区：全能工具导航矩阵 -->
         <section id="tool-explorer-section" class="space-y-4 pt-2">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
             <div>
