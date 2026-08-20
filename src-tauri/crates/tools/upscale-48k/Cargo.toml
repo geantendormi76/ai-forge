@@ -1,0 +1,13 @@
+[package]
+name = "upscale-48k"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+service-upscale = { path = "../../services/service-upscale" }
+shared-contracts = { path = "../../shared-contracts" }
+core-security = { path = "../../core-security" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tokio = { version = "1.38", features = ["full"] }

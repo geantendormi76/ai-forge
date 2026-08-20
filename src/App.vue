@@ -4,6 +4,7 @@ import { useUIStore } from './store/uiStore';
 import { useTauriWindow } from './composables/useTauriWindow';
 import Sidebar from './components/layout/Sidebar.vue';
 import HomeView from './views/HomeView.vue';
+import Upscale48kView from './views/Upscale48kView.vue';
 import FormatConverterView from './views/FormatConverterView.vue';
 import PdfParseView from './views/PdfParseView.vue';
 import VideoSubtitleView from './views/VideoSubtitleView.vue';
@@ -15,7 +16,6 @@ import {
   Check,
   AlertCircle,
   Info,
-  PanelLeftOpen,
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
@@ -31,15 +31,16 @@ onMounted(() => {
 <template>
   <div class="h-screen w-full overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
     
-    <!-- 1. 全景沉浸主工作区 (铺满整个 100vw * 100vh 物理视窗，底座永不断层) -->
+    <!-- 1. 全景沉浸主工作区 (自适应双态导轨间距) -->
     <main class="absolute inset-0 w-full h-full overflow-hidden z-0">
       <HomeView v-if="ui.currentView === 'home'" />
+      <Upscale48kView v-else-if="ui.currentView === 'upscale'" />
       <FormatConverterView v-else-if="ui.currentView === 'format'" />
       <PdfParseView v-else-if="ui.currentView === 'pdf'" />
       <VideoSubtitleView v-else-if="ui.currentView === 'asr'" />
     </main>
 
-    <!-- 2. 无边框原生拖拽顶栏与物理窗口控制器 (透明悬浮于顶层) -->
+    <!-- 2. 无边框原生拖拽顶栏与物理窗口控制器 -->
     <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-50 pointer-events-none">
       <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto" style="-webkit-app-region: drag;"></div>
       <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
@@ -71,29 +72,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 3. 悬浮侧边栏展开按钮 (当侧边栏收起时显现) -->
-    <div
-      v-if="ui.侧边栏收起"
-      class="fixed left-4 top-3.5 z-50 pointer-events-auto group/expand"
-      style="-webkit-app-region: no-drag;"
-    >
-      <button
-        type="button"
-        @click="ui.切换侧边栏"
-        class="h-9 w-9 rounded-2xl bg-[#182022]/90 backdrop-blur-xl border border-white/10 text-[#8b999b] hover:text-[#02c3b4] hover:border-[#02c3b4]/50 hover:bg-white/[0.06] shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
-        title="展开侧边栏"
-      >
-        <PanelLeftOpen :size="16" class="stroke-[2]" />
-      </button>
-      <div class="absolute top-11 left-1/2 -translate-x-1/2 bg-[#182022]/95 backdrop-blur-xl border border-white/15 rounded-xl px-3 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.8)] flex items-center justify-center pointer-events-none opacity-0 scale-95 group-hover/expand:opacity-100 group-hover/expand:scale-100 transition-all duration-200 select-none z-50">
-        <span class="text-[11px] font-bold text-[#f2f2ef] whitespace-nowrap">展开侧边栏</span>
-      </div>
-    </div>
-
-    <!-- 4. 悬浮暗黑胶囊侧边栏 (独立绝对浮层 HUD) -->
+    <!-- 3. 智能双态胶囊侧边栏 (展开宽栏 <-> 迷你纯图标导轨) -->
     <Sidebar />
 
-    <!-- 5. 全局暗黑海青微光 Toast 提示气泡 -->
+    <!-- 4. 全局暗黑海青微光 Toast 提示气泡 -->
     <div v-if="ui.toast显示" class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
       <Transition
         appear

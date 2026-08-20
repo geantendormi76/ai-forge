@@ -31,6 +31,8 @@ service-pdfium = { path = "crates/services/service-pdfium" }
 service-converter = { path = "crates/services/service-converter" }
 format-converter = { path = "crates/tools/format-converter" }
 video-subtitle = { path = "crates/tools/video-subtitle" }
+service-upscale = { path = "crates/services/service-upscale" }
+upscale-48k = { path = "crates/tools/upscale-48k" }
 
 [workspace]
 members = [
@@ -51,6 +53,8 @@ members = [
     "crates/tools/pdf-parse",
     "crates/tools/format-converter",
     "crates/tools/video-subtitle",
-    "crates/services/service-ocr"
+    "crates/tools/upscale-48k",
+    "crates/services/service-ocr",
+    "crates/services/service-upscale"
 ]
 resolver = "2"

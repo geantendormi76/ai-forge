@@ -30,7 +30,7 @@ impl Default for OrtSessionConfig {
             inter_threads: None,
             parallel_execution: Some(false),
             optimization_level: Some(GraphOptimizationLevel::Level3),
-            enable_memory_pattern: Some(true),
+            enable_memory_pattern: Some(false), // 🛡️ 关闭静态模板，消除动态切块显存抖动
         }
     }
 }
@@ -78,7 +78,6 @@ pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferErr
 }
 
 impl OrtSessionConfig {
-    /// 🛡️ 为自回归控制流模型 (如 Loop.0 / PP-FormulaNet) 专门定制的安全纯净配置
     pub fn for_control_flow() -> Self {
         Self {
             execution_providers: vec![OrtExecutionProvider::CPU],
@@ -144,7 +143,8 @@ impl OrtSessionConfig {
                 OrtExecutionProvider::CUDA { device_id } => {
                     use ort::ep::cuda::ConvAlgorithmSearch;
                     let mut cuda_ep = ort::ep::CUDA::default().with_device_id(*device_id);
-                    cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Default);
+                    // 🚀 官方最新规范：启用 cuDNN 启发式 Mode A 满血加速，杜绝 Fallback 慢速模式
+                    cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Heuristic);
                     dispatches.push(cuda_ep.build());
                 }
                 #[cfg(feature = "directml")]

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State};
+use upscale_48k::{Upscale48kTool, UpscaleResult, UpscaleTask};
 use video_subtitle::{
     VideoProbeResult, VideoProbeService, VideoSubtitleOptions, VideoSubtitleResult,
     VideoSubtitleTool,
@@ -15,6 +16,28 @@ pub struct AppState {
     pub vram_guard: Arc<VramTokenGuard>,
     pub output_dir: PathBuf,
     pub cancel_token: Arc<AtomicBool>,
+}
+
+#[tauri::command]
+async fn run_upscale_48k(
+    task: UpscaleTask,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<UpscaleResult, String> {
+    tracing::info!("🚀 收到前端 紫电 AI 4K/8K 视觉超分请求: {:?}", task.input_path);
+    let window_clone = window.clone();
+    let progress_cb = move |current: usize, total: usize, msg: &str| {
+        let _ = window_clone.emit(
+            "upscale-progress",
+            serde_json::json!({
+                "current": current,
+                "total": total,
+                "message": msg
+            }),
+        );
+    };
+
+    Upscale48kTool::execute(task, state.vram_guard.clone(), Some(progress_cb)).await
 }
 
 #[tauri::command]
@@ -39,7 +62,6 @@ async fn parse_pdf(
         );
     };
 
-    // 🌟 全系统统一铁律：解析产物直接就地输出至源 PDF 所在同级目录
     let pdf_input_path = Path::new(&file_path);
     let target_out_dir = pdf_input_path
         .parent()
@@ -70,7 +92,6 @@ async fn run_video_subtitle(
 
     Gatekeeper::check_permission("video-subtitle").await?;
 
-    // 重置取消令牌为运行状态
     state.cancel_token.store(false, Ordering::SeqCst);
 
     VideoSubtitleTool::run_pipeline_cancellable(
@@ -132,7 +153,8 @@ pub fn run() {
             run_video_subtitle,
             cancel_current_task,
             get_hardware_fingerprint,
-            run_format_convert
+            run_format_convert,
+            run_upscale_48k
         ])
         .run(tauri::generate_context!())
         .expect("🚨 启动 紫电 AI 桌面端失败");

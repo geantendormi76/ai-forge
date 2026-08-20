@@ -3,24 +3,23 @@ import { ref } from 'vue';
 
 const USAGE_STORAGE_KEY = 'zidian_tool_usage_counts';
 
-// 🌟 对齐冷启动基线权重 (asr: 10, pdf: 8, format: 6)
+// 🌟 对齐冷启动基线权重 (upscale: 12, asr: 10, pdf: 8, format: 6)
 const DEFAULT_INITIAL_COUNTS: Record<string, number> = {
+  upscale: 12,
   asr: 10,
   pdf: 8,
   format: 6,
 };
 
 export const useUIStore = defineStore('ui', () => {
-  const currentView = ref<'home' | 'format' | 'pdf' | 'asr'>('home');
+  const currentView = ref<'home' | 'format' | 'pdf' | 'asr' | 'upscale'>('home');
   const showRadar = ref(false);
   const radarMode = ref<'global' | 'local'>('global');
   const toast消息 = ref<string | null>(null);
   const toast类型 = ref<'success' | 'error' | 'info'>('success');
   const toast显示 = ref(false);
 
-  // 悬浮侧边栏收起/展开状态机
   const 侧边栏收起 = ref(false);
-
   let toast定时器: number | null = null;
 
   const 弹出提示 = (消息: string, 类型: 'success' | 'error' | 'info' = 'success') => {
@@ -40,7 +39,6 @@ export const useUIStore = defineStore('ui', () => {
     侧边栏收起.value = !侧边栏收起.value;
   };
 
-  // 🌟 1. 读取本地离线持久化频次数据
   const loadUsageCounts = (): Record<string, number> => {
     try {
       const raw = localStorage.getItem(USAGE_STORAGE_KEY);
@@ -55,7 +53,6 @@ export const useUIStore = defineStore('ui', () => {
 
   const toolUsageCounts = ref<Record<string, number>>(loadUsageCounts());
 
-  // 🌟 2. 原子记录工具使用并持久化
   const recordToolUsage = (toolId: string) => {
     const current = toolUsageCounts.value[toolId] || 0;
     const nextCounts = {

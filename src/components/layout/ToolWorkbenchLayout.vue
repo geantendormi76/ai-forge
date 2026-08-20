@@ -86,7 +86,7 @@ onUnmounted(() => {
 
     <div
       class="relative z-10 flex-1 w-full overflow-y-auto custom-scrollbar pt-12 pb-10 transition-all duration-300 ease-in-out"
-      :class="ui.侧边栏收起 ? 'px-6 sm:px-10 lg:px-14' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
+      :class="ui.侧边栏收起 ? 'pl-[84px] pr-6 sm:pr-10' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
       @dragover="workflow.handleDragOver"
       @dragleave="workflow.handleDragLeave"
       @drop="workflow.handleDrop"
@@ -329,19 +329,17 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 🌟 100% 对齐图二图三标准的现代化顶级成功 Modal -->
+    <!-- 成功 Modal -->
     <div
       v-if="workflow.isSuccessModalOpen.value && workflow.successInfo.value"
       class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-150 select-none"
     >
       <div class="max-w-[360px] sm:max-w-[380px] w-full p-6 sm:p-7 rounded-[32px] bg-white border border-slate-100 shadow-[0_25px_60px_rgba(0,0,0,0.35)] text-center space-y-4 flex flex-col items-center animate-in zoom-in-95 duration-150">
         
-        <!-- 1. 经典翠绿实体立体徽标 (对齐图三) -->
         <div class="w-14 h-14 rounded-full bg-[#10b981] text-white flex items-center justify-center shadow-[0_8px_20px_rgba(16,185,129,0.35)] shrink-0">
           <Check :size="28" class="stroke-[3.5]" />
         </div>
 
-        <!-- 2. 大标题与副标题 -->
         <div class="space-y-1 w-full">
           <h3 class="text-xl font-black text-slate-900 tracking-tight">
             处理成功
@@ -354,7 +352,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 3. 极简浅灰信息卡片仓 (对齐图三) -->
         <div class="w-full bg-[#f4f4f5]/90 border border-slate-200/50 rounded-2xl p-4 text-xs text-left space-y-2.5">
           <div class="flex justify-between items-center text-slate-500">
             <span class="font-medium">目标格式</span>
@@ -381,7 +378,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 4. 双胶囊操作按钮 (对齐图二图三) -->
         <div class="w-full flex items-center justify-center gap-3 pt-1">
           <button
             type="button"
