@@ -32,8 +32,8 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: HANDOFF-TOOL.md, .cargo/**, src-tauri/.cargo/**, src-tauri/Cargo.toml, src-tauri/tauri.conf.json, src-tauri/capabilities/**, src-tauri/src/**, deploy/cloudflare/auth_worker.js, src/bindings.ts, src/bindings/**, src/assets/**, package.json, vite.config.ts, postcss.config.js, tailwind.config.js, index.html, src/App.vue, src/main.ts, src/style.css, src/vite-env.d.ts, src/composables/**, src/store/**, src/locales/**, src/components/**, src/views/HomeView.vue, src/views/PdfParseView.vue, src-tauri/crates/services/service-ocr/**, src-tauri/crates/core-models-download/**, src-tauri/crates/core-security/**, src-tauri/crates/shared-contracts/**, src-tauri/crates/services/service-upscale/**, src-tauri/crates/core-onnx-infer/**
-- Files matching these patterns are excluded: **/node_modules/**, src-tauri/target/**, **/.venv/**, **/__pycache__/**, **/*.onnx, **/*.gguf, **/*.bin, **/*.pdiparams, **/*.pdmodel, **/*.pdf, test/fixtures/**, test/outs/**, data/**, **/*.sqlite3*, dist/**, src-tauri/crates/tools/format-converter/**, src-tauri/crates/services/service-converter/**, src/views/PdfParseView.vue, src-tauri/crates/services/service-pdfium/**, src-tauri/crates/services/service-doc-parse/**, src-tauri/crates/services/service-formula/**, src-tauri/crates/services/service-layout/**, src-tauri/crates/services/service-table/**, src-tauri/crates/tools/pdf-parse/**, test/parse/ground_truth/**, test/parse/*.py, src/views/VideoSubtitleView.vue, src-tauri/crates/services/service-asr/**, src-tauri/crates/services/service-translation/**, src-tauri/crates/tools/video-subtitle/**
+- Only files matching these patterns are included: HANDOFF-TOOL.md, .cargo/**, src-tauri/.cargo/**, src-tauri/Cargo.toml, src-tauri/tauri.conf.json, src-tauri/capabilities/**, src-tauri/src/**, deploy/cloudflare/auth_worker.js, src/bindings.ts, src/bindings/**, src/assets/**, package.json, vite.config.ts, postcss.config.js, tailwind.config.js, index.html, src/App.vue, src/main.ts, src/style.css, src/vite-env.d.ts, src/composables/**, src/store/**, src/locales/**, src/components/**, src/views/HomeView.vue, src-tauri/crates/core-models-download/**, src-tauri/crates/core-security/**, src-tauri/crates/shared-contracts/**, src-tauri/crates/core-onnx-infer/**
+- Files matching these patterns are excluded: **/node_modules/**, src-tauri/target/**, **/.venv/**, **/__pycache__/**, **/*.onnx, **/*.gguf, **/*.bin, **/*.pdiparams, **/*.pdmodel, **/*.pdf, test/fixtures/**, test/outs/**, data/**, **/*.sqlite3*, dist/**, src-tauri/crates/tools/format-converter/**, src-tauri/crates/services/service-converter/**, src/views/FormatConverterView.vue, src-tauri/crates/services/service-ocr/**, src/views/PdfParseView.vue, src-tauri/crates/services/service-pdfium/**, src-tauri/crates/services/service-doc-parse/**, src-tauri/crates/services/service-formula/**, src-tauri/crates/services/service-layout/**, src-tauri/crates/services/service-table/**, src-tauri/crates/tools/pdf-parse/**, test/parse/ground_truth/**, test/parse/*.py, src/views/Upscale48kView.vue, src-tauri/crates/services/service-upscale/**, src-tauri/crates/tools/upscale-48k/**, src/views/VideoSubtitleView.vue, src-tauri/crates/services/service-asr/**, src-tauri/crates/services/service-translation/**, src-tauri/crates/tools/video-subtitle/**
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -54,6 +54,8 @@ src/
         cover.svg
       pdf-parse/
         cover.svg
+      upscale-48k/
+        cover.svg
       video-subtitle/
         cover.svg
     vue.svg
@@ -61,6 +63,7 @@ src/
     tools/
       format-converter.ts
       pdf-parse.ts
+      upscale-48k.ts
       video-subtitle.ts
     index.ts
   components/
@@ -174,44 +177,6 @@ src-tauri/
         lib.rs
         license.rs
       Cargo.toml
-    services/
-      service-ocr/
-        src/
-          core/
-            constants.rs
-            errors.rs
-            inference.rs
-            mod.rs
-          engine/
-            crnn_rec_model.rs
-            db_det_model.rs
-            mod.rs
-            ocr_engine.rs
-            ocr_service.rs
-          processors/
-            crop.rs
-            ctc_decode.rs
-            db_postprocess.rs
-            geometry.rs
-            mod.rs
-            normalization.rs
-            resize_det.rs
-            resize_rec.rs
-            types.rs
-          utils/
-            dict.rs
-            mod.rs
-          lib.rs
-        Cargo.toml
-      service-upscale/
-        src/
-          lib.rs
-          pipeline.rs
-          processor.rs
-          tiling.rs
-        tests/
-          test_e2e.rs
-        Cargo.toml
     shared-contracts/
       src/
         lib.rs
@@ -231,705 +196,6 @@ vite.config.ts
 
 <files>
 This section contains the contents of the repository's files.
-
-<file path="src-tauri/crates/services/service-upscale/src/lib.rs">
-// 🛡️ 8K 视觉超分 - 工业级服务门面 (lib.rs)
-
-pub mod pipeline;
-pub mod processor;
-pub mod tiling;
-
-pub use pipeline::UpscalePipeline;
-pub use processor::{ImageProcessor, PreprocessedImage};
-pub use tiling::{compute_grid, TileInfo};
-
-use serde::{Deserialize, Serialize};
-use shared_contracts::{TaskWeight, VramTokenGuard};
-use std::path::{Path, PathBuf};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpscaleTask {
-    pub input_path: String,
-    pub output_path: String,
-    pub model_path: Option<String>,
-    pub target_scale: Option<f32>,
-    pub max_output_side: Option<u32>,
-    pub tile_size: Option<u32>,
-    pub tile_pad: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpscaleConfig {
-    pub model_path: PathBuf,
-    pub target_scale: f32,
-    pub max_output_side: u32,
-    pub tile_size: u32,
-    pub tile_pad: u32,
-}
-
-impl Default for UpscaleConfig {
-    fn default() -> Self {
-        Self {
-            model_path: UpscaleService::resolve_default_model_path(),
-            target_scale: 4.0,
-            max_output_side: 8192,
-            tile_size: 256,
-            tile_pad: 10,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpscaleResult {
-    pub success: bool,
-    pub input_path: String,
-    pub output_path: String,
-    pub original_size: (u32, u32),
-    pub output_size: (u32, u32),
-    pub actual_scale: f32,
-    pub elapsed_ms: u64,
-    pub total_tiles: usize,
-}
-
-pub struct UpscaleService;
-
-impl UpscaleService {
-    pub fn resolve_default_model_path() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\models\service-upscale\RealESRGAN_x4plus.onnx"),
-            PathBuf::from(r"models\service-upscale\RealESRGAN_x4plus.onnx"),
-            PathBuf::from(r"..\models\service-upscale\RealESRGAN_x4plus.onnx"),
-            PathBuf::from(r"..\..\models\service-upscale\RealESRGAN_x4plus.onnx"),
-        ];
-
-        for candidate in &candidates {
-            if candidate.exists() {
-                return candidate.clone();
-            }
-        }
-
-        PathBuf::from(r"C:\dev\ai-forge\models\service-upscale\RealESRGAN_x4plus.onnx")
-    }
-
-    pub async fn run_upscale<F>(
-        task: &UpscaleTask,
-        vram_guard: Option<&VramTokenGuard>,
-        progress_cb: Option<F>,
-    ) -> Result<UpscaleResult, String>
-    where
-        F: Fn(usize, usize, &str) + Send + Sync + 'static,
-    {
-        let input_path = Path::new(&task.input_path);
-        if !input_path.exists() {
-            return Err(format!("输入图像文件不存在: {:?}", task.input_path));
-        }
-
-        let output_path = Path::new(&task.output_path);
-        if let Some(parent) = output_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-
-        let model_path = task
-            .model_path
-            .as_ref()
-            .map(PathBuf::from)
-            .unwrap_or_else(Self::resolve_default_model_path);
-
-        if !model_path.exists() {
-            return Err(format!("ONNX 模型文件未就绪: {:?}", model_path));
-        }
-
-        let config = UpscaleConfig {
-            model_path: model_path.clone(),
-            target_scale: task.target_scale.unwrap_or(4.0),
-            max_output_side: task.max_output_side.unwrap_or(8192),
-            tile_size: task.tile_size.unwrap_or(256),
-            tile_pad: task.tile_pad.unwrap_or(10),
-        };
-
-        let _permit = if let Some(guard) = vram_guard {
-            Some(guard.acquire(TaskWeight::Medium).await?)
-        } else {
-            None
-        };
-
-        let input_buf = input_path.to_path_buf();
-        let output_buf = output_path.to_path_buf();
-
-        tokio::task::spawn_blocking(move || {
-            let mut pipeline = UpscalePipeline::new(&model_path)?;
-            pipeline.run(&input_buf, &output_buf, &config, progress_cb)
-        })
-        .await
-        .map_err(|e| format!("Tokio 线程调度异常: {e}"))?
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-upscale/src/pipeline.rs">
-// 🛡️ 8K 视觉超分 - 纯血 ONNX GPU 极速流水线 (pipeline.rs)
-
-use crate::processor::ImageProcessor;
-use crate::tiling::compute_grid;
-use crate::{UpscaleConfig, UpscaleResult};
-use core_onnx_infer::OrtInfer;
-use image::RgbImage;
-use std::path::Path;
-use std::time::Instant;
-
-pub struct UpscalePipeline {
-    infer: OrtInfer,
-}
-
-impl UpscalePipeline {
-    pub fn new(model_path: &Path) -> Result<Self, String> {
-        let infer = OrtInfer::new(model_path, Some("cuda:0"))
-            .map_err(|e| format!("初始化 ONNX 超分引擎失败: {e} ({:?})", model_path))?;
-        Ok(Self { infer })
-    }
-
-    pub fn run<F>(
-        &mut self,
-        input_path: &Path,
-        output_path: &Path,
-        config: &UpscaleConfig,
-        progress_cb: Option<F>,
-    ) -> Result<UpscaleResult, String>
-    where
-        F: Fn(usize, usize, &str) + Send + Sync,
-    {
-        let t0 = Instant::now();
-
-        if let Some(ref cb) = progress_cb {
-            cb(0, 100, "正在加载源图像并分离透明通道...");
-        }
-
-        // 1. 预处理
-        let prep = ImageProcessor::load_and_preprocess(
-            input_path,
-            config.target_scale,
-            config.max_output_side,
-        )?;
-
-        let orig_w = prep.orig_w;
-        let orig_h = prep.orig_h;
-        let target_w = prep.target_w;
-        let target_h = prep.target_h;
-        let actual_scale = prep.actual_scale;
-
-        // 2. 切块网格计算
-        let tiles = compute_grid(orig_w, orig_h, config.tile_size, config.tile_pad);
-        let total_tiles = tiles.len();
-
-        // 3. 构建 4x 目标物理画布
-        let model_scale = 4u32;
-        let mut canvas_4x = RgbImage::new(orig_w * model_scale, orig_h * model_scale);
-
-        // 4. 逐块 GPU 矩阵直推
-        for (idx, tile) in tiles.iter().enumerate() {
-            if let Some(ref cb) = progress_cb {
-                let msg = format!("RTX 显卡超分推理中 ({}/{})", idx + 1, total_tiles);
-                cb(idx + 1, total_tiles, &msg);
-            }
-
-            let input_tensor = ImageProcessor::crop_to_tensor(&prep.rgb_image, tile);
-            let out_tensor = self
-                .infer
-                .infer_array4(&input_tensor)
-                .map_err(|e| format!("ONNX 切块推理失败: {e}"))?;
-
-            ImageProcessor::paste_tile_to_canvas(
-                &mut canvas_4x,
-                &out_tensor,
-                tile,
-                model_scale,
-            );
-        }
-
-        if let Some(ref cb) = progress_cb {
-            cb(total_tiles, total_tiles, "正在执行双三次重采样与通道融合...");
-        }
-
-        // 5. 缩放与落盘
-        ImageProcessor::finalize_and_save(
-            canvas_4x,
-            prep.alpha_channel,
-            target_w,
-            target_h,
-            output_path,
-        )?;
-
-        let elapsed_ms = t0.elapsed().as_millis() as u64;
-
-        Ok(UpscaleResult {
-            success: true,
-            input_path: input_path.to_string_lossy().to_string(),
-            output_path: output_path.to_string_lossy().to_string(),
-            original_size: (orig_w, orig_h),
-            output_size: (target_w, target_h),
-            actual_scale,
-            elapsed_ms,
-            total_tiles,
-        })
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-upscale/src/processor.rs">
-// 🛡️ 8K 视觉超分 - 极速内存前处理/后处理引擎 (processor.rs)
-// 100% 外科手术式直译自 upscale_worker.py
-
-use crate::tiling::TileInfo;
-use fast_image_resize::images::{Image as FrImage, ImageRef};
-use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
-use image::{DynamicImage, GenericImageView, GrayImage, ImageBuffer, Rgb, RgbImage, Rgba, RgbaImage};
-use ndarray::Array4;
-use std::num::NonZeroU32;
-use std::path::Path;
-
-#[derive(Debug, Clone)]
-pub struct PreprocessedImage {
-    pub rgb_image: RgbImage,
-    pub alpha_channel: Option<GrayImage>,
-    pub orig_w: u32,
-    pub orig_h: u32,
-    pub target_w: u32,
-    pub target_h: u32,
-    pub actual_scale: f32,
-}
-
-pub struct ImageProcessor;
-
-impl ImageProcessor {
-    pub fn load_and_preprocess(
-        input_path: &Path,
-        req_scale: f32,
-        max_output_side: u32,
-    ) -> Result<PreprocessedImage, String> {
-        let dyn_img = image::open(input_path)
-            .map_err(|e| format!("打开图像文件失败: {e} ({:?})", input_path))?;
-
-        let (orig_w, orig_h) = dyn_img.dimensions();
-        if orig_w == 0 || orig_h == 0 {
-            return Err("图像尺寸为 0，无法进行超分处理".to_string());
-        }
-
-        let (rgb_image, alpha_channel) = match dyn_img {
-            DynamicImage::ImageRgba8(rgba) => {
-                let mut rgb = RgbImage::new(orig_w, orig_h);
-                let mut alpha = GrayImage::new(orig_w, orig_h);
-                let mut has_transparency = false;
-
-                for y in 0..orig_h {
-                    for x in 0..orig_w {
-                        let p = rgba.get_pixel(x, y);
-                        rgb.put_pixel(x, y, Rgb([p[0], p[1], p[2]]));
-                        alpha.put_pixel(x, y, image::Luma([p[3]]));
-                        if p[3] < 255 {
-                            has_transparency = true;
-                        }
-                    }
-                }
-
-                (rgb, if has_transparency { Some(alpha) } else { None })
-            }
-            _ => (dyn_img.to_rgb8(), None),
-        };
-
-        let max_in_side = orig_w.max(orig_h);
-        let mut actual_scale = req_scale;
-        if (max_in_side as f32 * req_scale) > max_output_side as f32 {
-            actual_scale = (max_output_side as f32 / max_in_side as f32).max(1.0);
-        }
-
-        let target_w = ((orig_w as f32 * actual_scale).round() as u32).max(1);
-        let target_h = ((orig_h as f32 * actual_scale).round() as u32).max(1);
-
-        Ok(PreprocessedImage {
-            rgb_image,
-            alpha_channel,
-            orig_w,
-            orig_h,
-            target_w,
-            target_h,
-            actual_scale,
-        })
-    }
-
-    /// ⚡ 高速向量化切块转 Array4<f32>: [1, 3, crop_h, crop_w], 范围 [0.0, 1.0]
-    pub fn crop_to_tensor(rgb_image: &RgbImage, tile: &TileInfo) -> Array4<f32> {
-        let (crop_x, crop_y, crop_w, crop_h) = tile.crop_rect();
-        let plane_size = (crop_w * crop_h) as usize;
-        let mut data = Vec::with_capacity(3 * plane_size);
-
-        let raw_pixels = rgb_image.as_raw();
-        let img_w = rgb_image.width() as usize;
-
-        // Planar NCHW: Channel R
-        for dy in 0..crop_h as usize {
-            let py = crop_y as usize + dy;
-            let row_start = (py * img_w + crop_x as usize) * 3;
-            for dx in 0..crop_w as usize {
-                data.push(raw_pixels[row_start + dx * 3] as f32 / 255.0);
-            }
-        }
-        // Channel G
-        for dy in 0..crop_h as usize {
-            let py = crop_y as usize + dy;
-            let row_start = (py * img_w + crop_x as usize) * 3;
-            for dx in 0..crop_w as usize {
-                data.push(raw_pixels[row_start + dx * 3 + 1] as f32 / 255.0);
-            }
-        }
-        // Channel B
-        for dy in 0..crop_h as usize {
-            let py = crop_y as usize + dy;
-            let row_start = (py * img_w + crop_x as usize) * 3;
-            for dx in 0..crop_w as usize {
-                data.push(raw_pixels[row_start + dx * 3 + 2] as f32 / 255.0);
-            }
-        }
-
-        Array4::from_shape_vec((1, 3, crop_h as usize, crop_w as usize), data)
-            .unwrap_or_else(|_| Array4::zeros((1, 3, crop_h as usize, crop_w as usize)))
-    }
-
-    /// ⚡ 行级连续内存极速贴图 (剔除重叠 Padding)
-    pub fn paste_tile_to_canvas(
-        canvas_4x: &mut RgbImage,
-        out_tensor: &Array4<f32>,
-        tile: &TileInfo,
-        model_scale: u32,
-    ) {
-        let (_, _, crop_w, crop_h) = tile.crop_rect();
-        let out_w = (crop_w * model_scale) as usize;
-        let out_h = (crop_h * model_scale) as usize;
-        let out_plane_size = out_w * out_h;
-
-        let tensor_slice = if let Some(slice) = out_tensor.as_slice() {
-            slice
-        } else {
-            return;
-        };
-
-        let r_plane = &tensor_slice[0..out_plane_size];
-        let g_plane = &tensor_slice[out_plane_size..2 * out_plane_size];
-        let b_plane = &tensor_slice[2 * out_plane_size..3 * out_plane_size];
-
-        let (valid_x, valid_y, valid_w, valid_h) = tile.valid_scaled_rect(model_scale);
-        let (paste_x, paste_y) = tile.canvas_paste_pos(model_scale);
-
-        let canvas_w = canvas_4x.width() as usize;
-        let canvas_raw: &mut [u8] = canvas_4x.as_mut();
-
-        for dy in 0..valid_h as usize {
-            let src_y = valid_y as usize + dy;
-            let src_row_start = src_y * out_w + valid_x as usize;
-
-            let dst_y = paste_y as usize + dy;
-            let dst_row_start = (dst_y * canvas_w + paste_x as usize) * 3;
-
-            for dx in 0..valid_w as usize {
-                let r = (r_plane[src_row_start + dx].clamp(0.0, 1.0) * 255.0).round() as u8;
-                let g = (g_plane[src_row_start + dx].clamp(0.0, 1.0) * 255.0).round() as u8;
-                let b = (b_plane[src_row_start + dx].clamp(0.0, 1.0) * 255.0).round() as u8;
-
-                let dst_idx = dst_row_start + dx * 3;
-                canvas_raw[dst_idx] = r;
-                canvas_raw[dst_idx + 1] = g;
-                canvas_raw[dst_idx + 2] = b;
-            }
-        }
-    }
-
-    pub fn resize_rgb(src: &RgbImage, dst_w: u32, dst_h: u32) -> Result<RgbImage, String> {
-        if src.width() == dst_w && src.height() == dst_h {
-            return Ok(src.clone());
-        }
-
-        let width = NonZeroU32::new(src.width()).ok_or("输入图像宽度为0")?;
-        let height = NonZeroU32::new(src.height()).ok_or("输入图像高度为0")?;
-        let dst_width = NonZeroU32::new(dst_w).ok_or("目标图像宽度为0")?;
-        let dst_height = NonZeroU32::new(dst_h).ok_or("目标图像高度为0")?;
-
-        let src_view = ImageRef::new(width.get(), height.get(), src.as_raw(), PixelType::U8x3)
-            .map_err(|e| format!("创建源图像视图失败: {e}"))?;
-
-        let mut dst_view = FrImage::new(dst_width.get(), dst_height.get(), PixelType::U8x3);
-        let mut resizer = Resizer::new();
-        let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::CatmullRom));
-
-        resizer
-            .resize(&src_view, &mut dst_view, &options)
-            .map_err(|e| format!("Bicubic 重采样失败: {e}"))?;
-
-        ImageBuffer::from_raw(dst_w, dst_h, dst_view.into_vec())
-            .ok_or_else(|| "构造 RgbImage 输出缓冲区失败".to_string())
-    }
-
-    pub fn resize_alpha(src: &GrayImage, dst_w: u32, dst_h: u32) -> Result<GrayImage, String> {
-        if src.width() == dst_w && src.height() == dst_h {
-            return Ok(src.clone());
-        }
-
-        let width = NonZeroU32::new(src.width()).ok_or("输入通道宽度为0")?;
-        let height = NonZeroU32::new(src.height()).ok_or("输入通道高度为0")?;
-        let dst_width = NonZeroU32::new(dst_w).ok_or("目标通道宽度为0")?;
-        let dst_height = NonZeroU32::new(dst_h).ok_or("目标通道高度为0")?;
-
-        let src_view = ImageRef::new(width.get(), height.get(), src.as_raw(), PixelType::U8)
-            .map_err(|e| format!("创建源 Alpha 视图失败: {e}"))?;
-
-        let mut dst_view = FrImage::new(dst_width.get(), dst_height.get(), PixelType::U8);
-        let mut resizer = Resizer::new();
-        let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::CatmullRom));
-
-        resizer
-            .resize(&src_view, &mut dst_view, &options)
-            .map_err(|e| format!("Alpha Bicubic 重采样失败: {e}"))?;
-
-        ImageBuffer::from_raw(dst_w, dst_h, dst_view.into_vec())
-            .ok_or_else(|| "构造 GrayImage 输出缓冲区失败".to_string())
-    }
-
-    pub fn finalize_and_save(
-        canvas_4x: RgbImage,
-        alpha_channel: Option<GrayImage>,
-        target_w: u32,
-        target_h: u32,
-        output_path: &Path,
-    ) -> Result<(), String> {
-        let final_rgb = Self::resize_rgb(&canvas_4x, target_w, target_h)?;
-
-        if let Some(alpha) = alpha_channel {
-            let final_alpha = Self::resize_alpha(&alpha, target_w, target_h)?;
-            let mut final_rgba = RgbaImage::new(target_w, target_h);
-
-            for y in 0..target_h {
-                for x in 0..target_w {
-                    let rgb_p = final_rgb.get_pixel(x, y);
-                    let a_p = final_alpha.get_pixel(x, y);
-                    final_rgba.put_pixel(x, y, Rgba([rgb_p[0], rgb_p[1], rgb_p[2], a_p[0]]));
-                }
-            }
-
-            final_rgba
-                .save(output_path)
-                .map_err(|e| format!("保存 RGBA 图像失败: {e} ({:?})", output_path))?;
-        } else {
-            final_rgb
-                .save(output_path)
-                .map_err(|e| format!("保存 RGB 图像失败: {e} ({:?})", output_path))?;
-        }
-
-        Ok(())
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-upscale/src/tiling.rs">
-// 🛡️ 8K 视觉超分 - 零接缝智能动态切块引擎 (tiling.rs)
-// 100% 外科手术式直译自 upscale_worker.py / upscale_daemon.py
-
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TileInfo {
-    pub x: u32,
-    pub y: u32,
-    pub w: u32,
-    pub h: u32,
-    pub pad_left: u32,
-    pub pad_top: u32,
-    pub pad_right: u32,
-    pub pad_bottom: u32,
-}
-
-impl TileInfo {
-    /// 计算包含 Padding 的输入图像裁剪区域: (crop_x, crop_y, crop_w, crop_h)
-    #[inline]
-    pub fn crop_rect(&self) -> (u32, u32, u32, u32) {
-        let crop_x = self.x - self.pad_left;
-        let crop_y = self.y - self.pad_top;
-        let crop_w = self.w + self.pad_left + self.pad_right;
-        let crop_h = self.h + self.pad_top + self.pad_bottom;
-        (crop_x, crop_y, crop_w, crop_h)
-    }
-
-    /// 计算模型放大后的内部有效截取区域 (剔除 Padding 伪影): (valid_x, valid_y, valid_w, valid_h)
-    #[inline]
-    pub fn valid_scaled_rect(&self, model_scale: u32) -> (u32, u32, u32, u32) {
-        let valid_x = self.pad_left * model_scale;
-        let valid_y = self.pad_top * model_scale;
-        let valid_w = self.w * model_scale;
-        let valid_h = self.h * model_scale;
-        (valid_x, valid_y, valid_w, valid_h)
-    }
-
-    /// 计算在全局 4x 目标画布上的贴图起始坐标: (paste_x, paste_y)
-    #[inline]
-    pub fn canvas_paste_pos(&self, model_scale: u32) -> (u32, u32) {
-        (self.x * model_scale, self.y * model_scale)
-    }
-}
-
-/// 智能网格切块计算器
-/// 1:1 对齐 Python 原版 compute_grid 算法
-pub fn compute_grid(img_w: u32, img_h: u32, tile_size: u32, tile_pad: u32) -> Vec<TileInfo> {
-    let mut tiles = Vec::new();
-    let mut y = 0;
-
-    while y < img_h {
-        let h = tile_size.min(img_h - y);
-        let mut x = 0;
-
-        while x < img_w {
-            let w = tile_size.min(img_w - x);
-            let pad_left = tile_pad.min(x);
-            let pad_top = tile_pad.min(y);
-            let pad_right = tile_pad.min(img_w.saturating_sub(x + w));
-            let pad_bottom = tile_pad.min(img_h.saturating_sub(y + h));
-
-            tiles.push(TileInfo {
-                x,
-                y,
-                w,
-                h,
-                pad_left,
-                pad_top,
-                pad_right,
-                pad_bottom,
-            });
-
-            x += tile_size;
-        }
-
-        y += tile_size;
-    }
-
-    tiles
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_compute_grid_basic() {
-        // 测试 500x500 图像在 tile_size=256, pad=10 时的切块分布 (应为 2x2 = 4 块)
-        let tiles = compute_grid(500, 500, 256, 10);
-        assert_eq!(tiles.len(), 4);
-
-        // 第 1 块 (左上角)
-        let t0 = &tiles[0];
-        assert_eq!(t0.x, 0);
-        assert_eq!(t0.y, 0);
-        assert_eq!(t0.w, 256);
-        assert_eq!(t0.h, 256);
-        assert_eq!(t0.pad_left, 0);
-        assert_eq!(t0.pad_top, 0);
-        assert_eq!(t0.pad_right, 10);
-        assert_eq!(t0.pad_bottom, 10);
-        assert_eq!(t0.crop_rect(), (0, 0, 266, 266));
-        assert_eq!(t0.valid_scaled_rect(4), (0, 0, 1024, 1024));
-        assert_eq!(t0.canvas_paste_pos(4), (0, 0));
-
-        // 第 4 块 (右下角尾块: 244x244)
-        let t3 = &tiles[3];
-        assert_eq!(t3.x, 256);
-        assert_eq!(t3.y, 256);
-        assert_eq!(t3.w, 244);
-        assert_eq!(t3.h, 244);
-        assert_eq!(t3.pad_left, 10);
-        assert_eq!(t3.pad_top, 10);
-        assert_eq!(t3.pad_right, 0);
-        assert_eq!(t3.pad_bottom, 0);
-        assert_eq!(t3.crop_rect(), (246, 246, 254, 254));
-        assert_eq!(t3.valid_scaled_rect(4), (40, 40, 976, 976));
-        assert_eq!(t3.canvas_paste_pos(4), (1024, 1024));
-    }
-
-    #[test]
-    fn test_small_image_no_split() {
-        // 小于 tile_size 的图像不分块
-        let tiles = compute_grid(100, 80, 256, 10);
-        assert_eq!(tiles.len(), 1);
-        let t = &tiles[0];
-        assert_eq!(t.w, 100);
-        assert_eq!(t.h, 80);
-        assert_eq!(t.pad_left, 0);
-        assert_eq!(t.pad_top, 0);
-        assert_eq!(t.pad_right, 0);
-        assert_eq!(t.pad_bottom, 0);
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-upscale/tests/test_e2e.rs">
-use service_upscale::{UpscaleService, UpscaleTask};
-use std::path::Path;
-
-#[tokio::test]
-async fn test_upscale_real_samples() {
-    let input_dir = Path::new(r"C:\dev\ai-forge\test\input\service-upscale");
-    let out_dir = Path::new(r"C:\dev\ai-forge\test\outs\service-upscale");
-    let _ = std::fs::create_dir_all(out_dir);
-
-    let samples = ["1.png", "2.png", "3.jpg"];
-
-    for sample in &samples {
-        let in_path = input_dir.join(sample);
-        if !in_path.exists() {
-            println!("⚠️ 测试样本不存在，跳过: {:?}", in_path);
-            continue;
-        }
-
-        let out_name = format!("upscaled_4x_{}", sample);
-        let out_path = out_dir.join(out_name);
-
-        let task = UpscaleTask {
-            input_path: in_path.to_string_lossy().to_string(),
-            output_path: out_path.to_string_lossy().to_string(),
-            model_path: None,
-            target_scale: Some(4.0),
-            max_output_side: Some(8192),
-            tile_size: Some(256),
-            tile_pad: Some(10),
-        };
-
-        println!("\n🚀 [纯血 Rust 8K 超分打靶] 输入: {:?}", in_path);
-        let result = UpscaleService::run_upscale(&task, None, Some(|cur, total, msg: &str| {
-            println!("  进度: [{}/{}] {}", cur, total, msg);
-        }))
-        .await
-        .expect("8K 超分执行失败");
-
-        println!("🎉 [打靶成功] 原始尺寸: {:?} ➔ 4x 输出尺寸: {:?}", result.original_size, result.output_size);
-        println!("⏱️ 真实物理耗时: {} ms ({:.2} s) | 切块数: {}", result.elapsed_ms, result.elapsed_ms as f64 / 1000.0, result.total_tiles);
-        println!("💾 产物落盘: {:?}", out_path);
-        assert!(out_path.exists());
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-upscale/Cargo.toml">
-[package]
-name = "service-upscale"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-core-onnx-infer = { path = "../../core-onnx-infer", features = ["cuda"] }
-shared-contracts = { path = "../../shared-contracts" }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
-fast_image_resize = { version = "5.1", features = ["image"] }
-ndarray = "0.15"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-tracing = "0.1"
-tokio = { version = "1.38", features = ["sync", "rt", "macros", "rt-multi-thread"] }
-</file>
 
 <file path="deploy/cloudflare/auth_worker.js">
 // 🛡️ AI-Forge Cloudflare Worker Serverless 鉴权中台 (v1.0.0)
@@ -1111,100 +377,6 @@ async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
 }
 </file>
 
-<file path="src/assets/tools/format-converter/cover.svg">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
-  <defs>
-    <!-- 极夜深空背景渐变 -->
-    <linearGradient id="fcBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#121819" />
-      <stop offset="50%" stop-color="#182224" />
-      <stop offset="100%" stop-color="#0c1112" />
-    </linearGradient>
-
-    <!-- 紫金核心聚光晕 -->
-    <radialGradient id="fcCenterGlow" cx="50%" cy="50%" r="65%">
-      <stop offset="0%" stop-color="#bc05ff" stop-opacity="0.25" />
-      <stop offset="45%" stop-color="#DCA54C" stop-opacity="0.10" />
-      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
-    </radialGradient>
-
-    <!-- 格式流转渐变 -->
-    <linearGradient id="fcFlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00ffa9" />
-      <stop offset="30%" stop-color="#00d2ff" />
-      <stop offset="70%" stop-color="#bc05ff" />
-      <stop offset="100%" stop-color="#DCA54C" />
-    </linearGradient>
-
-    <!-- 柔和辉光滤镜 -->
-    <filter id="fcNeonBlur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="10" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-  </defs>
-
-  <!-- 1. 底板画卷 (16:10 黄金比例) -->
-  <rect width="800" height="500" fill="url(#fcBgGrad)" />
-
-  <!-- 2. 核心光学聚光层 -->
-  <rect width="800" height="500" fill="url(#fcCenterGlow)" />
-
-  <!-- 3. 背景几何矩阵点阵 -->
-  <g opacity="0.15" fill="#00ffa9">
-    <circle cx="100" cy="80" r="1.5" /><circle cx="250" cy="80" r="1.5" /><circle cx="400" cy="80" r="1.5" /><circle cx="550" cy="80" r="1.5" /><circle cx="700" cy="80" r="1.5" />
-    <circle cx="100" cy="180" r="1.5" /><circle cx="250" cy="180" r="1.5" /><circle cx="400" cy="180" r="1.5" /><circle cx="550" cy="180" r="1.5" /><circle cx="700" cy="180" r="1.5" />
-    <circle cx="100" cy="280" r="1.5" /><circle cx="250" cy="280" r="1.5" /><circle cx="400" cy="280" r="1.5" /><circle cx="550" cy="280" r="1.5" /><circle cx="700" cy="280" r="1.5" />
-    <circle cx="100" cy="380" r="1.5" /><circle cx="250" cy="380" r="1.5" /><circle cx="400" cy="380" r="1.5" /><circle cx="550" cy="380" r="1.5" /><circle cx="700" cy="380" r="1.5" />
-  </g>
-
-  <!-- 4. 双向流转循环轨道 (莫比乌斯流光) -->
-  <g filter="url(#fcNeonBlur)" opacity="0.85">
-    <path d="M 180 250 C 180 160, 320 160, 400 250 C 480 340, 620 340, 620 250 C 620 160, 480 160, 400 250 C 320 340, 180 340, 180 250 Z" 
-          fill="none" stroke="url(#fcFlowGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-  </g>
-
-  <!-- 5. 核心格式浮动徽章卡片群 -->
-  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="16" text-anchor="middle">
-    <!-- 音频节点 (左侧) -->
-    <g transform="translate(180, 250)">
-      <circle r="42" fill="#182224" stroke="#00ffa9" stroke-width="2" opacity="0.9" />
-      <text y="6" fill="#00ffa9" font-size="14">AUDIO</text>
-    </g>
-
-    <!-- 电子书/文档节点 (中枢) -->
-    <g transform="translate(400, 250)">
-      <circle r="52" fill="#1b1c24" stroke="#bc05ff" stroke-width="2.5" opacity="0.95" />
-      <text y="7" fill="#ffffff" font-size="17">CONVERT</text>
-    </g>
-
-    <!-- 数据与图像节点 (右侧) -->
-    <g transform="translate(620, 250)">
-      <circle r="42" fill="#241e18" stroke="#DCA54C" stroke-width="2" opacity="0.9" />
-      <text y="6" fill="#DCA54C" font-size="14">DATA</text>
-    </g>
-  </g>
-
-  <!-- 6. 顶部全息副标 -->
-  <text x="400" y="90" 
-        fill="#ffffff" 
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
-        font-size="28" 
-        font-weight="900" 
-        text-anchor="middle" 
-        letter-spacing="4" 
-        opacity="0.95">UNIVERSAL FORMAT CONVERTER</text>
-
-  <!-- 7. 底部算力声明 -->
-  <text x="400" y="430" 
-        fill="#8b999b" 
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
-        font-size="13" 
-        font-weight="600" 
-        text-anchor="middle" 
-        letter-spacing="2">PURE RUST IN-STREAM · 0 VRAM OVERHEAD · FULLY OFFLINE</text>
-</svg>
-</file>
-
 <file path="src/assets/tools/pdf-parse/cover.svg">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
   <defs>
@@ -1283,92 +455,80 @@ async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
 </svg>
 </file>
 
-<file path="src/assets/tools/video-subtitle/cover.svg">
+<file path="src/assets/tools/upscale-48k/cover.svg">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
   <defs>
-    <!-- 极夜深空背景渐变 -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#101718" />
-      <stop offset="50%" stop-color="#142124" />
-      <stop offset="100%" stop-color="#0a0f10" />
+    <!-- 主底板电光紫晶渐变 (满铺) -->
+    <linearGradient id="fullUpscaleVioletSheet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d946ef" />
+      <stop offset="35%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#4c1d95" />
     </linearGradient>
 
-    <!-- 中心电光海青聚光晕 -->
-    <radialGradient id="centerGlow" cx="50%" cy="50%" r="65%">
-      <stop offset="0%" stop-color="#02c3b4" stop-opacity="0.32" />
-      <stop offset="45%" stop-color="#02c3b4" stop-opacity="0.08" />
-      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
-    </radialGradient>
-
-    <!-- 紫电流光渐变 -->
-    <linearGradient id="streamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#02c3b4" stop-opacity="0.2" />
-      <stop offset="30%" stop-color="#02c3b4" stop-opacity="1" />
-      <stop offset="50%" stop-color="#00d2ff" stop-opacity="1" />
-      <stop offset="70%" stop-color="#bc05ff" stop-opacity="0.9" />
-      <stop offset="100%" stop-color="#02c3b4" stop-opacity="0.2" />
+    <!-- 右上角 3D 翻折折角渐变 -->
+    <linearGradient id="fullFoldFlapGradUp" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0abfc" />
+      <stop offset="100%" stop-color="#7e22ce" />
     </linearGradient>
 
-    <!-- 柔和光学辉光滤镜 -->
-    <filter id="neonBlur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-
-    <filter id="subtleGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="4" result="blur2" />
-      <feComposite in="SourceGraphic" in2="blur2" operator="over" />
+    <!-- 拟真立体折角投影 -->
+    <filter id="foldShadowUp" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-4" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.45" />
     </filter>
   </defs>
 
-  <!-- 1. 底板画卷 (16:10 黄金比例) -->
-  <rect width="800" height="500" fill="url(#bgGrad)" />
+  <!-- 1. 🌟 全屏满铺紫底卡片主体 (右上角带 3D 折角缺口) -->
+  <path d="M 0 0 
+           L 680 0 
+           L 800 120 
+           L 800 500 
+           L 0 500 Z" 
+        fill="url(#fullUpscaleVioletSheet)" />
 
-  <!-- 2. 核心光学聚光层 -->
-  <rect width="800" height="500" fill="url(#centerGlow)" />
+  <!-- 2. 全景外边缘晶体高光微边 -->
+  <path d="M 0 1 
+           L 679 1 
+           L 799 121 
+           L 799 499 
+           L 1 499 
+           L 1 0" 
+        fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.25" />
 
-  <!-- 3. 背景参数化几何点阵 -->
-  <g opacity="0.12" fill="#02c3b4">
-    <circle cx="100" cy="80" r="1.5" /><circle cx="250" cy="80" r="1.5" /><circle cx="400" cy="80" r="1.5" /><circle cx="550" cy="80" r="1.5" /><circle cx="700" cy="80" r="1.5" />
-    <circle cx="100" cy="180" r="1.5" /><circle cx="250" cy="180" r="1.5" /><circle cx="400" cy="180" r="1.5" /><circle cx="550" cy="180" r="1.5" /><circle cx="700" cy="180" r="1.5" />
-    <circle cx="100" cy="280" r="1.5" /><circle cx="250" cy="280" r="1.5" /><circle cx="400" cy="280" r="1.5" /><circle cx="550" cy="280" r="1.5" /><circle cx="700" cy="280" r="1.5" />
-    <circle cx="100" cy="380" r="1.5" /><circle cx="250" cy="380" r="1.5" /><circle cx="400" cy="380" r="1.5" /><circle cx="550" cy="380" r="1.5" /><circle cx="700" cy="380" r="1.5" />
+  <!-- 3. 🌟 右上角 3D 拟真翻折三角瓣 -->
+  <g filter="url(#foldShadowUp)">
+    <path d="M 680 0 
+             L 680 96 
+             A 24 24 0 0 0 704 120 
+             L 800 120 Z" 
+          fill="url(#fullFoldFlapGradUp)" />
+    <!-- 折角底边阴影暗线 -->
+    <path d="M 680 120 L 800 120" stroke="#000000" stroke-width="2.5" stroke-opacity="0.3" />
   </g>
 
-  <!-- 4. 抽象电影声波流光曲线 -->
-  <g filter="url(#neonBlur)" opacity="0.75">
-    <path d="M 50 250 C 180 160, 240 340, 360 220 C 460 120, 540 380, 640 230 C 700 160, 750 250, 750 250" 
-          fill="none" stroke="url(#streamGrad)" stroke-width="6" stroke-linecap="round" />
-  </g>
+  <!-- 4. 🌟 绝对居中超大号字标：8K (165px 纯白极粗，绝对视觉焦点) -->
+  <text x="400" y="270" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="165" 
+        font-weight="900" 
+        text-anchor="middle" 
+        letter-spacing="6">8K</text>
 
-  <!-- 5. 核心声波频段粒子阵列 -->
-  <g filter="url(#subtleGlow)" opacity="0.95">
-    <!-- 左翼渐进区 -->
-    <rect x="120" y="225" width="5" height="50" rx="2.5" fill="#02c3b4" />
-    <rect x="145" y="200" width="5" height="100" rx="2.5" fill="#02c3b4" />
-    <rect x="170" y="170" width="5" height="160" rx="2.5" fill="#02c3b4" />
-    <rect x="195" y="210" width="5" height="80" rx="2.5" fill="#02c3b4" />
-    <rect x="220" y="150" width="5" height="200" rx="2.5" fill="#00d2ff" />
-    <rect x="245" y="180" width="5" height="140" rx="2.5" fill="#02c3b4" />
-    <rect x="270" y="220" width="5" height="60" rx="2.5" fill="#02c3b4" />
+  <!-- 5. 🌟 绝对居中副标：4K / 8K Ultra Resolution -->
+  <text x="400" y="350" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="26" 
+        font-weight="700" 
+        text-anchor="middle" 
+        letter-spacing="4" 
+        opacity="0.95">4K / 8K Ultra Resolution</text>
 
-    <!-- 黄金中枢区 -->
-    <rect x="300" y="160" width="6" height="180" rx="3" fill="#bc05ff" />
-    <rect x="330" y="120" width="6" height="260" rx="3" fill="#02c3b4" />
-    <rect x="360" y="80"  width="7" height="340" rx="3.5" fill="#00ffa9" />
-    <rect x="395" y="105" width="8" height="290" rx="4" fill="#ffffff" />
-    <rect x="430" y="80"  width="7" height="340" rx="3.5" fill="#00ffa9" />
-    <rect x="465" y="120" width="6" height="260" rx="3" fill="#02c3b4" />
-    <rect x="495" y="160" width="6" height="180" rx="3" fill="#bc05ff" />
-
-    <!-- 右翼收敛区 -->
-    <rect x="525" y="220" width="5" height="60" rx="2.5" fill="#02c3b4" />
-    <rect x="550" y="180" width="5" height="140" rx="2.5" fill="#02c3b4" />
-    <rect x="575" y="150" width="5" height="200" rx="2.5" fill="#00d2ff" />
-    <rect x="600" y="210" width="5" height="80" rx="2.5" fill="#02c3b4" />
-    <rect x="625" y="170" width="5" height="160" rx="2.5" fill="#02c3b4" />
-    <rect x="650" y="200" width="5" height="100" rx="2.5" fill="#02c3b4" />
-    <rect x="675" y="225" width="5" height="50" rx="2.5" fill="#02c3b4" />
+  <!-- 6. 底部极简结构高光装饰条 (居中舒展) -->
+  <g opacity="0.35" fill="#ffffff">
+    <rect x="220" y="400" width="100" height="7" rx="3.5" />
+    <rect x="340" y="400" width="120" height="7" rx="3.5" />
+    <rect x="480" y="400" width="100" height="7" rx="3.5" />
   </g>
 </svg>
 </file>
@@ -1406,6 +566,52 @@ export interface FormatConvertResult {
 
 export async function runFormatConvert(task: FormatConvertTask): Promise<FormatConvertResult> {
   return await invoke<FormatConvertResult>("run_format_convert", { task });
+}
+</file>
+
+<file path="src/bindings/tools/upscale-48k.ts">
+// 🛡️ 紫电 AI 桌面工坊 - 4K/8K 视觉超分专属强类型契约 (upscale-48k.ts)
+
+import { invoke } from "@tauri-apps/api/core";
+
+export interface UpscaleTask {
+  /** 待超分输入图像物理绝对路径 */
+  input_path: string;
+  /** 超分结果输出物理绝对路径 */
+  output_path: string;
+  /** 可选指定的 ONNX 模型物理路径 */
+  model_path?: string | null;
+  /** 目标放大倍率 (如 2.0, 4.0, 8.0) */
+  target_scale?: number | null;
+  /** 智能封顶最大物理边长 (4K 极速: 3840, 8K 旗舰: 8192) */
+  max_output_side?: number | null;
+  /** 切块网格尺寸 (默认 256 或 512) */
+  tile_size?: number | null;
+  /** 切块重叠 Padding 消除接缝 (默认 10) */
+  tile_pad?: number | null;
+}
+
+export interface UpscaleResult {
+  /** 是否处理成功 */
+  success: boolean;
+  /** 源输入图像路径 */
+  input_path: string;
+  /** 产物输出路径 */
+  output_path: string;
+  /** 原始物理分辨率 (宽, 高) */
+  original_size: [number, number];
+  /** 最终超分物理分辨率 (宽, 高) */
+  output_size: [number, number];
+  /** 实际收敛生效的放大倍率 */
+  actual_scale: number;
+  /** 端到端物理耗时 (毫秒) */
+  elapsed_ms: number;
+  /** 切块总数 */
+  total_tiles: number;
+}
+
+export async function runUpscale48k(task: UpscaleTask): Promise<UpscaleResult> {
+  return await invoke<UpscaleResult>("run_upscale_48k", { task });
 }
 </file>
 
@@ -4072,1499 +3278,6 @@ mod tests {
 }
 </file>
 
-<file path="src-tauri/crates/services/service-ocr/src/core/constants.rs">
-pub const DEFAULT_LIMIT_SIDE_LEN: u32 = 960;
-pub const DEFAULT_MAX_SIDE_LIMIT: u32 = 4000;
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/core/errors.rs">
-use core_onnx_infer::OrtInferError;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum OCRError {
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
-
-    #[error("Config error: {0}")]
-    ConfigError(String),
-
-    #[error("Model load failed: {path} ({context})")]
-    ModelLoad {
-        path: String,
-        context: String,
-        #[source]
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    },
-
-    #[error("Inference failed for {model_name}: {context}")]
-    Inference {
-        model_name: String,
-        context: String,
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
-
-    #[error("Image load failed: {0}")]
-    ImageLoad(#[from] image::ImageError),
-
-    #[error("ONNX inference engine error: {0}")]
-    OrtInfer(#[from] OrtInferError),
-}
-
-pub type OcrResult<T> = Result<T, OCRError>;
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/core/inference.rs">
-pub use core_onnx_infer::OrtInfer;
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/core/mod.rs">
-pub mod constants;
-pub mod errors;
-pub mod inference;
-
-pub use constants::*;
-pub use errors::{OCRError, OcrResult};
-pub use inference::OrtInfer;
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/engine/crnn_rec_model.rs">
-use crate::core::errors::OCRError;
-use crate::core::inference::OrtInfer;
-use crate::processors::{CTCLabelDecode, ColorOrder, NormalizeImage, OCRResize, TensorLayout};
-use crate::utils::read_character_dict;
-use image::{DynamicImage, RgbImage};
-use std::path::Path;
-
-pub struct CRNNRecModel {
-    infer: OrtInfer,
-    resizer: OCRResize,
-    normalizer: NormalizeImage,
-    decoder: CTCLabelDecode,
-}
-
-impl CRNNRecModel {
-    pub fn new(model_path: &Path, dict_path: &Path) -> Result<Self, OCRError> {
-        let infer = OrtInfer::new(model_path, None)?;
-        let resizer = OCRResize::new(Some(48), Some(960));
-        let normalizer = NormalizeImage::with_color_order(
-            Some(1.0 / 255.0),
-            Some(vec![0.5, 0.5, 0.5]),
-            Some(vec![0.5, 0.5, 0.5]),
-            Some(TensorLayout::CHW),
-            Some(ColorOrder::BGR),
-        )?;
-
-        let dict = read_character_dict(dict_path)?;
-        let decoder = CTCLabelDecode::new(Some(&dict), true);
-
-        Ok(Self {
-            infer,
-            resizer,
-            normalizer,
-            decoder,
-        })
-    }
-
-    pub fn recognize_crop(&mut self, crop_img: &RgbImage) -> Result<(String, f32), OCRError> {
-        let resized = self.resizer.resize(crop_img)?;
-        let batch_tensor = self.normalizer.normalize_to(DynamicImage::ImageRgb8(resized))?;
-        let preds = self.infer.infer_array3(&batch_tensor)?;
-        let (texts, scores) = self.decoder.apply(&preds);
-
-        let text = texts.into_iter().next().unwrap_or_default();
-        let score = scores.into_iter().next().unwrap_or(0.0);
-
-        Ok((text, score))
-    }
-
-    pub fn recognize_crops_batch(&mut self, crops: &[RgbImage]) -> Result<Vec<(String, f32)>, OCRError> {
-        if crops.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let batch_tensor = self.resizer.resize_and_pack_batch_tensor(crops, &self.normalizer)?;
-        let preds = self.infer.infer_array3(&batch_tensor)?;
-        let (texts, scores) = self.decoder.apply(&preds);
-
-        let mut results = Vec::with_capacity(texts.len());
-        for (t, s) in texts.into_iter().zip(scores.into_iter()) {
-            results.push((t, s));
-        }
-
-        Ok(results)
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/engine/db_det_model.rs">
-use crate::core::errors::OCRError;
-use crate::core::inference::OrtInfer;
-use crate::models::text_region::BoundingBox;
-use crate::processors::{ColorOrder, DBPostProcess, DBPostProcessConfig, DetResizeForTest, NormalizeImage, TensorLayout};
-use image::DynamicImage;
-use std::path::Path;
-
-pub struct DBDetModel {
-    infer: OrtInfer,
-    resizer: DetResizeForTest,
-    normalizer: NormalizeImage,
-    postprocess: DBPostProcess,
-    config: Option<DBPostProcessConfig>,
-}
-
-impl DBDetModel {
-    pub fn new(model_path: &Path, config: Option<DBPostProcessConfig>) -> Result<Self, OCRError> {
-        let infer = OrtInfer::new(model_path, None)?;
-        let resizer = DetResizeForTest::new(None, None, None, None, None, None, None);
-        let normalizer = NormalizeImage::with_color_order(
-            Some(1.0 / 255.0),
-            Some(vec![0.485, 0.456, 0.406]),
-            Some(vec![0.229, 0.224, 0.225]),
-            Some(TensorLayout::CHW),
-            Some(ColorOrder::BGR),
-        )?;
-        let postprocess = DBPostProcess::new(None, None, None, None, None, None, None);
-
-        Ok(Self {
-            infer,
-            resizer,
-            normalizer,
-            postprocess,
-            config,
-        })
-    }
-
-    pub fn detect(&mut self, img: DynamicImage) -> Result<(Vec<BoundingBox>, Vec<f32>), OCRError> {
-        let (resized_imgs, scale_infos) = self.resizer.apply(vec![img], None, None, None);
-        let batch_tensor = self.normalizer.normalize_batch_to(resized_imgs)?;
-        let preds = self.infer.infer_array4(&batch_tensor)?;
-        let (boxes_batch, scores_batch) = self.postprocess.apply(&preds, scale_infos, self.config.as_ref());
-
-        let boxes = boxes_batch.into_iter().next().unwrap_or_default();
-        let scores = scores_batch.into_iter().next().unwrap_or_default();
-
-        Ok((boxes, scores))
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/engine/mod.rs">
-pub mod crnn_rec_model;
-pub mod db_det_model;
-pub mod ocr_engine;
-pub mod ocr_service;
-
-pub use crnn_rec_model::CRNNRecModel;
-pub use db_det_model::DBDetModel;
-pub use ocr_engine::OcrEngine;
-pub use ocr_service::OcrService;
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/engine/ocr_engine.rs">
-use crate::core::errors::OCRError;
-use crate::engine::crnn_rec_model::CRNNRecModel;
-use crate::engine::db_det_model::DBDetModel;
-use crate::models::text_region::TextRegion;
-use crate::processors::crop_text_region;
-use image::{DynamicImage, RgbImage};
-use std::path::Path;
-
-pub struct OcrEngine {
-    det_model: DBDetModel,
-    rec_model: CRNNRecModel,
-}
-
-impl OcrEngine {
-    pub fn new(
-        det_model_path: &Path,
-        rec_model_path: &Path,
-        dict_path: &Path,
-    ) -> Result<Self, OCRError> {
-        let det_model = DBDetModel::new(det_model_path, None)?;
-        let rec_model = CRNNRecModel::new(rec_model_path, dict_path)?;
-
-        Ok(Self {
-            det_model,
-            rec_model,
-        })
-    }
-
-    pub fn process_image(&mut self, img: DynamicImage) -> Result<Vec<TextRegion>, OCRError> {
-        let rgb_img = img.to_rgb8();
-        let (boxes, _scores) = self.det_model.detect(DynamicImage::ImageRgb8(rgb_img.clone()))?;
-
-        if boxes.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut valid_crops: Vec<(usize, crate::models::text_region::BoundingBox, RgbImage)> =
-            Vec::with_capacity(boxes.len());
-
-        for (orig_idx, bbox) in boxes.into_iter().enumerate() {
-            let crop = crop_text_region(&rgb_img, &bbox);
-            if crop.width() >= 4 && crop.height() >= 4 {
-                valid_crops.push((orig_idx, bbox, crop));
-            }
-        }
-
-        if valid_crops.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // 🛡️ SOTA 算法 1：按文字行物理宽度升序排序（Width Bucketing）
-        valid_crops.sort_by_key(|(_, _, c)| c.width());
-
-        // 🛡️ SOTA 算法 2：微批次分桶推导 (Micro-Batching, 6 行一组)，避免黑边 padding 引发 O(W^2) 计算量暴胀
-        let chunk_size = 6;
-        let mut indexed_results = Vec::with_capacity(valid_crops.len());
-
-        for chunk in valid_crops.chunks(chunk_size) {
-            let crops_chunk: Vec<RgbImage> = chunk.iter().map(|(_, _, c)| c.clone()).collect();
-            let batch_res = self.rec_model.recognize_crops_batch(&crops_chunk)?;
-
-            for (item, (text, score)) in chunk.iter().zip(batch_res.into_iter()) {
-                indexed_results.push((item.0, item.1.clone(), text, score));
-            }
-        }
-
-        // 🛡️ SOTA 算法 3：按原始检测框顺序还原
-        indexed_results.sort_by_key(|(orig_idx, _, _, _)| *orig_idx);
-
-        let mut regions = Vec::with_capacity(indexed_results.len());
-        for (_, bbox, text, score) in indexed_results {
-            let trimmed = text.trim();
-            if !trimmed.is_empty() && score >= 0.3 {
-                regions.push(TextRegion {
-                    bbox,
-                    text: trimmed.to_string(),
-                    score,
-                });
-            }
-        }
-
-        Ok(regions)
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/engine/ocr_service.rs">
-use crate::core::errors::OCRError;
-use crate::engine::ocr_engine::OcrEngine;
-use crate::models::text_region::TextRegion;
-use image::DynamicImage;
-use std::path::{Path, PathBuf};
-
-pub struct OcrService;
-
-impl OcrService {
-    pub fn resolve_default_det_model_path() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\models\service-ocr\PP-OCRv6_small\pp-ocrv6_small_det.onnx"),
-            PathBuf::from(r"C:\dev\rpa\models\pp-ocrv6_small\pp-ocrv6_small_det.onnx"),
-            PathBuf::from(r"C:\dev\ai-forge\models\tool-pdf-parse\PP-OCRv6_medium_det\model.onnx"),
-        ];
-        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
-            PathBuf::from(r"C:\dev\ai-forge\models\service-ocr\PP-OCRv6_small\pp-ocrv6_small_det.onnx")
-        })
-    }
-
-    pub fn resolve_default_rec_model_path() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\models\service-ocr\PP-OCRv6_small\pp-ocrv6_small_rec.onnx"),
-            PathBuf::from(r"C:\dev\rpa\models\pp-ocrv6_small\pp-ocrv6_small_rec.onnx"),
-            PathBuf::from(r"C:\dev\ai-forge\models\tool-pdf-parse\PP-OCRv6_medium_rec\model.onnx"),
-        ];
-        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
-            PathBuf::from(r"C:\dev\ai-forge\models\service-ocr\PP-OCRv6_small\pp-ocrv6_small_rec.onnx")
-        })
-    }
-
-    pub fn resolve_default_dict_path() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\models\service-ocr\PP-OCRv6_small\ppocrv6_dict.txt"),
-            PathBuf::from(r"C:\dev\rpa\models\pp-ocrv6_small\ppocrv6_dict.txt"),
-            PathBuf::from(r"C:\dev\ai-forge\models\tool-pdf-parse\PP-OCRv6_medium_rec\ppocrv6_dict.txt"),
-        ];
-        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
-            PathBuf::from(r"C:\dev\ai-forge\models\service-ocr\PP-OCRv6_small\ppocrv6_dict.txt")
-        })
-    }
-
-    pub fn default_engine() -> Result<OcrEngine, OCRError> {
-        let det_path = Self::resolve_default_det_model_path();
-        let rec_path = Self::resolve_default_rec_model_path();
-        let dict_path = Self::resolve_default_dict_path();
-        OcrEngine::new(&det_path, &rec_path, &dict_path)
-    }
-
-    pub fn run_ocr_default(img: DynamicImage) -> Result<Vec<TextRegion>, OCRError> {
-        let mut engine = Self::default_engine()?;
-        engine.process_image(img)
-    }
-
-    pub fn run_ocr(
-        det_model_path: &Path,
-        rec_model_path: &Path,
-        dict_path: &Path,
-        img: DynamicImage,
-    ) -> Result<Vec<TextRegion>, OCRError> {
-        let mut engine = OcrEngine::new(det_model_path, rec_model_path, dict_path)?;
-        engine.process_image(img)
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/crop.rs">
-use crate::models::text_region::BoundingBox;
-use image::{imageops, RgbImage};
-
-pub fn crop_text_region(img: &RgbImage, bbox: &BoundingBox) -> RgbImage {
-    let (img_w, img_h) = img.dimensions();
-    if img_w == 0 || img_h == 0 || bbox.points.is_empty() {
-        return RgbImage::new(1, 1);
-    }
-
-    let (min_x, min_y, max_x, max_y) = bbox.aabb();
-
-    let pad = 2.0;
-    let x1 = (min_x - pad).floor().max(0.0) as u32;
-    let y1 = (min_y - pad).floor().max(0.0) as u32;
-    let x2 = (max_x + pad).ceil().min(img_w as f32) as u32;
-    let y2 = (max_y + pad).ceil().min(img_h as f32) as u32;
-
-    let crop_w = (x2.saturating_sub(x1)).max(1);
-    let crop_h = (y2.saturating_sub(y1)).max(1);
-
-    imageops::crop_imm(img, x1, y1, crop_w, crop_h).to_image()
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/ctc_decode.rs">
-use rayon::prelude::*;
-
-#[derive(Debug, Clone)]
-pub struct CTCLabelDecode {
-    pub character_dict: Vec<char>,
-    pub blank_index: usize,
-}
-
-impl CTCLabelDecode {
-    pub fn new(character_list: Option<&[String]>, use_space_char: bool) -> Self {
-        let mut chars: Vec<char> = Vec::new();
-        chars.push('\0');
-
-        if let Some(list) = character_list {
-            for s in list {
-                if let Some(c) = s.chars().next() {
-                    chars.push(c);
-                }
-            }
-        } else {
-            chars.extend("0123456789abcdefghijklmnopqrstuvwxyz".chars());
-        }
-
-        if use_space_char && !chars.contains(&' ') {
-            chars.push(' ');
-        }
-
-        Self {
-            character_dict: chars,
-            blank_index: 0,
-        }
-    }
-
-    pub fn decode_sequence(&self, sequence_idx: &[usize], sequence_prob: &[f32]) -> (String, f32) {
-        let mut text = String::with_capacity(sequence_idx.len());
-        let mut filtered_prob = Vec::with_capacity(sequence_idx.len());
-        let mut prev_idx = self.blank_index;
-
-        for (i, &idx) in sequence_idx.iter().enumerate() {
-            if idx != self.blank_index && idx != prev_idx {
-                if let Some(&ch) = self.character_dict.get(idx) {
-                    text.push(ch);
-                    if i < sequence_prob.len() {
-                        filtered_prob.push(sequence_prob[i]);
-                    }
-                }
-            }
-            prev_idx = idx;
-        }
-
-        let score = if filtered_prob.is_empty() {
-            0.0
-        } else {
-            filtered_prob.iter().sum::<f32>() / filtered_prob.len() as f32
-        };
-
-        (text, score)
-    }
-
-    pub fn apply<S>(&self, preds: &ndarray::ArrayBase<S, ndarray::Ix3>) -> (Vec<String>, Vec<f32>)
-    where
-        S: ndarray::Data<Elem = f32> + Sync,
-    {
-        if preds.is_empty() {
-            return (Vec::new(), Vec::new());
-        }
-
-        let batch_size = preds.shape()[0];
-
-        (0..batch_size)
-            .into_par_iter()
-            .map(|batch_idx| {
-                let pred = preds.index_axis(ndarray::Axis(0), batch_idx);
-                let time_steps = pred.shape()[0];
-
-                let mut sequence_idx = Vec::with_capacity(time_steps);
-                let mut sequence_prob = Vec::with_capacity(time_steps);
-
-                for row in pred.outer_iter() {
-                    let mut max_idx = 0;
-                    let mut max_val = f32::NEG_INFINITY;
-                    for (vocab_idx, &val) in row.iter().enumerate() {
-                        if val > max_val {
-                            max_val = val;
-                            max_idx = vocab_idx;
-                        }
-                    }
-                    sequence_idx.push(max_idx);
-                    sequence_prob.push(max_val);
-                }
-
-                self.decode_sequence(&sequence_idx, &sequence_prob)
-            })
-            .unzip()
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/geometry.rs">
-use crate::models::text_region::{BoundingBox, Point};
-use imageproc::contours::Contour;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MinAreaRect {
-    pub center: Point,
-    pub width: f32,
-    pub height: f32,
-    pub angle: f32,
-}
-
-impl MinAreaRect {
-    pub fn min_side(&self) -> f32 {
-        self.width.min(self.height)
-    }
-}
-
-pub fn get_min_area_rect(points: &[Point]) -> MinAreaRect {
-    if points.is_empty() {
-        return MinAreaRect {
-            center: Point::new(0.0, 0.0),
-            width: 0.0,
-            height: 0.0,
-            angle: 0.0,
-        };
-    }
-
-    let mut best_area = f32::INFINITY;
-    let mut best_rect = MinAreaRect {
-        center: Point::new(0.0, 0.0),
-        width: 0.0,
-        height: 0.0,
-        angle: 0.0,
-    };
-
-    for deg in 0..90 {
-        let rad = (deg as f32).to_radians();
-        let cos_a = rad.cos();
-        let sin_a = rad.sin();
-
-        let mut min_x = f32::INFINITY;
-        let mut max_x = f32::NEG_INFINITY;
-        let mut min_y = f32::INFINITY;
-        let mut max_y = f32::NEG_INFINITY;
-
-        for p in points {
-            let rx = p.x * cos_a + p.y * sin_a;
-            let ry = -p.x * sin_a + p.y * cos_a;
-            min_x = min_x.min(rx);
-            max_x = max_x.max(rx);
-            min_y = min_y.min(ry);
-            max_y = max_y.max(ry);
-        }
-
-        let w = max_x - min_x;
-        let h = max_y - min_y;
-        let area = w * h;
-
-        if area < best_area {
-            best_area = area;
-            let cx_rot = (min_x + max_x) * 0.5;
-            let cy_rot = (min_y + max_y) * 0.5;
-
-            let cx = cx_rot * cos_a - cy_rot * sin_a;
-            let cy = cx_rot * sin_a + cy_rot * cos_a;
-
-            best_rect = MinAreaRect {
-                center: Point::new(cx, cy),
-                width: w,
-                height: h,
-                angle: deg as f32,
-            };
-        }
-    }
-
-    best_rect
-}
-
-impl BoundingBox {
-    pub fn from_contour(contour: &Contour<u32>) -> Self {
-        let points = contour
-            .points
-            .iter()
-            .map(|p| Point::new(p.x as f32, p.y as f32))
-            .collect();
-        Self { points }
-    }
-
-    pub fn perimeter(&self) -> f32 {
-        if self.points.len() < 2 {
-            return 0.0;
-        }
-        let mut perim = 0.0f32;
-        let n = self.points.len();
-        for i in 0..n {
-            let p1 = &self.points[i];
-            let p2 = &self.points[(i + 1) % n];
-            let dx = p1.x - p2.x;
-            let dy = p1.y - p2.y;
-            perim += (dx * dx + dy * dy).sqrt();
-        }
-        perim
-    }
-
-    pub fn get_min_area_rect_from_points(points: &[Point]) -> MinAreaRect {
-        get_min_area_rect(points)
-    }
-
-    pub fn approx_poly_dp(&self, epsilon: f32) -> Self {
-        if self.points.len() <= 2 {
-            return self.clone();
-        }
-        let simplified = rdp_simplify(&self.points, epsilon);
-        Self { points: simplified }
-    }
-}
-
-fn rdp_simplify(points: &[Point], epsilon: f32) -> Vec<Point> {
-    if points.len() <= 2 {
-        return points.to_vec();
-    }
-
-    fn perpendicular_distance(p: &Point, line_start: &Point, line_end: &Point) -> f32 {
-        let dx = line_end.x - line_start.x;
-        let dy = line_end.y - line_start.y;
-        let len_sq = dx * dx + dy * dy;
-        if len_sq == 0.0 {
-            let px = p.x - line_start.x;
-            let py = p.y - line_start.y;
-            return (px * px + py * py).sqrt();
-        }
-        let num = ((line_end.y - line_start.y) * p.x - (line_end.x - line_start.x) * p.y
-            + line_end.x * line_start.y
-            - line_end.y * line_start.x)
-            .abs();
-        num / len_sq.sqrt()
-    }
-
-    let mut dmax = 0.0f32;
-    let mut index = 0;
-    let end = points.len() - 1;
-
-    for i in 1..end {
-        let d = perpendicular_distance(&points[i], &points[0], &points[end]);
-        if d > dmax {
-            index = i;
-            dmax = d;
-        }
-    }
-
-    if dmax > epsilon {
-        let mut rec_results1 = rdp_simplify(&points[..=index], epsilon);
-        let mut rec_results2 = rdp_simplify(&points[index..], epsilon);
-        rec_results1.pop();
-        rec_results1.append(&mut rec_results2);
-        rec_results1
-    } else {
-        vec![points[0], points[end]]
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct ScanlineBuffer {
-    intersections: Vec<f32>,
-}
-
-impl ScanlineBuffer {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            intersections: Vec::with_capacity(capacity),
-        }
-    }
-
-    pub fn process_scanline(
-        &mut self,
-        scanline_y: f32,
-        bbox: &BoundingBox,
-        start_x: usize,
-        end_x: usize,
-        pred: &ndarray::ArrayView2<f32>,
-    ) -> (f32, usize) {
-        self.intersections.clear();
-        let pts = &bbox.points;
-        let n = pts.len();
-        if n < 3 {
-            return (0.0, 0);
-        }
-
-        for i in 0..n {
-            let p1 = &pts[i];
-            let p2 = &pts[(i + 1) % n];
-
-            if (p1.y <= scanline_y && p2.y > scanline_y) || (p2.y <= scanline_y && p1.y > scanline_y) {
-                let dy = p2.y - p1.y;
-                if dy.abs() > 1e-6 {
-                    let t = (scanline_y - p1.y) / dy;
-                    let x_inter = p1.x + t * (p2.x - p1.x);
-                    self.intersections.push(x_inter);
-                }
-            }
-        }
-
-        self.intersections.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
-        let mut total_score = 0.0f32;
-        let mut total_pixels = 0usize;
-
-        let y_idx = (scanline_y.floor() as usize).min(pred.shape()[0].saturating_sub(1));
-
-        let mut i = 0;
-        while i + 1 < self.intersections.len() {
-            let x_start = (self.intersections[i].ceil() as usize).max(start_x);
-            let x_end = (self.intersections[i + 1].floor() as usize + 1).min(end_x);
-
-            if x_start < x_end {
-                let max_w = pred.shape()[1];
-                let row = pred.row(y_idx);
-                for x in x_start..x_end.min(max_w) {
-                    total_score += row[x];
-                    total_pixels += 1;
-                }
-            }
-            i += 2;
-        }
-
-        (total_score, total_pixels)
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/mod.rs">
-pub mod crop;
-pub mod ctc_decode;
-pub mod db_postprocess;
-pub mod geometry;
-pub mod normalization;
-pub mod resize_det;
-pub mod resize_rec;
-pub mod types;
-
-pub use crop::crop_text_region;
-pub use ctc_decode::CTCLabelDecode;
-pub use db_postprocess::{DBPostProcess, DBPostProcessConfig};
-pub use geometry::{get_min_area_rect, MinAreaRect, ScanlineBuffer};
-pub use normalization::NormalizeImage;
-pub use resize_det::DetResizeForTest;
-pub use resize_rec::OCRResize;
-pub use types::{BoxType, ColorOrder, ImageScaleInfo, LimitType, ResizeType, ScoreMode, TensorLayout};
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/normalization.rs">
-use crate::core::OCRError;
-use crate::processors::types::{ColorOrder, TensorLayout};
-use image::{DynamicImage, RgbImage};
-use ndarray::Array4;
-use rayon::prelude::*;
-
-#[derive(Debug)]
-pub struct NormalizeImage {
-    pub alpha: Vec<f32>,
-    pub beta: Vec<f32>,
-    pub order: TensorLayout,
-    pub color_order: ColorOrder,
-}
-
-impl NormalizeImage {
-    const PARALLEL_NORMALIZE_MIN_BYTES: usize = 1_048_576;
-
-    fn should_parallelize(batch_size: usize, total_output_bytes: usize) -> bool {
-        batch_size > 1 && total_output_bytes > Self::PARALLEL_NORMALIZE_MIN_BYTES
-    }
-
-    fn src_channels(&self) -> [usize; 3] {
-        match self.color_order {
-            ColorOrder::RGB => [0, 1, 2],
-            ColorOrder::BGR => [2, 1, 0],
-        }
-    }
-
-    fn image_len(width: u32, height: u32, channels: usize) -> usize {
-        width as usize * height as usize * channels
-    }
-
-    pub fn new(
-        scale: Option<f32>,
-        mean: Option<Vec<f32>>,
-        std: Option<Vec<f32>>,
-        order: Option<TensorLayout>,
-        color_order: Option<ColorOrder>,
-    ) -> Result<Self, OCRError> {
-        Self::with_color_order(scale, mean, std, order, color_order)
-    }
-
-    pub fn with_color_order(
-        scale: Option<f32>,
-        mean: Option<Vec<f32>>,
-        std: Option<Vec<f32>>,
-        order: Option<TensorLayout>,
-        color_order: Option<ColorOrder>,
-    ) -> Result<Self, OCRError> {
-        let scale = scale.unwrap_or(1.0 / 255.0);
-        let mean = mean.unwrap_or_else(|| vec![0.485, 0.456, 0.406]);
-        let std = std.unwrap_or_else(|| vec![0.229, 0.224, 0.225]);
-        let order = order.unwrap_or(TensorLayout::CHW);
-        let color_order = color_order.unwrap_or_default();
-
-        if scale <= 0.0 {
-            return Err(OCRError::ConfigError("Scale must be greater than 0".into()));
-        }
-        if mean.len() != 3 || std.len() != 3 {
-            return Err(OCRError::ConfigError("Mean/Std must have exactly 3 elements".into()));
-        }
-        for (i, &s) in std.iter().enumerate() {
-            if s <= 0.0 {
-                return Err(OCRError::ConfigError(format!("Std at index {i} must be > 0")));
-            }
-        }
-
-        let alpha: Vec<f32> = std.iter().map(|s| scale / s).collect();
-        let beta: Vec<f32> = mean.iter().zip(&std).map(|(m, s)| -m / s).collect();
-
-        Ok(Self {
-            alpha,
-            beta,
-            order,
-            color_order,
-        })
-    }
-
-    pub fn apply(&self, imgs: Vec<DynamicImage>) -> Vec<Vec<f32>> {
-        imgs.into_iter().map(|img| self.normalize(img)).collect()
-    }
-
-    fn normalize(&self, img: DynamicImage) -> Vec<f32> {
-        let rgb_img = into_rgb8_no_copy(img);
-        self.normalize_rgb(&rgb_img)
-    }
-
-    fn normalize_rgb(&self, rgb_img: &RgbImage) -> Vec<f32> {
-        let (width, height) = rgb_img.dimensions();
-        let mut result = vec![0.0f32; Self::image_len(width, height, 3)];
-        self.normalize_rgb_into(rgb_img, &mut result);
-        result
-    }
-
-    fn normalize_rgb_into(&self, rgb_img: &RgbImage, out: &mut [f32]) {
-        let (width, height) = rgb_img.dimensions();
-        let (w, h) = (width as usize, height as usize);
-        let src_ch = self.src_channels();
-        let alpha = [self.alpha[0], self.alpha[1], self.alpha[2]];
-        let beta = [self.beta[0], self.beta[1], self.beta[2]];
-        let rgb = rgb_img.as_raw();
-
-        let hw = w * h;
-        match self.order {
-            TensorLayout::CHW => {
-                for y in 0..h {
-                    for x in 0..w {
-                        let i = y * w + x;
-                        let pixel_idx = i * 3;
-                        let r = rgb[pixel_idx];
-                        let g = rgb[pixel_idx + 1];
-                        let b = rgb[pixel_idx + 2];
-                        let pixels = [r as f32, g as f32, b as f32];
-
-                        out[0 * hw + i] = pixels[src_ch[0]] * alpha[0] + beta[0];
-                        out[1 * hw + i] = pixels[src_ch[1]] * alpha[1] + beta[1];
-                        out[2 * hw + i] = pixels[src_ch[2]] * alpha[2] + beta[2];
-                    }
-                }
-            }
-            TensorLayout::HWC => {
-                for y in 0..h {
-                    for x in 0..w {
-                        let i = y * w + x;
-                        let pixel_idx = i * 3;
-                        let r = rgb[pixel_idx];
-                        let g = rgb[pixel_idx + 1];
-                        let b = rgb[pixel_idx + 2];
-                        let pixels = [r as f32, g as f32, b as f32];
-
-                        let out_idx = i * 3;
-                        out[out_idx] = pixels[src_ch[0]] * alpha[0] + beta[0];
-                        out[out_idx + 1] = pixels[src_ch[1]] * alpha[1] + beta[1];
-                        out[out_idx + 2] = pixels[src_ch[2]] * alpha[2] + beta[2];
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn normalize_to(&self, img: DynamicImage) -> Result<Array4<f32>, OCRError> {
-        let rgb_img = into_rgb8_no_copy(img);
-        let (width, height) = rgb_img.dimensions();
-        let (w, h) = (width as usize, height as usize);
-        let result = self.normalize_rgb(&rgb_img);
-
-        match self.order {
-            TensorLayout::CHW => Array4::from_shape_vec((1, 3, h, w), result)
-                .map_err(|e| OCRError::InvalidInput(format!("CHW shape error: {e}"))),
-            TensorLayout::HWC => Array4::from_shape_vec((1, h, w, 3), result)
-                .map_err(|e| OCRError::InvalidInput(format!("HWC shape error: {e}"))),
-        }
-    }
-
-    pub fn normalize_batch_to(&self, imgs: Vec<DynamicImage>) -> Result<Array4<f32>, OCRError> {
-        if imgs.is_empty() {
-            return Ok(Array4::zeros((0, 0, 0, 0)));
-        }
-
-        let batch_size = imgs.len();
-        let rgb_imgs: Vec<_> = imgs.into_iter().map(into_rgb8_no_copy).collect();
-        let (first_w, first_h) = rgb_imgs[0].dimensions();
-
-        for (i, img) in rgb_imgs.iter().enumerate() {
-            if img.dimensions() != (first_w, first_h) {
-                return Err(OCRError::InvalidInput(format!(
-                    "Batch images must have same dimensions. Image 0: {first_w}x{first_h}, Image {i}: {}x{}",
-                    img.width(), img.height()
-                )));
-            }
-        }
-
-        let (w, h) = (first_w as usize, first_h as usize);
-        let img_size = Self::image_len(first_w, first_h, 3);
-        let mut result = vec![0.0f32; batch_size * img_size];
-
-        let use_parallel = Self::should_parallelize(batch_size, result.len() * std::mem::size_of::<f32>());
-        if !use_parallel {
-            for (rgb_img, batch_slice) in rgb_imgs.iter().zip(result.chunks_mut(img_size)) {
-                self.normalize_rgb_into(rgb_img, batch_slice);
-            }
-        } else {
-            result
-                .par_chunks_mut(img_size)
-                .zip(rgb_imgs.par_iter())
-                .for_each(|(batch_slice, rgb_img)| {
-                    self.normalize_rgb_into(rgb_img, batch_slice);
-                });
-        }
-
-        let shape = match self.order {
-            TensorLayout::CHW => (batch_size, 3, h, w),
-            TensorLayout::HWC => (batch_size, h, w, 3),
-        };
-        Array4::from_shape_vec(shape, result)
-            .map_err(|e| OCRError::InvalidInput(format!("Batch normalization shape error: {e}")))
-    }
-}
-
-fn into_rgb8_no_copy(img: DynamicImage) -> RgbImage {
-    match img {
-        DynamicImage::ImageRgb8(img) => img,
-        img => img.to_rgb8(),
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/resize_det.rs">
-use crate::core::constants::{DEFAULT_LIMIT_SIDE_LEN, DEFAULT_MAX_SIDE_LIMIT};
-use crate::processors::types::{ImageScaleInfo, LimitType, ResizeType};
-use image::{DynamicImage, GenericImageView};
-use rayon::prelude::*;
-use tracing::{error, warn};
-
-#[derive(Debug)]
-pub struct DetResizeForTest {
-    pub resize_type: ResizeType,
-    pub limit_side_len: Option<u32>,
-    pub limit_type: Option<LimitType>,
-    pub max_side_limit: u32,
-    pub filter: image::imageops::FilterType,
-}
-
-impl DetResizeForTest {
-    pub fn new(
-        input_shape: Option<(u32, u32, u32)>,
-        image_shape: Option<(u32, u32)>,
-        keep_ratio: Option<bool>,
-        limit_side_len: Option<u32>,
-        limit_type: Option<LimitType>,
-        resize_long: Option<u32>,
-        max_side_limit: Option<u32>,
-    ) -> Self {
-        let resize_type = if let Some(shape) = input_shape {
-            ResizeType::Type3 { input_shape: shape }
-        } else if let Some(shape) = image_shape {
-            ResizeType::Type1 {
-                image_shape: shape,
-                keep_ratio: keep_ratio.unwrap_or(false),
-            }
-        } else if let Some(long) = resize_long {
-            ResizeType::Type2 { resize_long: long }
-        } else {
-            ResizeType::Type0
-        };
-
-        Self {
-            resize_type,
-            limit_side_len: limit_side_len.or(Some(DEFAULT_LIMIT_SIDE_LEN)),
-            limit_type: limit_type.or(Some(LimitType::Max)),
-            max_side_limit: max_side_limit.unwrap_or(DEFAULT_MAX_SIDE_LIMIT),
-            filter: image::imageops::FilterType::Triangle,
-        }
-    }
-
-    pub fn apply(
-        &self,
-        imgs: Vec<DynamicImage>,
-        limit_side_len: Option<u32>,
-        limit_type: Option<LimitType>,
-        max_side_limit: Option<u32>,
-    ) -> (Vec<DynamicImage>, Vec<ImageScaleInfo>) {
-        let resized: Vec<(DynamicImage, ImageScaleInfo)> = imgs
-            .into_par_iter()
-            .map(|img| self.resize(img, limit_side_len, limit_type.as_ref(), max_side_limit))
-            .collect();
-
-        let mut resize_imgs = Vec::with_capacity(resized.len());
-        let mut img_shapes = Vec::with_capacity(resized.len());
-        for (resized_img, shape) in resized {
-            resize_imgs.push(resized_img);
-            img_shapes.push(shape);
-        }
-
-        (resize_imgs, img_shapes)
-    }
-
-    fn resize(
-        &self,
-        mut img: DynamicImage,
-        limit_side_len: Option<u32>,
-        limit_type: Option<&LimitType>,
-        max_side_limit: Option<u32>,
-    ) -> (DynamicImage, ImageScaleInfo) {
-        let (src_w, src_h) = img.dimensions();
-
-        if (src_h + src_w) < 64 {
-            img = self.image_padding(img);
-        }
-
-        let (resized_img, ratios) = match &self.resize_type {
-            ResizeType::Type0 => {
-                self.resize_image_type0(img, limit_side_len, limit_type, max_side_limit)
-            }
-            ResizeType::Type1 {
-                image_shape,
-                keep_ratio,
-            } => self.resize_image_type1(img, *image_shape, *keep_ratio),
-            ResizeType::Type2 { resize_long } => self.resize_image_type2(img, *resize_long),
-            ResizeType::Type3 { input_shape } => self.resize_image_type3(img, *input_shape),
-        };
-
-        let scale_info = ImageScaleInfo::new(src_h as f32, src_w as f32, ratios[0], ratios[1]);
-        (resized_img, scale_info)
-    }
-
-    fn image_padding(&self, img: DynamicImage) -> DynamicImage {
-        let (w, h) = img.dimensions();
-        let new_w = w.max(32);
-        let new_h = h.max(32);
-
-        if new_w == w && new_h == h {
-            return img;
-        }
-
-        let mut padded = DynamicImage::new_rgb8(new_w, new_h);
-        image::imageops::overlay(&mut padded, &img, 0, 0);
-        padded
-    }
-
-    fn resize_image_type0(
-        &self,
-        img: DynamicImage,
-        limit_side_len: Option<u32>,
-        limit_type: Option<&LimitType>,
-        max_side_limit: Option<u32>,
-    ) -> (DynamicImage, [f32; 2]) {
-        let (w, h) = img.dimensions();
-        let limit_side_len = limit_side_len
-            .or(self.limit_side_len)
-            .unwrap_or(DEFAULT_LIMIT_SIDE_LEN);
-        let limit_type = limit_type
-            .or(self.limit_type.as_ref())
-            .unwrap_or(&LimitType::Min);
-        let max_side_limit = max_side_limit.unwrap_or(self.max_side_limit);
-
-        let ratio = match limit_type {
-            LimitType::Max => {
-                if h.max(w) > limit_side_len {
-                    limit_side_len as f32 / h.max(w) as f32
-                } else {
-                    1.0
-                }
-            }
-            LimitType::Min => {
-                if h.min(w) < limit_side_len {
-                    limit_side_len as f32 / h.min(w) as f32
-                } else {
-                    1.0
-                }
-            }
-            LimitType::ResizeLong => limit_side_len as f32 / h.max(w) as f32,
-        };
-
-        let mut resize_h = (h as f32 * ratio) as u32;
-        let mut resize_w = (w as f32 * ratio) as u32;
-
-        if resize_h.max(resize_w) > max_side_limit {
-            warn!(
-                "Resized image size ({}x{}) exceeds max_side_limit of {}. Resizing to fit within limit.",
-                resize_h, resize_w, max_side_limit
-            );
-            let limit_ratio = max_side_limit as f32 / resize_h.max(resize_w) as f32;
-            resize_h = (resize_h as f32 * limit_ratio) as u32;
-            resize_w = (resize_w as f32 * limit_ratio) as u32;
-        }
-
-        resize_h = ((resize_h + 16) / 32 * 32).max(32);
-        resize_w = ((resize_w + 16) / 32 * 32).max(32);
-
-        if resize_h == h && resize_w == w {
-            return (img, [1.0, 1.0]);
-        }
-
-        if resize_w == 0 || resize_h == 0 {
-            error!("Invalid resize dimensions: {}x{}", resize_w, resize_h);
-            return (img, [1.0, 1.0]);
-        }
-
-        let resized_img = img.resize_exact(resize_w, resize_h, self.filter);
-        let ratio_h = resize_h as f32 / h as f32;
-        let ratio_w = resize_w as f32 / w as f32;
-
-        (resized_img, [ratio_h, ratio_w])
-    }
-
-    fn resize_image_type1(
-        &self,
-        img: DynamicImage,
-        image_shape: (u32, u32),
-        keep_ratio: bool,
-    ) -> (DynamicImage, [f32; 2]) {
-        let (ori_w, ori_h) = img.dimensions();
-        let (resize_h, mut resize_w) = image_shape;
-
-        if keep_ratio {
-            resize_w = (ori_w * resize_h) / ori_h;
-            let n = resize_w.div_ceil(32);
-            resize_w = n * 32;
-        }
-
-        if resize_h == ori_h && resize_w == ori_w {
-            return (img, [1.0, 1.0]);
-        }
-
-        let ratio_h = resize_h as f32 / ori_h as f32;
-        let ratio_w = resize_w as f32 / ori_w as f32;
-        let resized_img = img.resize_exact(resize_w, resize_h, self.filter);
-
-        (resized_img, [ratio_h, ratio_w])
-    }
-
-    fn resize_image_type2(&self, img: DynamicImage, resize_long: u32) -> (DynamicImage, [f32; 2]) {
-        let (w, h) = img.dimensions();
-
-        let ratio = if h > w {
-            resize_long as f32 / h as f32
-        } else {
-            resize_long as f32 / w as f32
-        };
-
-        let mut resize_h = (h as f32 * ratio) as u32;
-        let mut resize_w = (w as f32 * ratio) as u32;
-
-        let max_stride = 128;
-        resize_h = resize_h.div_ceil(max_stride) * max_stride;
-        resize_w = resize_w.div_ceil(max_stride) * max_stride;
-
-        if resize_h == h && resize_w == w {
-            return (img, [1.0, 1.0]);
-        }
-
-        let resized_img = img.resize_exact(resize_w, resize_h, self.filter);
-        let ratio_h = resize_h as f32 / h as f32;
-        let ratio_w = resize_w as f32 / w as f32;
-
-        (resized_img, [ratio_h, ratio_w])
-    }
-
-    fn resize_image_type3(
-        &self,
-        img: DynamicImage,
-        input_shape: (u32, u32, u32),
-    ) -> (DynamicImage, [f32; 2]) {
-        let (ori_w, ori_h) = img.dimensions();
-        let (_, resize_h, resize_w) = input_shape;
-
-        if resize_h == ori_h && resize_w == ori_w {
-            return (img, [1.0, 1.0]);
-        }
-
-        let ratio_h = resize_h as f32 / ori_h as f32;
-        let ratio_w = resize_w as f32 / ori_w as f32;
-        let resized_img = img.resize_exact(resize_w, resize_h, self.filter);
-
-        (resized_img, [ratio_h, ratio_w])
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/resize_rec.rs">
-use crate::core::OCRError;
-use crate::processors::normalization::NormalizeImage;
-use image::{imageops, DynamicImage, RgbImage};
-use ndarray::Array4;
-
-#[derive(Debug, Clone)]
-pub struct OCRResize {
-    pub target_height: u32,
-    pub max_width: u32,
-}
-
-impl OCRResize {
-    pub fn new(target_height: Option<u32>, max_width: Option<u32>) -> Self {
-        Self {
-            target_height: target_height.unwrap_or(48),
-            max_width: max_width.unwrap_or(960),
-        }
-    }
-
-    pub fn resize(&self, img: &RgbImage) -> Result<RgbImage, OCRError> {
-        let (orig_w, orig_h) = img.dimensions();
-        if orig_w == 0 || orig_h == 0 {
-            return Err(OCRError::InvalidInput("Empty image for recognition resize".into()));
-        }
-
-        let ratio = orig_w as f32 / orig_h.max(1) as f32;
-        let mut target_w = (self.target_height as f32 * ratio).ceil() as u32;
-        target_w = target_w.clamp(1, self.max_width);
-
-        let resized = imageops::resize(
-            img,
-            target_w,
-            self.target_height,
-            imageops::FilterType::Triangle,
-        );
-
-        let mut padded = RgbImage::from_pixel(target_w, self.target_height, image::Rgb([0, 0, 0]));
-        imageops::overlay(&mut padded, &resized, 0, 0);
-
-        Ok(padded)
-    }
-
-    pub fn resize_and_pack_batch_tensor(
-        &self,
-        crops: &[RgbImage],
-        normalizer: &NormalizeImage,
-    ) -> Result<Array4<f32>, OCRError> {
-        if crops.is_empty() {
-            return Ok(Array4::zeros((0, 3, self.target_height as usize, 32)));
-        }
-
-        let mut resized_items = Vec::with_capacity(crops.len());
-        let mut max_batch_w = 32u32;
-
-        for img in crops {
-            let (orig_w, orig_h) = img.dimensions();
-            if orig_w == 0 || orig_h == 0 {
-                continue;
-            }
-
-            let ratio = orig_w as f32 / orig_h.max(1) as f32;
-            let target_w = ((self.target_height as f32 * ratio).ceil() as u32).clamp(16, self.max_width);
-            max_batch_w = max_batch_w.max(target_w);
-
-            let resized = imageops::resize(
-                img,
-                target_w,
-                self.target_height,
-                imageops::FilterType::Triangle,
-            );
-            resized_items.push((resized, target_w));
-        }
-
-        if resized_items.is_empty() {
-            return Ok(Array4::zeros((0, 3, self.target_height as usize, 32)));
-        }
-
-        let mut padded_batch = Vec::with_capacity(resized_items.len());
-        for (resized_img, _w) in resized_items {
-            let mut padded = RgbImage::from_pixel(max_batch_w, self.target_height, image::Rgb([0, 0, 0]));
-            imageops::overlay(&mut padded, &resized_img, 0, 0);
-            padded_batch.push(DynamicImage::ImageRgb8(padded));
-        }
-
-        normalizer.normalize_batch_to(padded_batch)
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/processors/types.rs">
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum TensorLayout {
-    #[default]
-    CHW,
-    HWC,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum ColorOrder {
-    #[default]
-    RGB,
-    BGR,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum LimitType {
-    #[default]
-    Max,
-    Min,
-    ResizeLong,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum ScoreMode {
-    #[default]
-    Fast,
-    Slow,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum BoxType {
-    #[default]
-    Quad,
-    Poly,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ResizeType {
-    Type0,
-    Type1 {
-        image_shape: (u32, u32),
-        keep_ratio: bool,
-    },
-    Type2 {
-        resize_long: u32,
-    },
-    Type3 {
-        input_shape: (u32, u32, u32),
-    },
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct ImageScaleInfo {
-    pub src_h: f32,
-    pub src_w: f32,
-    pub ratio_h: f32,
-    pub ratio_w: f32,
-}
-
-impl ImageScaleInfo {
-    pub fn new(src_h: f32, src_w: f32, ratio_h: f32, ratio_w: f32) -> Self {
-        Self {
-            src_h,
-            src_w,
-            ratio_h,
-            ratio_w,
-        }
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/utils/dict.rs">
-use crate::core::OCRError;
-use std::path::Path;
-
-pub fn read_character_dict(path: &Path) -> Result<Vec<String>, OCRError> {
-    let content = std::fs::read_to_string(path).map_err(|e| {
-        OCRError::ConfigError(format!(
-            "Failed to read character dictionary from '{}': {}",
-            path.display(),
-            e
-        ))
-    })?;
-    Ok(content.lines().map(|s| s.to_string()).collect())
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/utils/mod.rs">
-pub mod dict;
-pub use dict::read_character_dict;
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/src/lib.rs">
-pub mod core;
-pub mod engine;
-pub mod models;
-pub mod processors;
-pub mod utils;
-
-pub use core::errors::{OCRError, OcrResult};
-pub use core::inference::OrtInfer;
-pub use engine::{CRNNRecModel, DBDetModel, OcrEngine, OcrService};
-pub use models::text_region::{BoundingBox, Point, TextRegion};
-pub use processors::{
-    crop_text_region, BoxType, ColorOrder, CTCLabelDecode, DBPostProcess, DBPostProcessConfig,
-    DetResizeForTest, ImageScaleInfo, LimitType, NormalizeImage, OCRResize, ScoreMode, TensorLayout,
-};
-pub use utils::read_character_dict;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-    use std::time::Instant;
-
-    fn resolve_test_image_path() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\service-ocr.png"),
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\ocr_test.png"),
-        ];
-        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\service-ocr.png")
-        })
-    }
-
-    #[test]
-    fn test_service_ocr_default_small_e2e_benchmark() {
-        let det_path = OcrService::resolve_default_det_model_path();
-        let rec_path = OcrService::resolve_default_rec_model_path();
-        let dict_path = OcrService::resolve_default_dict_path();
-        let img_path = resolve_test_image_path();
-
-        if !det_path.exists() || !rec_path.exists() || !dict_path.exists() || !img_path.exists() {
-            println!("⚠️ [跳过打靶测试] 默认物理模型/词表/测试图片文件不存在: det={:?}, rec={:?}, dict={:?}, img={:?}", det_path, rec_path, dict_path, img_path);
-            return;
-        }
-
-        println!("\n⚡ ===== [service-ocr 默认 PP-OCRv6 Small 物理打靶启动] =====");
-        println!("  默认检测模型: {:?}", det_path);
-        println!("  默认识别模型: {:?}", rec_path);
-        println!("  默认字符词表: {:?}", dict_path);
-        println!("  测试图片:     {:?}", img_path);
-
-        let t0 = Instant::now();
-        let img = image::open(&img_path).expect("读取测试图片失败");
-
-        let mut engine = OcrService::default_engine().expect("初始化默认小模型 OcrEngine 失败");
-        let init_ms = t0.elapsed().as_secs_f64() * 1000.0;
-
-        let t1 = Instant::now();
-        let regions = engine.process_image(img).expect("默认小模型 OCR 推导打靶失败");
-        let infer_ms = t1.elapsed().as_secs_f64() * 1000.0;
-
-        println!("\n🎉 ===== [service-ocr 默认 Small 模型打靶成功断言] =====");
-        println!("  ⏱️ 默认引擎点火耗时: {:.2} ms", init_ms);
-        println!("  ⏱️ 默认图像推导耗时: {:.2} ms (0.5 秒极速即出！)", infer_ms);
-        println!("  📊 识别文本行数: {}", regions.len());
-        println!("  预览前 10 句识别结果:");
-
-        for (idx, reg) in regions.iter().take(10).enumerate() {
-            println!("    [{:02}] [{:.2}]: {}", idx + 1, reg.score, reg.text);
-        }
-
-        let outs_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\service-ocr");
-        let _ = std::fs::create_dir_all(&outs_dir);
-
-        let out_json_path = outs_dir.join("ocr_result_default_small.json");
-        let out_md_path = outs_dir.join("ocr_result_default_small.md");
-
-        if let Ok(pretty_json) = serde_json::to_string_pretty(&regions) {
-            let _ = std::fs::write(&out_json_path, pretty_json);
-        }
-
-        let mut md_content = String::from("# ⚡ service-ocr 默认 PP-OCRv6 Small 物理打靶产物\n\n");
-        for (idx, reg) in regions.iter().enumerate() {
-            md_content.push_str(&format!("{}. **[{:.2}]**: {}\n", idx + 1, reg.score, reg.text));
-        }
-        let _ = std::fs::write(&out_md_path, md_content);
-
-        println!("  💾 默认模型 OCR 物理产物成功落盘至:");
-        println!("     - JSON: {:?}", out_json_path);
-        println!("     - MD:   {:?}", out_md_path);
-        println!("=======================================================\n");
-
-        assert!(regions.len() > 0, "识别文本行数不可为 0！");
-    }
-}
-</file>
-
-<file path="src-tauri/crates/services/service-ocr/Cargo.toml">
-[package]
-name = "service-ocr"
-version = "0.1.0"
-edition = "2024"
-
-[lib]
-name = "service_ocr"
-path = "src/lib.rs"
-
-[features]
-default = []
-cuda = ["core-onnx-infer/cuda"]
-simd = []
-
-[dependencies]
-shared-contracts = { path = "../../shared-contracts" }
-core-onnx-infer = { path = "../../core-onnx-infer" }
-ndarray = "0.15"
-image = "0.25"
-imageproc = "0.25"
-clipper2-rust = "1.1"
-rayon = "1.10"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2"
-tracing = "0.1"
-tokio = { version = "1.38", features = ["full"] }
-anyhow = "1.0"
-</file>
-
 <file path="src-tauri/crates/shared-contracts/src/lib.rs">
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -5766,6 +3479,162 @@ export default defineConfig({
 });
 </file>
 
+<file path="src/assets/tools/format-converter/cover.svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <!-- 主底板琥珀流金渐变 (满铺) -->
+    <linearGradient id="fullFcGoldSheet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffc837" />
+      <stop offset="35%" stop-color="#dca54c" />
+      <stop offset="100%" stop-color="#7a5214" />
+    </linearGradient>
+
+    <!-- 右上角 3D 翻折折角渐变 -->
+    <linearGradient id="fullFoldFlapGradFc" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe28a" />
+      <stop offset="100%" stop-color="#b38030" />
+    </linearGradient>
+
+    <!-- 拟真立体折角投影 -->
+    <filter id="foldShadowFc" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-4" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- 1. 🌟 全屏满铺金底卡片主体 (右上角带 3D 折角缺口) -->
+  <path d="M 0 0 
+           L 680 0 
+           L 800 120 
+           L 800 500 
+           L 0 500 Z" 
+        fill="url(#fullFcGoldSheet)" />
+
+  <!-- 2. 全景外边缘晶体高光微边 -->
+  <path d="M 0 1 
+           L 679 1 
+           L 799 121 
+           L 799 499 
+           L 1 499 
+           L 1 0" 
+        fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.25" />
+
+  <!-- 3. 🌟 右上角 3D 拟真翻折三角瓣 -->
+  <g filter="url(#foldShadowFc)">
+    <path d="M 680 0 
+             L 680 96 
+             A 24 24 0 0 0 704 120 
+             L 800 120 Z" 
+          fill="url(#fullFoldFlapGradFc)" />
+    <!-- 折角底边阴影暗线 -->
+    <path d="M 680 120 L 800 120" stroke="#000000" stroke-width="2.5" stroke-opacity="0.3" />
+  </g>
+
+  <!-- 4. 🌟 绝对居中超大号字标：CONV (165px 纯白极粗，绝对视觉焦点) -->
+  <text x="400" y="270" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="165" 
+        font-weight="900" 
+        text-anchor="middle" 
+        letter-spacing="6">CONV</text>
+
+  <!-- 5. 🌟 绝对居中副标：Universal Format Converter -->
+  <text x="400" y="350" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="26" 
+        font-weight="700" 
+        text-anchor="middle" 
+        letter-spacing="4" 
+        opacity="0.95">Universal Format Converter</text>
+
+  <!-- 6. 底部极简数据结构高光装饰条 (居中舒展) -->
+  <g opacity="0.35" fill="#ffffff">
+    <rect x="220" y="400" width="100" height="7" rx="3.5" />
+    <rect x="340" y="400" width="120" height="7" rx="3.5" />
+    <rect x="480" y="400" width="100" height="7" rx="3.5" />
+  </g>
+</svg>
+</file>
+
+<file path="src/assets/tools/video-subtitle/cover.svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <!-- 主底板海青电光渐变 (满铺) -->
+    <linearGradient id="fullAsrCyanSheet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffa9" />
+      <stop offset="35%" stop-color="#02c3b4" />
+      <stop offset="100%" stop-color="#034742" />
+    </linearGradient>
+
+    <!-- 右上角 3D 翻折折角渐变 -->
+    <linearGradient id="fullFoldFlapGradAsr" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7df9ef" />
+      <stop offset="100%" stop-color="#029488" />
+    </linearGradient>
+
+    <!-- 拟真立体折角投影 -->
+    <filter id="foldShadowAsr" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-4" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- 1. 🌟 全屏满铺海青底板文档主体 (右上角带 3D 折角缺口) -->
+  <path d="M 0 0 
+           L 680 0 
+           L 800 120 
+           L 800 500 
+           L 0 500 Z" 
+        fill="url(#fullAsrCyanSheet)" />
+
+  <!-- 2. 全景外边缘晶体高光微边 -->
+  <path d="M 0 1 
+           L 679 1 
+           L 799 121 
+           L 799 499 
+           L 1 499 
+           L 1 0" 
+        fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.25" />
+
+  <!-- 3. 🌟 右上角 3D 拟真翻折三角瓣 -->
+  <g filter="url(#foldShadowAsr)">
+    <path d="M 680 0 
+             L 680 96 
+             A 24 24 0 0 0 704 120 
+             L 800 120 Z" 
+          fill="url(#fullFoldFlapGradAsr)" />
+    <!-- 折角底边阴影暗线 -->
+    <path d="M 680 120 L 800 120" stroke="#000000" stroke-width="2.5" stroke-opacity="0.3" />
+  </g>
+
+  <!-- 4. 🌟 绝对居中超大号字标：ASR (165px 纯白极粗，绝对视觉焦点) -->
+  <text x="400" y="270" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="165" 
+        font-weight="900" 
+        text-anchor="middle" 
+        letter-spacing="6">ASR</text>
+
+  <!-- 5. 🌟 绝对居中副标：AI Video Subtitle & Translation -->
+  <text x="400" y="350" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="26" 
+        font-weight="700" 
+        text-anchor="middle" 
+        letter-spacing="4" 
+        opacity="0.95">AI Video Subtitle &amp; Translation</text>
+
+  <!-- 6. 底部极简文档/流媒体结构高光装饰条 (居中舒展) -->
+  <g opacity="0.35" fill="#ffffff">
+    <rect x="220" y="400" width="100" height="7" rx="3.5" />
+    <rect x="340" y="400" width="120" height="7" rx="3.5" />
+    <rect x="480" y="400" width="100" height="7" rx="3.5" />
+  </g>
+</svg>
+</file>
+
 <file path="src/bindings/tools/pdf-parse.ts">
 // 🛡️ 紫电 AI 桌面工坊 - PDF 智能解析专属强类型契约 (pdf-parse.ts)
 // 100% 对齐 Rust 后端 Native 本地直出结构 (零 Zip / 零 Web 污染)
@@ -5794,39 +3663,6 @@ export interface PdfParseResult {
 export async function parsePdf(filePath: string): Promise<PdfParseResult> {
   return await invoke<PdfParseResult>("parse_pdf", { filePath });
 }
-</file>
-
-<file path="src/bindings/index.ts">
-// 🛡️ 紫电 AI 桌面工坊 - 端到端强类型契约门面中枢 (bindings/index.ts)
-
-import { invoke } from "@tauri-apps/api/core";
-import { runFormatConvert } from "./tools/format-converter";
-import { parsePdf } from "./tools/pdf-parse";
-import { runVideoSubtitle, probeVideo } from "./tools/video-subtitle";
-
-// 1. 导出各工具领域专有强类型契约与独立调用方法
-export * from "./tools/format-converter";
-export * from "./tools/pdf-parse";
-export * from "./tools/video-subtitle";
-
-// 2. 导出全局公共底座命令
-export async function getHardwareFingerprint(): Promise<string> {
-  return await invoke<string>("get_hardware_fingerprint");
-}
-
-export async function cancelCurrentTask(): Promise<boolean> {
-  return await invoke<boolean>("cancel_current_task");
-}
-
-// 3. 统一门面 RPC 命名空间 (Commands Facade)
-export const commands = {
-  runFormatConvert,
-  parsePdf,
-  probeVideo,
-  runVideoSubtitle,
-  cancelCurrentTask,
-  getHardwareFingerprint,
-};
 </file>
 
 <file path="src/components/ui/aspect-ratio/AspectRatio.vue">
@@ -6895,95 +4731,6 @@ export function useTauriWindow() {
 }
 </file>
 
-<file path="src/store/uiStore.ts">
-import { defineStore } from 'pinia';
-import { ref } from 'vue';
-
-const USAGE_STORAGE_KEY = 'zidian_tool_usage_counts';
-
-// 🌟 对齐冷启动基线权重 (asr: 10, pdf: 8, format: 6)
-const DEFAULT_INITIAL_COUNTS: Record<string, number> = {
-  asr: 10,
-  pdf: 8,
-  format: 6,
-};
-
-export const useUIStore = defineStore('ui', () => {
-  const currentView = ref<'home' | 'format' | 'pdf' | 'asr'>('home');
-  const showRadar = ref(false);
-  const radarMode = ref<'global' | 'local'>('global');
-  const toast消息 = ref<string | null>(null);
-  const toast类型 = ref<'success' | 'error' | 'info'>('success');
-  const toast显示 = ref(false);
-
-  // 悬浮侧边栏收起/展开状态机
-  const 侧边栏收起 = ref(false);
-
-  let toast定时器: number | null = null;
-
-  const 弹出提示 = (消息: string, 类型: 'success' | 'error' | 'info' = 'success') => {
-    toast消息.value = 消息;
-    toast类型.value = 类型;
-    toast显示.value = true;
-    if (toast定时器) {
-      clearTimeout(toast定时器);
-      toast定时器 = null;
-    }
-    toast定时器 = window.setTimeout(() => {
-      toast显示.value = false;
-    }, 2500);
-  };
-
-  const 切换侧边栏 = () => {
-    侧边栏收起.value = !侧边栏收起.value;
-  };
-
-  // 🌟 1. 读取本地离线持久化频次数据
-  const loadUsageCounts = (): Record<string, number> => {
-    try {
-      const raw = localStorage.getItem(USAGE_STORAGE_KEY);
-      if (raw) {
-        return { ...DEFAULT_INITIAL_COUNTS, ...JSON.parse(raw) };
-      }
-    } catch (e) {
-      console.warn('⚠️ 读取工具使用频次异常:', e);
-    }
-    return { ...DEFAULT_INITIAL_COUNTS };
-  };
-
-  const toolUsageCounts = ref<Record<string, number>>(loadUsageCounts());
-
-  // 🌟 2. 原子记录工具使用并持久化
-  const recordToolUsage = (toolId: string) => {
-    const current = toolUsageCounts.value[toolId] || 0;
-    const nextCounts = {
-      ...toolUsageCounts.value,
-      [toolId]: current + 1,
-    };
-    toolUsageCounts.value = nextCounts;
-    try {
-      localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(nextCounts));
-    } catch (e) {
-      console.warn('⚠️ 写入工具使用频次异常:', e);
-    }
-  };
-
-  return {
-    currentView,
-    showRadar,
-    radarMode,
-    toast消息,
-    toast类型,
-    toast显示,
-    弹出提示,
-    侧边栏收起,
-    切换侧边栏,
-    toolUsageCounts,
-    recordToolUsage,
-  };
-});
-</file>
-
 <file path="src/bindings.ts">
 // 🛡️ 紫电 AI 桌面工坊 - 根级契约转发桥接 (bindings.ts)
 // 指向模块化门面中枢，保持向下完全兼容
@@ -7029,182 +4776,6 @@ CMAKE_MAKE_PROGRAM = { value = "C:/Program Files (x86)/Microsoft Visual Studio/2
     "opener:default",
     "dialog:default"
   ]
-}
-</file>
-
-<file path="src-tauri/crates/core-onnx-infer/src/config.rs">
-use crate::errors::OrtInferError;
-use ort::ep::ExecutionProviderDispatch;
-use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OrtExecutionProvider {
-    CPU,
-    CUDA { device_id: i32 },
-    DirectML { device_id: i32 },
-}
-
-#[derive(Debug, Clone)]
-pub struct OrtSessionConfig {
-    pub execution_providers: Vec<OrtExecutionProvider>,
-    pub intra_threads: Option<usize>,
-    pub inter_threads: Option<usize>,
-    pub parallel_execution: Option<bool>,
-    pub optimization_level: Option<GraphOptimizationLevel>,
-    pub enable_memory_pattern: Option<bool>,
-}
-
-impl Default for OrtSessionConfig {
-    fn default() -> Self {
-        Self {
-            execution_providers: vec![
-                OrtExecutionProvider::CUDA { device_id: 0 },
-                OrtExecutionProvider::CPU,
-            ],
-            intra_threads: None,
-            inter_threads: None,
-            parallel_execution: Some(false),
-            optimization_level: Some(GraphOptimizationLevel::Level3),
-            enable_memory_pattern: Some(true),
-        }
-    }
-}
-
-pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferError> {
-    let dev = device.to_lowercase();
-    if dev == "cpu" {
-        return Ok(OrtSessionConfig {
-            execution_providers: vec![OrtExecutionProvider::CPU],
-            ..Default::default()
-        });
-    }
-
-    if dev.starts_with("cuda") {
-        let id = dev
-            .strip_prefix("cuda:")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
-        return Ok(OrtSessionConfig {
-            execution_providers: vec![
-                OrtExecutionProvider::CUDA { device_id: id },
-                OrtExecutionProvider::CPU,
-            ],
-            ..Default::default()
-        });
-    }
-
-    if dev.starts_with("directml") || dev.starts_with("dml") {
-        let id = dev
-            .strip_prefix("directml:")
-            .or_else(|| dev.strip_prefix("dml:"))
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
-        return Ok(OrtSessionConfig {
-            execution_providers: vec![
-                OrtExecutionProvider::DirectML { device_id: id },
-                OrtExecutionProvider::CPU,
-            ],
-            parallel_execution: Some(false),
-            ..Default::default()
-        });
-    }
-
-    Ok(OrtSessionConfig::default())
-}
-
-impl OrtSessionConfig {
-    /// 🛡️ 为自回归控制流模型 (如 Loop.0 / PP-FormulaNet) 专门定制的安全纯净配置
-    pub fn for_control_flow() -> Self {
-        Self {
-            execution_providers: vec![OrtExecutionProvider::CPU],
-            intra_threads: None,
-            inter_threads: None,
-            parallel_execution: Some(false),
-            optimization_level: Some(GraphOptimizationLevel::Level1),
-            enable_memory_pattern: Some(false),
-        }
-    }
-
-    pub fn build_session_builder(&self) -> Result<SessionBuilder, OrtInferError> {
-        let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
-            path: "ONNX SessionBuilder".into(),
-            context: format!("Failed to create builder: {e}"),
-        })?;
-
-        let opt_level = self.optimization_level.unwrap_or(GraphOptimizationLevel::Level3);
-        builder = builder
-            .with_optimization_level(opt_level)
-            .map_err(|e| OrtInferError::ModelLoad {
-                path: "ONNX SessionBuilder".into(),
-                context: format!("Failed to set optimization level: {e}"),
-            })?;
-
-        if let Some(enable_mem) = self.enable_memory_pattern {
-            builder = builder
-                .with_memory_pattern(enable_mem)
-                .map_err(|e| OrtInferError::ModelLoad {
-                    path: "ONNX SessionBuilder".into(),
-                    context: format!("Failed to set memory pattern: {e}"),
-                })?;
-        }
-
-        if let Some(intra) = self.intra_threads {
-            builder = builder.with_intra_threads(intra).map_err(|e| OrtInferError::ModelLoad {
-                path: "ONNX SessionBuilder".into(),
-                context: format!("Failed to set intra threads: {e}"),
-            })?;
-        }
-
-        if let Some(inter) = self.inter_threads {
-            builder = builder.with_inter_threads(inter).map_err(|e| OrtInferError::ModelLoad {
-                path: "ONNX SessionBuilder".into(),
-                context: format!("Failed to set inter threads: {e}"),
-            })?;
-        }
-
-        if let Some(par) = self.parallel_execution {
-            builder = builder.with_parallel_execution(par).map_err(|e| OrtInferError::ModelLoad {
-                path: "ONNX SessionBuilder".into(),
-                context: format!("Failed to set parallel execution: {e}"),
-            })?;
-        }
-
-        let mut dispatches: Vec<ExecutionProviderDispatch> = Vec::new();
-        for ep in &self.execution_providers {
-            match ep {
-                OrtExecutionProvider::CPU => {
-                    dispatches.push(ort::ep::CPU::default().build());
-                }
-                #[cfg(feature = "cuda")]
-                OrtExecutionProvider::CUDA { device_id } => {
-                    use ort::ep::cuda::ConvAlgorithmSearch;
-                    let mut cuda_ep = ort::ep::CUDA::default().with_device_id(*device_id);
-                    cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Default);
-                    dispatches.push(cuda_ep.build());
-                }
-                #[cfg(feature = "directml")]
-                OrtExecutionProvider::DirectML { device_id } => {
-                    let dml_ep = ort::ep::DirectML::default().with_device_id(*device_id);
-                    dispatches.push(dml_ep.build());
-                }
-                #[cfg(not(feature = "cuda"))]
-                OrtExecutionProvider::CUDA { .. } => {}
-                #[cfg(not(feature = "directml"))]
-                OrtExecutionProvider::DirectML { .. } => {}
-            }
-        }
-
-        if !dispatches.is_empty() {
-            builder = builder
-                .with_execution_providers(dispatches)
-                .map_err(|e| OrtInferError::ModelLoad {
-                    path: "ONNX SessionBuilder".into(),
-                    context: format!("Failed to set execution providers: {e}"),
-                })?;
-        }
-
-        Ok(builder)
-    }
 }
 </file>
 
@@ -7305,570 +4876,6 @@ wmi = "0.13"
 winreg = "0.52"
 </file>
 
-<file path="src-tauri/crates/services/service-ocr/src/processors/db_postprocess.rs">
-use crate::models::text_region::{BoundingBox, Point};
-use crate::processors::geometry::{MinAreaRect, ScanlineBuffer};
-use crate::processors::types::{BoxType, ImageScaleInfo, ScoreMode};
-use clipper2_rust::{
-    clipper::inflate_paths_d,
-    core::{area, PathD, PathsD, PointD},
-    offset::{EndType, JoinType},
-};
-use image::GrayImage;
-use imageproc::contours::{find_contours, Contour};
-use ndarray::Axis;
-use rayon::prelude::*;
-use std::cmp::Ordering;
-use std::f32::consts::PI;
-
-#[derive(Debug, Clone)]
-pub struct DBPostProcessConfig {
-    pub thresh: f32,
-    pub box_thresh: f32,
-    pub unclip_ratio: f32,
-}
-
-impl DBPostProcessConfig {
-    pub fn new(thresh: f32, box_thresh: f32, unclip_ratio: f32) -> Self {
-        Self {
-            thresh,
-            box_thresh,
-            unclip_ratio,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct DBPostProcess {
-    pub thresh: f32,
-    pub box_thresh: f32,
-    pub max_candidates: usize,
-    pub unclip_ratio: f32,
-    pub min_size: f32,
-    pub score_mode: ScoreMode,
-    pub box_type: BoxType,
-    pub use_dilation: bool,
-}
-
-impl DBPostProcess {
-    /// 🛡️ 1:1 对齐官方 PP-OCRv6_det inference.yml 默认黄金参数
-    pub fn new(
-        thresh: Option<f32>,
-        box_thresh: Option<f32>,
-        max_candidates: Option<usize>,
-        unclip_ratio: Option<f32>,
-        use_dilation: Option<bool>,
-        score_mode: Option<ScoreMode>,
-        box_type: Option<BoxType>,
-    ) -> Self {
-        Self {
-            thresh: thresh.unwrap_or(0.2),              // 官方标准: 0.2
-            box_thresh: box_thresh.unwrap_or(0.45),      // 官方标准: 0.45
-            max_candidates: max_candidates.unwrap_or(3000), // 官方标准: 3000
-            unclip_ratio: unclip_ratio.unwrap_or(1.4),    // 官方标准: 1.4
-            min_size: 3.0,
-            score_mode: score_mode.unwrap_or(ScoreMode::Fast),
-            box_type: box_type.unwrap_or(BoxType::Quad),
-            use_dilation: use_dilation.unwrap_or(false),
-        }
-    }
-
-    pub fn apply(
-        &self,
-        preds: &ndarray::Array4<f32>,
-        img_shapes: Vec<ImageScaleInfo>,
-        config: Option<&DBPostProcessConfig>,
-    ) -> (Vec<Vec<BoundingBox>>, Vec<Vec<f32>>) {
-        let thresh = config.map(|c| c.thresh).unwrap_or(self.thresh);
-        let box_thresh = config.map(|c| c.box_thresh).unwrap_or(self.box_thresh);
-        let unclip_ratio = config.map(|c| c.unclip_ratio).unwrap_or(self.unclip_ratio);
-
-        let mut all_boxes = Vec::with_capacity(img_shapes.len());
-        let mut all_scores = Vec::with_capacity(img_shapes.len());
-
-        for (batch_idx, shape_batch) in img_shapes.iter().enumerate() {
-            let pred_slice = preds.index_axis(Axis(0), batch_idx);
-            let pred_channel = pred_slice.index_axis(Axis(0), 0);
-
-            let (boxes, scores) =
-                self.process(&pred_channel, shape_batch, thresh, box_thresh, unclip_ratio);
-            all_boxes.push(boxes);
-            all_scores.push(scores);
-        }
-
-        (all_boxes, all_scores)
-    }
-
-    fn process(
-        &self,
-        pred: &ndarray::ArrayView2<f32>,
-        img_shape: &ImageScaleInfo,
-        thresh: f32,
-        box_thresh: f32,
-        unclip_ratio: f32,
-    ) -> (Vec<BoundingBox>, Vec<f32>) {
-        let src_h = img_shape.src_h as u32;
-        let src_w = img_shape.src_w as u32;
-
-        let mask_img = self.threshold_to_mask(pred, thresh);
-        let mask_img = if self.use_dilation {
-            imageproc::morphology::dilate(&mask_img, imageproc::distance_transform::Norm::LInf, 1)
-        } else {
-            mask_img
-        };
-
-        match self.box_type {
-            BoxType::Poly => {
-                self.polygons_from_bitmap(pred, &mask_img, src_w, src_h, box_thresh, unclip_ratio)
-            }
-            BoxType::Quad => {
-                self.boxes_from_bitmap(pred, &mask_img, src_w, src_h, box_thresh, unclip_ratio)
-            }
-        }
-    }
-
-    fn threshold_to_mask(&self, pred: &ndarray::ArrayView2<f32>, thresh: f32) -> GrayImage {
-        let height = pred.shape()[0] as u32;
-        let width = pred.shape()[1] as u32;
-        let mut mask_img = GrayImage::new(width, height);
-        let buf: &mut [u8] = mask_img.as_mut();
-        let row_bytes = width as usize;
-
-        let fill_row = |y: usize, row: &mut [u8]| {
-            let pred_row = pred.row(y);
-            if let Some(slice) = pred_row.as_slice() {
-                for (dst, &val) in row.iter_mut().zip(slice) {
-                    *dst = if val > thresh { 255 } else { 0 };
-                }
-            } else {
-                for (x, dst) in row.iter_mut().enumerate() {
-                    *dst = if pred_row[x] > thresh { 255 } else { 0 };
-                }
-            }
-        };
-
-        if height >= 64 {
-            buf.par_chunks_mut(row_bytes)
-                .enumerate()
-                .for_each(|(y, row)| fill_row(y, row));
-        } else {
-            buf.chunks_mut(row_bytes)
-                .enumerate()
-                .for_each(|(y, row)| fill_row(y, row));
-        }
-
-        mask_img
-    }
-
-    pub fn polygons_from_bitmap(
-        &self,
-        pred: &ndarray::ArrayView2<f32>,
-        bitmap: &GrayImage,
-        dest_width: u32,
-        dest_height: u32,
-        box_thresh: f32,
-        unclip_ratio: f32,
-    ) -> (Vec<BoundingBox>, Vec<f32>) {
-        let height = bitmap.height() as usize;
-        let width = bitmap.width() as usize;
-        let width_scale = dest_width as f32 / width as f32;
-        let height_scale = dest_height as f32 / height as f32;
-        let dest_w_f = dest_width as f32;
-        let dest_h_f = dest_height as f32;
-
-        let contours = find_contours::<u32>(bitmap);
-        let max_candidates = self.max_candidates;
-        let mut boxes: Vec<BoundingBox> = Vec::with_capacity(contours.len().min(max_candidates));
-        let mut scores: Vec<f32> = Vec::with_capacity(boxes.capacity());
-
-        for contour in contours.into_iter().take(max_candidates) {
-            if contour.points.len() < 4 {
-                continue;
-            }
-
-            let bbox = BoundingBox::from_contour(&contour);
-            let epsilon = 0.002 * bbox.perimeter();
-            let approx = bbox.approx_poly_dp(epsilon);
-
-            if approx.points.len() < 4 {
-                continue;
-            }
-
-            let score = self.box_score_fast(pred, &approx);
-            if score < box_thresh {
-                continue;
-            }
-
-            let unclipped = self.unclip(&approx, unclip_ratio);
-            if unclipped.points.is_empty() {
-                continue;
-            }
-
-            let Some((_, sside)) = self.get_mini_boxes_from_points(&unclipped.points) else {
-                continue;
-            };
-            if sside < self.min_size + 2.0 {
-                continue;
-            }
-
-            let n = unclipped.points.len();
-            let mut scaled_points: Vec<Point> = Vec::with_capacity(n);
-            for point in &unclipped.points {
-                let x = (point.x * width_scale).round().clamp(0.0, dest_w_f);
-                let y = (point.y * height_scale).round().clamp(0.0, dest_h_f);
-                scaled_points.push(Point::new(x, y));
-            }
-
-            boxes.push(BoundingBox::new(scaled_points));
-            scores.push(score);
-        }
-
-        (boxes, scores)
-    }
-
-    pub fn boxes_from_bitmap(
-        &self,
-        pred: &ndarray::ArrayView2<f32>,
-        bitmap: &GrayImage,
-        dest_width: u32,
-        dest_height: u32,
-        box_thresh: f32,
-        unclip_ratio: f32,
-    ) -> (Vec<BoundingBox>, Vec<f32>) {
-        let height = bitmap.height() as usize;
-        let width = bitmap.width() as usize;
-        let width_scale = dest_width as f32 / width as f32;
-        let height_scale = dest_height as f32 / height as f32;
-        let dest_w_f = dest_width as f32;
-        let dest_h_f = dest_height as f32;
-
-        let contours = find_contours::<u32>(bitmap);
-        let max_candidates = self.max_candidates;
-        let mut boxes: Vec<BoundingBox> = Vec::with_capacity(contours.len().min(max_candidates));
-        let mut scores: Vec<f32> = Vec::with_capacity(boxes.capacity());
-
-        for contour in contours.into_iter().take(max_candidates) {
-            let Some((mini_box_points, min_side)) = self.get_mini_boxes_from_contour(&contour)
-            else {
-                continue;
-            };
-            if min_side < self.min_size {
-                continue;
-            }
-            let mini_box = BoundingBox::new(mini_box_points);
-
-            let score = match self.score_mode {
-                ScoreMode::Fast => self.box_score_fast(pred, &mini_box),
-                ScoreMode::Slow => self.box_score_slow(pred, &contour),
-            };
-
-            if score < box_thresh {
-                continue;
-            }
-
-            let unclipped = self.unclip(&mini_box, unclip_ratio);
-            if unclipped.points.is_empty() {
-                continue;
-            }
-
-            let Some((box_points, sside)) = self.get_mini_boxes_from_points(&unclipped.points)
-            else {
-                continue;
-            };
-            if sside < self.min_size + 2.0 {
-                continue;
-            }
-
-            let n = box_points.len();
-            let mut scaled_points: Vec<Point> = Vec::with_capacity(n);
-            for point in &box_points {
-                let x = (point.x * width_scale).round().clamp(0.0, dest_w_f);
-                let y = (point.y * height_scale).round().clamp(0.0, dest_h_f);
-                scaled_points.push(Point::new(x, y));
-            }
-
-            boxes.push(BoundingBox::new(scaled_points));
-            scores.push(score);
-        }
-
-        (boxes, scores)
-    }
-
-    fn get_mini_boxes_from_contour(&self, contour: &Contour<u32>) -> Option<(Vec<Point>, f32)> {
-        let points = contour
-            .points
-            .iter()
-            .map(|p| Point::new(p.x as f32, p.y as f32))
-            .collect::<Vec<_>>();
-        let simplified = Self::simplify_chain_points(&points);
-        if simplified.len() >= 3 {
-            self.get_mini_boxes_from_points(&simplified)
-        } else {
-            self.get_mini_boxes_from_points(&points)
-        }
-    }
-
-    fn get_mini_boxes_from_points(&self, points: &[Point]) -> Option<(Vec<Point>, f32)> {
-        if points.len() < 3 {
-            return None;
-        }
-
-        let min_rect = BoundingBox::get_min_area_rect_from_points(points);
-        let min_side = min_rect.min_side();
-        if !min_side.is_finite() || min_side <= 0.0 {
-            return None;
-        }
-
-        let raw_points = Self::box_points_without_reorder(&min_rect);
-        if raw_points.len() != 4 {
-            return None;
-        }
-
-        Some((Self::paddlex_order_mini_box_points(raw_points), min_side))
-    }
-
-    fn box_points_without_reorder(rect: &MinAreaRect) -> Vec<Point> {
-        let cos_a = (rect.angle * PI / 180.0).cos();
-        let sin_a = (rect.angle * PI / 180.0).sin();
-        let w_2 = rect.width / 2.0;
-        let h_2 = rect.height / 2.0;
-        let corners = [(-w_2, -h_2), (w_2, -h_2), (w_2, h_2), (-w_2, h_2)];
-
-        corners
-            .iter()
-            .map(|(x, y)| {
-                let rotated_x = x * cos_a - y * sin_a + rect.center.x;
-                let rotated_y = x * sin_a + y * cos_a + rect.center.y;
-                Point::new(rotated_x, rotated_y)
-            })
-            .collect()
-    }
-
-    fn simplify_chain_points(points: &[Point]) -> Vec<Point> {
-        if points.len() <= 2 {
-            return points.to_vec();
-        }
-
-        let mut simplified = Vec::with_capacity(points.len());
-        let n = points.len();
-
-        for i in 0..n {
-            let prev = points[(i + n - 1) % n];
-            let curr = points[i];
-            let next = points[(i + 1) % n];
-
-            let dir_prev = (
-                Self::sign_step(curr.x - prev.x),
-                Self::sign_step(curr.y - prev.y),
-            );
-            let dir_next = (
-                Self::sign_step(next.x - curr.x),
-                Self::sign_step(next.y - curr.y),
-            );
-
-            if dir_prev != dir_next {
-                simplified.push(curr);
-            }
-        }
-
-        if simplified.len() < 3 {
-            points.to_vec()
-        } else {
-            simplified
-        }
-    }
-
-    fn sign_step(v: f32) -> i8 {
-        if v > 0.0 {
-            1
-        } else if v < 0.0 {
-            -1
-        } else {
-            0
-        }
-    }
-
-    fn paddlex_order_mini_box_points(mut points: Vec<Point>) -> Vec<Point> {
-        if points.len() != 4 {
-            return points;
-        }
-
-        points.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(Ordering::Equal));
-
-        let (index_1, index_4) = if points[1].y > points[0].y {
-            (0usize, 1usize)
-        } else {
-            (1usize, 0usize)
-        };
-        let (index_2, index_3) = if points[3].y > points[2].y {
-            (2usize, 3usize)
-        } else {
-            (3usize, 2usize)
-        };
-
-        vec![
-            points[index_1],
-            points[index_2],
-            points[index_3],
-            points[index_4],
-        ]
-    }
-
-    fn unclip(&self, bbox: &BoundingBox, unclip_ratio: f32) -> BoundingBox {
-        if bbox.points.len() < 3 {
-            return bbox.clone();
-        }
-
-        let clipper_path: PathD = bbox
-            .points
-            .iter()
-            .map(|point| PointD {
-                x: point.x as f64,
-                y: point.y as f64,
-            })
-            .collect();
-
-        if clipper_path.len() < 3 {
-            return BoundingBox::new(Vec::new());
-        }
-
-        let polygon_area = area(&clipper_path).abs();
-        if polygon_area <= f64::EPSILON {
-            return BoundingBox::new(Vec::new());
-        }
-
-        let mut perimeter = 0.0f64;
-        let n = clipper_path.len();
-        if n >= 2 {
-            let mut p1 = &clipper_path[0];
-            for p2 in &clipper_path[1..] {
-                perimeter += (p2.x - p1.x).hypot(p2.y - p1.y);
-                p1 = p2;
-            }
-            let first = &clipper_path[0];
-            perimeter += (first.x - p1.x).hypot(first.y - p1.y);
-        }
-
-        if perimeter <= f64::EPSILON {
-            return BoundingBox::new(Vec::new());
-        }
-
-        let delta = polygon_area * unclip_ratio as f64 / perimeter;
-        if delta.abs() <= f64::EPSILON {
-            return BoundingBox::new(Vec::new());
-        }
-
-        let paths: PathsD = vec![clipper_path];
-        let offset_paths = inflate_paths_d(
-            &paths,
-            delta,
-            JoinType::Round,
-            EndType::Polygon,
-            2.0,
-            2,
-            0.0,
-        );
-
-        if offset_paths.len() != 1 {
-            return BoundingBox::new(Vec::new());
-        }
-
-        let path = offset_paths.into_iter().next().unwrap();
-
-        let mut points: Vec<Point> = path
-            .iter()
-            .map(|pt| Point::new(pt.x as f32, pt.y as f32))
-            .collect();
-
-        if points.len() > 1
-            && let (Some(first), Some(last)) = (points.first(), points.last())
-            && (first.x - last.x).abs() < f32::EPSILON
-            && (first.y - last.y).abs() < f32::EPSILON
-        {
-            points.pop();
-        }
-
-        if points.len() < 3 {
-            return BoundingBox::new(Vec::new());
-        }
-
-        BoundingBox::new(points)
-    }
-
-    pub fn box_score_fast(&self, pred: &ndarray::ArrayView2<f32>, bbox: &BoundingBox) -> f32 {
-        let height = pred.shape()[0];
-        let width = pred.shape()[1];
-
-        let (min_x, min_y, max_x, max_y) = bbox.aabb();
-
-        let min_x = min_x.floor().max(0.0).min(width as f32 - 1.0);
-        let max_x = max_x.ceil().max(0.0).min(width as f32 - 1.0);
-        let min_y = min_y.floor().max(0.0).min(height as f32 - 1.0);
-        let max_y = max_y.ceil().max(0.0).min(height as f32 - 1.0);
-
-        let start_y = min_y as usize;
-        let end_y = max_y as usize + 1;
-        let start_x = min_x as usize;
-        let end_x = max_x as usize + 1;
-
-        self.box_score_fast_contour(pred, bbox, start_y, end_y, start_x, end_x)
-    }
-
-    fn box_score_fast_contour(
-        &self,
-        pred: &ndarray::ArrayView2<f32>,
-        bbox: &BoundingBox,
-        start_y: usize,
-        end_y: usize,
-        start_x: usize,
-        end_x: usize,
-    ) -> f32 {
-        let max_polygon_points = bbox.points.len();
-        let mut scanline_buffer = ScanlineBuffer::new(max_polygon_points);
-
-        let mut total_score = 0.0;
-        let mut total_pixels = 0;
-
-        for y in start_y..end_y {
-            let scanline_y = y as f32 + 0.5;
-            let (line_score, line_pixels) =
-                scanline_buffer.process_scanline(scanline_y, bbox, start_x, end_x, pred);
-            total_score += line_score;
-            total_pixels += line_pixels;
-        }
-
-        if total_pixels > 0 {
-            total_score / total_pixels as f32
-        } else {
-            0.0
-        }
-    }
-
-    pub fn box_score_slow(
-        &self,
-        pred: &ndarray::ArrayView2<f32>,
-        contour: &Contour<u32>,
-    ) -> f32 {
-        let height = pred.shape()[0];
-        let width = pred.shape()[1];
-
-        if height == 0 || width == 0 || contour.points.is_empty() {
-            return 0.0;
-        }
-
-        let bbox = BoundingBox::from_contour(contour);
-        let (min_x, min_y, max_x, max_y) = bbox.aabb();
-
-        let start_y = min_y.floor().max(0.0).min(height as f32 - 1.0) as usize;
-        let end_y = max_y.ceil().max(0.0).min(height as f32 - 1.0) as usize + 1;
-        let start_x = min_x.floor().max(0.0).min(width as f32 - 1.0) as usize;
-        let end_x = max_x.ceil().max(0.0).min(width as f32 - 1.0) as usize + 1;
-
-        self.box_score_fast_contour(pred, &bbox, start_y, end_y, start_x, end_x)
-    }
-}
-</file>
-
 <file path=".cargo/config.toml">
 [build]
 rustflags = ["-C", "target-feature=-crt-static"]
@@ -7876,6 +4883,42 @@ rustflags = ["-C", "target-feature=-crt-static"]
 [env]
 CMAKE_GENERATOR = { value = "Ninja", force = true }
 CMAKE_MAKE_PROGRAM = { value = "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe", force = true }
+</file>
+
+<file path="src/bindings/index.ts">
+// 🛡️ 紫电 AI 桌面工坊 - 端到端强类型契约门面中枢 (bindings/index.ts)
+
+import { invoke } from "@tauri-apps/api/core";
+import { runFormatConvert } from "./tools/format-converter";
+import { parsePdf } from "./tools/pdf-parse";
+import { runVideoSubtitle, probeVideo } from "./tools/video-subtitle";
+import { runUpscale48k } from "./tools/upscale-48k";
+
+// 1. 导出各工具领域专有强类型契约与独立调用方法
+export * from "./tools/format-converter";
+export * from "./tools/pdf-parse";
+export * from "./tools/video-subtitle";
+export * from "./tools/upscale-48k";
+
+// 2. 导出全局公共底座命令
+export async function getHardwareFingerprint(): Promise<string> {
+  return await invoke<string>("get_hardware_fingerprint");
+}
+
+export async function cancelCurrentTask(): Promise<boolean> {
+  return await invoke<boolean>("cancel_current_task");
+}
+
+// 3. 统一门面 RPC 命名空间 (Commands Facade)
+export const commands = {
+  runFormatConvert,
+  parsePdf,
+  probeVideo,
+  runVideoSubtitle,
+  runUpscale48k,
+  cancelCurrentTask,
+  getHardwareFingerprint,
+};
 </file>
 
 <file path="src/components/effects/ChromaGrid.vue">
@@ -8137,6 +5180,268 @@ const handleCardMove = (e: MouseEvent) => {
     "langZHHant": "🇭🇰 繁体中文",
     "langKO": "🇰🇷 韩语"
   }
+}
+</file>
+
+<file path="src/store/uiStore.ts">
+import { defineStore } from 'pinia';
+import { ref } from 'vue';
+
+const USAGE_STORAGE_KEY = 'zidian_tool_usage_counts';
+
+// 🌟 对齐冷启动基线权重 (upscale: 12, asr: 10, pdf: 8, format: 6)
+const DEFAULT_INITIAL_COUNTS: Record<string, number> = {
+  upscale: 12,
+  asr: 10,
+  pdf: 8,
+  format: 6,
+};
+
+export const useUIStore = defineStore('ui', () => {
+  const currentView = ref<'home' | 'format' | 'pdf' | 'asr' | 'upscale'>('home');
+  const showRadar = ref(false);
+  const radarMode = ref<'global' | 'local'>('global');
+  const toast消息 = ref<string | null>(null);
+  const toast类型 = ref<'success' | 'error' | 'info'>('success');
+  const toast显示 = ref(false);
+
+  const 侧边栏收起 = ref(false);
+  let toast定时器: number | null = null;
+
+  const 弹出提示 = (消息: string, 类型: 'success' | 'error' | 'info' = 'success') => {
+    toast消息.value = 消息;
+    toast类型.value = 类型;
+    toast显示.value = true;
+    if (toast定时器) {
+      clearTimeout(toast定时器);
+      toast定时器 = null;
+    }
+    toast定时器 = window.setTimeout(() => {
+      toast显示.value = false;
+    }, 2500);
+  };
+
+  const 切换侧边栏 = () => {
+    侧边栏收起.value = !侧边栏收起.value;
+  };
+
+  const loadUsageCounts = (): Record<string, number> => {
+    try {
+      const raw = localStorage.getItem(USAGE_STORAGE_KEY);
+      if (raw) {
+        return { ...DEFAULT_INITIAL_COUNTS, ...JSON.parse(raw) };
+      }
+    } catch (e) {
+      console.warn('⚠️ 读取工具使用频次异常:', e);
+    }
+    return { ...DEFAULT_INITIAL_COUNTS };
+  };
+
+  const toolUsageCounts = ref<Record<string, number>>(loadUsageCounts());
+
+  const recordToolUsage = (toolId: string) => {
+    const current = toolUsageCounts.value[toolId] || 0;
+    const nextCounts = {
+      ...toolUsageCounts.value,
+      [toolId]: current + 1,
+    };
+    toolUsageCounts.value = nextCounts;
+    try {
+      localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(nextCounts));
+    } catch (e) {
+      console.warn('⚠️ 写入工具使用频次异常:', e);
+    }
+  };
+
+  return {
+    currentView,
+    showRadar,
+    radarMode,
+    toast消息,
+    toast类型,
+    toast显示,
+    弹出提示,
+    侧边栏收起,
+    切换侧边栏,
+    toolUsageCounts,
+    recordToolUsage,
+  };
+});
+</file>
+
+<file path="src-tauri/crates/core-onnx-infer/src/config.rs">
+use crate::errors::OrtInferError;
+use ort::ep::ExecutionProviderDispatch;
+use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OrtExecutionProvider {
+    CPU,
+    CUDA { device_id: i32 },
+    DirectML { device_id: i32 },
+}
+
+#[derive(Debug, Clone)]
+pub struct OrtSessionConfig {
+    pub execution_providers: Vec<OrtExecutionProvider>,
+    pub intra_threads: Option<usize>,
+    pub inter_threads: Option<usize>,
+    pub parallel_execution: Option<bool>,
+    pub optimization_level: Option<GraphOptimizationLevel>,
+    pub enable_memory_pattern: Option<bool>,
+}
+
+impl Default for OrtSessionConfig {
+    fn default() -> Self {
+        Self {
+            execution_providers: vec![
+                OrtExecutionProvider::CUDA { device_id: 0 },
+                OrtExecutionProvider::CPU,
+            ],
+            intra_threads: None,
+            inter_threads: None,
+            parallel_execution: Some(false),
+            optimization_level: Some(GraphOptimizationLevel::Level3),
+            enable_memory_pattern: Some(false), // 🛡️ 关闭静态模板，消除动态切块显存抖动
+        }
+    }
+}
+
+pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferError> {
+    let dev = device.to_lowercase();
+    if dev == "cpu" {
+        return Ok(OrtSessionConfig {
+            execution_providers: vec![OrtExecutionProvider::CPU],
+            ..Default::default()
+        });
+    }
+
+    if dev.starts_with("cuda") {
+        let id = dev
+            .strip_prefix("cuda:")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+        return Ok(OrtSessionConfig {
+            execution_providers: vec![
+                OrtExecutionProvider::CUDA { device_id: id },
+                OrtExecutionProvider::CPU,
+            ],
+            ..Default::default()
+        });
+    }
+
+    if dev.starts_with("directml") || dev.starts_with("dml") {
+        let id = dev
+            .strip_prefix("directml:")
+            .or_else(|| dev.strip_prefix("dml:"))
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+        return Ok(OrtSessionConfig {
+            execution_providers: vec![
+                OrtExecutionProvider::DirectML { device_id: id },
+                OrtExecutionProvider::CPU,
+            ],
+            parallel_execution: Some(false),
+            ..Default::default()
+        });
+    }
+
+    Ok(OrtSessionConfig::default())
+}
+
+impl OrtSessionConfig {
+    pub fn for_control_flow() -> Self {
+        Self {
+            execution_providers: vec![OrtExecutionProvider::CPU],
+            intra_threads: None,
+            inter_threads: None,
+            parallel_execution: Some(false),
+            optimization_level: Some(GraphOptimizationLevel::Level1),
+            enable_memory_pattern: Some(false),
+        }
+    }
+
+    pub fn build_session_builder(&self) -> Result<SessionBuilder, OrtInferError> {
+        let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
+            path: "ONNX SessionBuilder".into(),
+            context: format!("Failed to create builder: {e}"),
+        })?;
+
+        let opt_level = self.optimization_level.unwrap_or(GraphOptimizationLevel::Level3);
+        builder = builder
+            .with_optimization_level(opt_level)
+            .map_err(|e| OrtInferError::ModelLoad {
+                path: "ONNX SessionBuilder".into(),
+                context: format!("Failed to set optimization level: {e}"),
+            })?;
+
+        if let Some(enable_mem) = self.enable_memory_pattern {
+            builder = builder
+                .with_memory_pattern(enable_mem)
+                .map_err(|e| OrtInferError::ModelLoad {
+                    path: "ONNX SessionBuilder".into(),
+                    context: format!("Failed to set memory pattern: {e}"),
+                })?;
+        }
+
+        if let Some(intra) = self.intra_threads {
+            builder = builder.with_intra_threads(intra).map_err(|e| OrtInferError::ModelLoad {
+                path: "ONNX SessionBuilder".into(),
+                context: format!("Failed to set intra threads: {e}"),
+            })?;
+        }
+
+        if let Some(inter) = self.inter_threads {
+            builder = builder.with_inter_threads(inter).map_err(|e| OrtInferError::ModelLoad {
+                path: "ONNX SessionBuilder".into(),
+                context: format!("Failed to set inter threads: {e}"),
+            })?;
+        }
+
+        if let Some(par) = self.parallel_execution {
+            builder = builder.with_parallel_execution(par).map_err(|e| OrtInferError::ModelLoad {
+                path: "ONNX SessionBuilder".into(),
+                context: format!("Failed to set parallel execution: {e}"),
+            })?;
+        }
+
+        let mut dispatches: Vec<ExecutionProviderDispatch> = Vec::new();
+        for ep in &self.execution_providers {
+            match ep {
+                OrtExecutionProvider::CPU => {
+                    dispatches.push(ort::ep::CPU::default().build());
+                }
+                #[cfg(feature = "cuda")]
+                OrtExecutionProvider::CUDA { device_id } => {
+                    use ort::ep::cuda::ConvAlgorithmSearch;
+                    let mut cuda_ep = ort::ep::CUDA::default().with_device_id(*device_id);
+                    // 🚀 官方最新规范：启用 cuDNN 启发式 Mode A 满血加速，杜绝 Fallback 慢速模式
+                    cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Heuristic);
+                    dispatches.push(cuda_ep.build());
+                }
+                #[cfg(feature = "directml")]
+                OrtExecutionProvider::DirectML { device_id } => {
+                    let dml_ep = ort::ep::DirectML::default().with_device_id(*device_id);
+                    dispatches.push(dml_ep.build());
+                }
+                #[cfg(not(feature = "cuda"))]
+                OrtExecutionProvider::CUDA { .. } => {}
+                #[cfg(not(feature = "directml"))]
+                OrtExecutionProvider::DirectML { .. } => {}
+            }
+        }
+
+        if !dispatches.is_empty() {
+            builder = builder
+                .with_execution_providers(dispatches)
+                .map_err(|e| OrtInferError::ModelLoad {
+                    path: "ONNX SessionBuilder".into(),
+                    context: format!("Failed to set execution providers: {e}"),
+                })?;
+        }
+
+        Ok(builder)
+    }
 }
 </file>
 
@@ -9228,21 +6533,24 @@ import {
   BookOpen,
   Image as ImageIcon,
   PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  User,
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
 
-// 1. 已竣工主力工坊组 (正式并入 全能格式转换)
+// 1. 已竣工主力工坊
 const mainWorkbenches = [
   { id: 'home', label: '工坊主页', icon: LayoutDashboard },
+  { id: 'upscale', label: '4K/8K 图像超分', icon: Scan },
   { id: 'format', label: '全能格式转换', icon: Zap },
   { id: 'pdf', label: 'PDF 智能解析', icon: FileText },
   { id: 'asr', label: '视频字幕生成', icon: Film },
 ];
 
-// 2. 本地算力扩展矩阵 (规划建设中的离线端侧算子)
+// 2. 本地算力扩展矩阵
 const extensionOperators = [
-  { id: 'super_res', label: '8K 视觉超分', icon: Scan },
   { id: 'knowledge', label: '本地离线知识库', icon: Database },
   { id: 'audio_master', label: '音频母带增强', icon: Music },
   { id: 'table_clean', label: '多维表格清洗', icon: Table },
@@ -9251,110 +6559,189 @@ const extensionOperators = [
 ];
 
 const switchView = (id: string) => {
-  if (['home', 'format', 'asr', 'pdf'].includes(id)) {
-    ui.currentView = id as 'home' | 'format' | 'asr' | 'pdf';
+  if (['home', 'upscale', 'format', 'asr', 'pdf'].includes(id)) {
+    ui.currentView = id as any;
   } else {
     const target = extensionOperators.find((o) => o.id === id);
     ui.弹出提示(`💡 [${target ? target.label : '算子'}] 正在端侧并网构建中，敬请期待...`, 'info');
   }
 };
+
+const handleSettingsClick = () => {
+  ui.弹出提示('⚙️ 系统设置面板（模型缓存、硬件算力分配）正在就绪中...', 'info');
+};
+
+const handleAccountClick = () => {
+  ui.弹出提示('👤 本地账户：离线专业版 · 永久授权激活', 'success');
+};
 </script>
 
 <template>
   <aside
-    class="fixed left-4 top-4 bottom-4 w-[230px] bg-[#182022]/90 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.5)] flex flex-col pt-6 pb-4 z-40 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
-    :class="ui.侧边栏收起 ? '-translate-x-[270px] opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'"
+    class="fixed left-3 top-3 bottom-3 bg-[#182022]/95 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.6)] flex flex-col pt-4 pb-3 z-40 transition-all duration-300 ease-in-out select-none border border-white/[0.08]"
+    :class="ui.侧边栏收起 ? 'w-[64px]' : 'w-[236px]'"
     style="-webkit-app-region: drag;"
   >
-    <!-- 头部品牌标识 -->
-    <div class="px-5 mb-5 flex items-center justify-between pointer-events-auto select-none" style="-webkit-app-region: no-drag;">
-      <div
-        @click="ui.currentView = 'home'"
-        class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2"
-        title="返回紫电主页"
-      >
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#bc05ff] to-[#DCA54C] flex items-center justify-center shadow-[0_0_12px_rgba(188,5,255,0.4)]">
-          <Zap :size="15" class="text-white fill-white" />
+    <!-- ==================== 顶部品牌与切换开关 ==================== -->
+    <div class="px-3.5 mb-3 flex items-center justify-between pointer-events-auto" style="-webkit-app-region: no-drag;">
+      
+      <!-- 展开态头部 -->
+      <div v-if="!ui.侧边栏收起" class="flex items-center justify-between w-full">
+        <div
+          @click="ui.currentView = 'home'"
+          class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2"
+          title="返回紫电主页"
+        >
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#bc05ff] to-[#DCA54C] flex items-center justify-center shadow-[0_0_12px_rgba(188,5,255,0.4)]">
+            <Zap :size="15" class="text-white fill-white" />
+          </div>
+          <ShinyText
+            text="紫电 AI"
+            :speed="3.5"
+            :spread="150"
+            color="#f2f2ef"
+            shine-color="#DCA54C"
+            class="text-[17px] font-black tracking-tight"
+          />
         </div>
-        <ShinyText
-          text="紫电 AI"
-          :speed="3.5"
-          :spread="150"
-          color="#f2f2ef"
-          shine-color="#DCA54C"
-          class="text-[17px] font-black tracking-tight"
-        />
+
+        <button
+          type="button"
+          @click="ui.切换侧边栏"
+          class="w-7 h-7 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
+          title="收起侧边栏"
+        >
+          <PanelLeftClose :size="15" class="stroke-[2]" />
+        </button>
       </div>
 
-      <button
-        type="button"
-        @click="ui.切换侧边栏"
-        class="w-7 h-7 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
-        title="收起侧边栏"
-      >
-        <PanelLeftClose :size="15" class="stroke-[2]" />
-      </button>
+      <!-- 收起态头部 (迷你图轨开关) -->
+      <div v-else class="flex flex-col items-center justify-center w-full space-y-2">
+        <button
+          type="button"
+          @click="ui.切换侧边栏"
+          class="w-9 h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 hover:border-[#02c3b4]/50 text-[#8b999b] hover:text-[#02c3b4] flex items-center justify-center transition-all cursor-pointer group relative"
+        >
+          <PanelLeftOpen :size="16" class="stroke-[2]" />
+          
+          <!-- 悬浮气泡: 打开边栏 -->
+          <div class="absolute left-12 bg-black/90 text-white font-bold text-[11px] px-2.5 py-1 rounded-lg border border-white/15 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 shadow-xl z-50">
+            打开边栏
+          </div>
+        </button>
+      </div>
+
     </div>
 
-    <!-- 菜单滚动区 -->
-    <div class="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1 pointer-events-auto" style="-webkit-app-region: no-drag;">
+    <!-- ==================== 中部菜单滚动区 ==================== -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar px-2 space-y-1.5 pointer-events-auto" style="-webkit-app-region: no-drag;">
       
       <!-- 主力工坊组 -->
       <div
         v-for="item in mainWorkbenches"
         :key="item.id"
         @click="switchView(item.id)"
-        class="flex items-center justify-between px-3.5 py-2.5 rounded-2xl cursor-pointer transition-all duration-150 border select-none group"
+        class="relative flex items-center rounded-2xl cursor-pointer transition-all duration-150 border select-none group"
         :class="[
+          ui.侧边栏收起 ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5',
           ui.currentView === item.id
-            ? 'bg-white/[0.06] border-[#02c3b4]/30 text-white font-bold shadow-[0_4px_20px_rgba(2,195,180,0.12)]'
+            ? 'bg-white/[0.08] border-[#02c3b4]/40 text-white font-bold shadow-[0_4px_20px_rgba(2,195,180,0.15)]'
             : 'border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
         ]"
       >
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2.5">
           <component
             :is="item.icon"
-            :size="16"
+            :size="17"
             :class="ui.currentView === item.id ? 'text-[#02c3b4] stroke-[2.5]' : 'text-[#8b999b] group-hover:text-white stroke-[2]'"
           />
-          <span class="text-[13px] tracking-wide">{{ item.label }}</span>
+          <span v-if="!ui.侧边栏收起" class="text-[13px] tracking-wide truncate">{{ item.label }}</span>
         </div>
 
         <span
-          v-if="ui.currentView === item.id"
+          v-if="!ui.侧边栏收起 && ui.currentView === item.id"
           class="w-1.5 h-1.5 rounded-full bg-[#02c3b4] shadow-[0_0_8px_#02c3b4]"
         />
-      </div>
 
-      <!-- 分隔线与标题 -->
-      <div class="pt-4 pb-1.5 px-3 flex items-center justify-between">
-        <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
-        <span class="text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded">6 算子</span>
-      </div>
-
-      <!-- 扩展算子矩阵组 -->
-      <div
-        v-for="item in extensionOperators"
-        :key="item.id"
-        @click="switchView(item.id)"
-        class="flex items-center justify-between px-3.5 py-2 rounded-2xl cursor-pointer transition-all border border-transparent text-[#6e7d80] hover:bg-white/[0.03] hover:text-[#c4d4d6] hover:border-white/[0.04] font-medium select-none group"
-      >
-        <div class="flex items-center gap-3">
-          <component :is="item.icon" :size="15" class="text-[#526063] group-hover:text-[#8b999b] stroke-[2]" />
-          <span class="text-[12.5px] tracking-wide">{{ item.label }}</span>
+        <!-- 收起态 Hover 悬浮气泡 -->
+        <div
+          v-if="ui.侧边栏收起"
+          class="absolute left-14 bg-black/90 text-white font-bold text-xs px-2.5 py-1 rounded-lg border border-white/15 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 shadow-xl z-50"
+        >
+          {{ item.label }}
         </div>
-        <span class="text-[9px] font-mono text-[#435154] group-hover:text-[#02c3b4] transition-colors">离线</span>
       </div>
+
+      <!-- 分隔线与扩展区 (展开时显示) -->
+      <template v-if="!ui.侧边栏收起">
+        <div class="pt-3 pb-1 px-2 flex items-center justify-between">
+          <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
+          <span class="text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded">5 算子</span>
+        </div>
+
+        <div
+          v-for="item in extensionOperators"
+          :key="item.id"
+          @click="switchView(item.id)"
+          class="flex items-center justify-between px-3 py-1.5 rounded-2xl cursor-pointer transition-all border border-transparent text-[#6e7d80] hover:bg-white/[0.03] hover:text-[#c4d4d6] hover:border-white/[0.04] font-medium select-none group"
+        >
+          <div class="flex items-center gap-2.5">
+            <component :is="item.icon" :size="15" class="text-[#526063] group-hover:text-[#8b999b] stroke-[2]" />
+            <span class="text-[12px] tracking-wide">{{ item.label }}</span>
+          </div>
+          <span class="text-[9px] font-mono text-[#435154] group-hover:text-[#02c3b4] transition-colors">离线</span>
+        </div>
+      </template>
 
     </div>
 
-    <!-- 底部状态指示灯 -->
-    <div class="px-5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-[#5b696b] pointer-events-auto" style="-webkit-app-region: no-drag;">
-      <span class="flex items-center gap-1.5 text-[#8b999b]">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-        RTX 3060 Ready
-      </span>
-      <span class="text-[10px] text-[#02c3b4]">v2.0</span>
+    <!-- ==================== 底部：设置与账户常驻区 ==================== -->
+    <div class="px-2 pt-2 border-t border-white/[0.06] space-y-1 pointer-events-auto" style="-webkit-app-region: no-drag;">
+      
+      <!-- 设置按钮 -->
+      <div
+        @click="handleSettingsClick"
+        class="relative flex items-center rounded-xl cursor-pointer transition-all border border-transparent text-[#8b999b] hover:text-white hover:bg-white/[0.04] group"
+        :class="ui.侧边栏收起 ? 'justify-center p-2.5' : 'px-3 py-2 gap-2.5'"
+        title="系统设置"
+      >
+        <Settings :size="17" class="stroke-[2] text-[#8b999b] group-hover:text-white" />
+        <span v-if="!ui.侧边栏收起" class="text-[12.5px] font-bold">设置</span>
+
+        <div
+          v-if="ui.侧边栏收起"
+          class="absolute left-14 bg-black/90 text-white font-bold text-xs px-2.5 py-1 rounded-lg border border-white/15 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 shadow-xl z-50"
+        >
+          系统设置
+        </div>
+      </div>
+
+      <!-- 账户头像按钮 -->
+      <div
+        @click="handleAccountClick"
+        class="relative flex items-center rounded-xl cursor-pointer transition-all border border-transparent text-[#8b999b] hover:text-white hover:bg-white/[0.04] group"
+        :class="ui.侧边栏收起 ? 'justify-center p-2' : 'px-2.5 py-1.5 gap-2.5'"
+        title="个人账户"
+      >
+        <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#DCA54C] to-[#02c3b4] p-[1.5px] shrink-0">
+          <div class="w-full h-full rounded-full bg-[#182022] flex items-center justify-center text-white">
+            <User :size="14" class="stroke-[2.5]" />
+          </div>
+        </div>
+        
+        <div v-if="!ui.侧边栏收起" class="flex flex-col min-w-0">
+          <span class="text-xs font-bold text-white truncate">紫电开发者</span>
+          <span class="text-[10px] font-mono text-[#02c3b4] leading-tight">Pro License</span>
+        </div>
+
+        <div
+          v-if="ui.侧边栏收起"
+          class="absolute left-14 bg-black/90 text-white font-bold text-xs px-2.5 py-1 rounded-lg border border-white/15 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 shadow-xl z-50"
+        >
+          紫电开发者 (Pro)
+        </div>
+      </div>
+
     </div>
   </aside>
 </template>
@@ -9449,7 +6836,7 @@ onUnmounted(() => {
 
     <div
       class="relative z-10 flex-1 w-full overflow-y-auto custom-scrollbar pt-12 pb-10 transition-all duration-300 ease-in-out"
-      :class="ui.侧边栏收起 ? 'px-6 sm:px-10 lg:px-14' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
+      :class="ui.侧边栏收起 ? 'pl-[84px] pr-6 sm:pr-10' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-14'"
       @dragover="workflow.handleDragOver"
       @dragleave="workflow.handleDragLeave"
       @drop="workflow.handleDrop"
@@ -9692,19 +7079,17 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 🌟 100% 对齐图二图三标准的现代化顶级成功 Modal -->
+    <!-- 成功 Modal -->
     <div
       v-if="workflow.isSuccessModalOpen.value && workflow.successInfo.value"
       class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-150 select-none"
     >
       <div class="max-w-[360px] sm:max-w-[380px] w-full p-6 sm:p-7 rounded-[32px] bg-white border border-slate-100 shadow-[0_25px_60px_rgba(0,0,0,0.35)] text-center space-y-4 flex flex-col items-center animate-in zoom-in-95 duration-150">
         
-        <!-- 1. 经典翠绿实体立体徽标 (对齐图三) -->
         <div class="w-14 h-14 rounded-full bg-[#10b981] text-white flex items-center justify-center shadow-[0_8px_20px_rgba(16,185,129,0.35)] shrink-0">
           <Check :size="28" class="stroke-[3.5]" />
         </div>
 
-        <!-- 2. 大标题与副标题 -->
         <div class="space-y-1 w-full">
           <h3 class="text-xl font-black text-slate-900 tracking-tight">
             处理成功
@@ -9717,7 +7102,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 3. 极简浅灰信息卡片仓 (对齐图三) -->
         <div class="w-full bg-[#f4f4f5]/90 border border-slate-200/50 rounded-2xl p-4 text-xs text-left space-y-2.5">
           <div class="flex justify-between items-center text-slate-500">
             <span class="font-medium">目标格式</span>
@@ -9744,7 +7128,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 4. 双胶囊操作按钮 (对齐图二图三) -->
         <div class="w-full flex items-center justify-center gap-3 pt-1">
           <button
             type="button"
@@ -9775,6 +7158,7 @@ import { useUIStore } from './store/uiStore';
 import { useTauriWindow } from './composables/useTauriWindow';
 import Sidebar from './components/layout/Sidebar.vue';
 import HomeView from './views/HomeView.vue';
+import Upscale48kView from './views/Upscale48kView.vue';
 import FormatConverterView from './views/FormatConverterView.vue';
 import PdfParseView from './views/PdfParseView.vue';
 import VideoSubtitleView from './views/VideoSubtitleView.vue';
@@ -9786,7 +7170,6 @@ import {
   Check,
   AlertCircle,
   Info,
-  PanelLeftOpen,
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
@@ -9802,15 +7185,16 @@ onMounted(() => {
 <template>
   <div class="h-screen w-full overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
     
-    <!-- 1. 全景沉浸主工作区 (铺满整个 100vw * 100vh 物理视窗，底座永不断层) -->
+    <!-- 1. 全景沉浸主工作区 (自适应双态导轨间距) -->
     <main class="absolute inset-0 w-full h-full overflow-hidden z-0">
       <HomeView v-if="ui.currentView === 'home'" />
+      <Upscale48kView v-else-if="ui.currentView === 'upscale'" />
       <FormatConverterView v-else-if="ui.currentView === 'format'" />
       <PdfParseView v-else-if="ui.currentView === 'pdf'" />
       <VideoSubtitleView v-else-if="ui.currentView === 'asr'" />
     </main>
 
-    <!-- 2. 无边框原生拖拽顶栏与物理窗口控制器 (透明悬浮于顶层) -->
+    <!-- 2. 无边框原生拖拽顶栏与物理窗口控制器 -->
     <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-50 pointer-events-none">
       <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto" style="-webkit-app-region: drag;"></div>
       <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
@@ -9842,29 +7226,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 3. 悬浮侧边栏展开按钮 (当侧边栏收起时显现) -->
-    <div
-      v-if="ui.侧边栏收起"
-      class="fixed left-4 top-3.5 z-50 pointer-events-auto group/expand"
-      style="-webkit-app-region: no-drag;"
-    >
-      <button
-        type="button"
-        @click="ui.切换侧边栏"
-        class="h-9 w-9 rounded-2xl bg-[#182022]/90 backdrop-blur-xl border border-white/10 text-[#8b999b] hover:text-[#02c3b4] hover:border-[#02c3b4]/50 hover:bg-white/[0.06] shadow-[0_8px_24px_rgba(0,0,0,0.6)] cursor-pointer transition-all hover:scale-105 flex items-center justify-center"
-        title="展开侧边栏"
-      >
-        <PanelLeftOpen :size="16" class="stroke-[2]" />
-      </button>
-      <div class="absolute top-11 left-1/2 -translate-x-1/2 bg-[#182022]/95 backdrop-blur-xl border border-white/15 rounded-xl px-3 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.8)] flex items-center justify-center pointer-events-none opacity-0 scale-95 group-hover/expand:opacity-100 group-hover/expand:scale-100 transition-all duration-200 select-none z-50">
-        <span class="text-[11px] font-bold text-[#f2f2ef] whitespace-nowrap">展开侧边栏</span>
-      </div>
-    </div>
-
-    <!-- 4. 悬浮暗黑胶囊侧边栏 (独立绝对浮层 HUD) -->
+    <!-- 3. 智能双态胶囊侧边栏 (展开宽栏 <-> 迷你纯图标导轨) -->
     <Sidebar />
 
-    <!-- 5. 全局暗黑海青微光 Toast 提示气泡 -->
+    <!-- 4. 全局暗黑海青微光 Toast 提示气泡 -->
     <div v-if="ui.toast显示" class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
       <Transition
         appear
@@ -9900,164 +7265,123 @@ onMounted(() => {
 </file>
 
 <file path="HANDOFF-TOOL.md">
-# 🛡️ AI-Forge 8K 视觉超分与工程重构交接文档 (HANDOFF_TOOL.md)
+# 🛡️ 紫电 AI (Zidian AI) 工业级工程与商业化全量交接文档 (HANDOFF_TOOL.md)
 
-> **文档版本**：v21.0.0 (2026年8月 8K 视觉超分重构与底座防腐交接版)  
+> **文档版本**：v22.0.0 (2026年8月 4K/8K 图像超分完工、UI 视觉统一与 SOTA 商业代币中台落盘版)  
 > **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 工业级多包 Workspace)  
-> **操作系统与环境**：Windows 11 x64 / PowerShell 7+ / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1 / `uv` / RTX 3060 12GB  
-> **技术栈**：Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace (纯血 Native 架构，全面废除重型 Python `.venv` 与网络端口 IPC)  
+> **操作系统与环境**：Windows 11 x64 / Developer PowerShell for VS 2022 / MSVC (`x86_64-pc-windows-msvc`) / CUDA 12.4 & 13.1 / Ninja / RTX 3060 12GB  
+> **技术栈**：Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + ONNX Runtime (纯血 Native 架构，0 Python 沙箱，0 端口开销)  
 > **面向对象**：新会话 AI 系统架构师 / 核心开发助手 (零历史上下文障碍无损接管)
 
 ---
 
-## 🏢 1. 当前业务目标与任务背景 (What We Are Doing)
+## 🏢 1. 业务目标与整体定位 (What We Are Doing)
 
-1. **核心使命**：
-   - 为【紫电 AI 桌面工坊】扩展并网第 4 大主力工坊 —— **8K 视觉超分（`service-upscale` / `tool-upscale-8k`）**。
-   - 实现端侧 100% 本地隐私安全、0 显存泄漏、0 数据上传的 2x / 4x / 8x 极速超分辨率图像画质重建。
-2. **基准性能指标（Target Baseline）**：
-   - 目标性能：在本地 NVIDIA RTX 3060（12GB VRAM）硬件上，**单张 8K 级别超分辨率图像重建总耗时收敛在 ~10 - 13 秒左右**。
-3. **架构铁律**：
-   - 遵循 2026 纯血 Native 架构定理：静态矩阵视觉模型采用 **Rust 宿主 + 显存守卫 (`VramTokenGuard`) + `core-onnx-infer` (ONNX Runtime CUDA 直推)**；
-   - 贯彻【第 14 条：零回归代码迁移 3 大支柱】（接口锚定、重放断言、外科手术式直译），彻底剔除原工程中笨重的 Unix Domain Socket（`/tmp/*.sock`）与多余进程间通信。
-
----
-
-## 🏛️ 2. 工作空间拓扑与公共底座防腐现状 (Workspace Status)
-
-```text
-C:\dev\ai-forge\
-├── .cargo\config.toml                     【根级环境守卫】 (Ninja + MSVC 动态链接 CRT)
-├── Cargo.toml                             【工作空间根清单】
-├── models\service-upscale\                【超分模型物理资产区】
-│   ├── RealESRGAN_x4plus.pth              : 原始 PyTorch 权重 (65.4 MB)
-│   ├── RealESRGAN_x4plus.onnx             : 导出的 FP32 动态计算图 (63.95 MB)
-│   └── RealESRGAN_x4plus_fp16.onnx        : 导出的 FP16 半精度动态计算图 (32.19 MB)
-├── bin\cuda12\                            【NVIDIA CUDA 12 核心动态链接库 (16 个 DLL)】
-│   ├── cublas64_12.dll, cublasLt64_12.dll : cuBLAS 线性代数加速库
-│   ├── cudart64_12.dll, cudnn*.dll        : CUDA 运行时与 cuDNN 深度学习加速库
-│   └── onnxruntime*.dll                   : ONNX Runtime 及其 CUDA Provider 插件
-├── test\
-│   ├── input\service-upscale\             【真实测试样本集】
-│   │   ├── 1.png                          : 带透明通道 RGBA 样本 (1090x976)
-│   │   ├── 2.png                          : 钻石高频高光样本 (2048x2048 ➔ 8192x8192 真实 8K)
-│   │   └── 3.jpg                          : 高密文字与图表样本 (1463x672)
-│   └── outs\service-upscale\              【测试落盘输出区】
-└── src-tauri\crates\
-    ├── core-security\                     【只读防腐区 🛡️】 (HMAC 设备指纹 + 离线 License)
-    ├── shared-contracts\                  【只读防腐区 🛡️】 (VramTokenGuard, 11000MB 令牌锁)
-    ├── core-models-download\              【只读防腐区 🛡️】 (SHA256 校验与 CDN 断点续传)
-    ├── core-onnx-infer\                   【只读防腐区 🛡️】 (100% 原始纯净，0 警告，多工具共享)
-    │
-    ├── services\                          【底层算法服务】
-    │   ├── service-upscale\               【🌟 本次新建并网的超分算法底座】
-    │   │   ├── Cargo.toml                 : 依赖 core-onnx-infer(cuda), image, fast_image_resize, ndarray
-    │   │   ├── src\tiling.rs              : 1:1 直译的动态分块与接缝消除数学引擎 (compute_grid)
-    │   │   ├── src\processor.rs           : 图像加载、Alpha 通道解耦、行级零拷贝向量化内存直拷
-    │   │   ├── src\pipeline.rs            : 纯血 ONNX GPU 推理流水线 (UpscalePipeline)
-    │   │   ├── src\lib.rs                 : 对外公开门面 (UpscaleService, UpscaleTask, UpscaleConfig)
-    │   │   └── tests\test_e2e.rs          : 端到端自动化打靶测试
-    │   └── ... (service-ocr, service-layout, service-formula, service-table, service-pdfium 等)
-    └── tools\                             【前端适配与 IPC 网关层】
-```
+1. **核心定位**：
+   - 打造 100% 纯血 Rust Native、本地离线隐私安全、零显存泄漏的顶奢桌面 AI 算力工坊（紫电 AI / Zidian AI）；
+   - 商业哲学：深度贯彻钱学森系统工程论 —— **“不执着于单点技术的极致拔尖，而是通过全系统协同优化，让廉价 AI + 极致框架创造最大化生产力”**。
+2. **四大主力工坊矩阵**：
+   - **4K/8K 图像超分 (`upscale-48k`)**：RealESRGAN 神经网络矩阵直推，4K 极速秒级出图 / 8K 旗舰巨幅重构；
+   - **视频字幕生成 (`video-subtitle`)**：MOSS 0.9B ASR 语音识别 + 混元 Hy-MT2 1.8B 神经翻译 + 显卡硬压；
+   - **PDF 智能解析 (`pdf-parse`)**：双轨多模态排版重构、公式转写与表格还原；
+   - **全能格式转换 (`format-converter`)**：纯血 Rust 音频母带解密、结构数据清洗与格式流转（永久 100% 免费基座）。
 
 ---
 
-## 🟢 3. 本会话已完成的坚实里程碑 (Accomplished)
+## 🏛️ 2. 本会话已完成的坚实里程碑 (Accomplished)
 
-1. **核心算法 1:1 外科手术式直译落盘**：
-   - `tiling.rs`：完成了 `compute_grid` 算法直译，动态计算四周 `pad_left/top/right/bottom` 并在放大 4x 后精准截取 `valid_rect`，数学上 100% 根除分块接缝网格线；
-   - `processor.rs`：实现了多格式图像载入、RGBA 透明通道分离、智能封顶尺寸限缩、Bicubic 双三次重采样以及 Alpha 重新贴回机制；
-   - 彻底优化了内存切片逻辑：改用行级连续内存遍历（`as_mut()`），消除了 CPU 侧的频繁越界安全检查。
-2. **权重模型格式转换**：
-   - 成功从 `RealESRGAN_x4plus.pth` 导出了两套完整的 ONNX 模型：
-     - `RealESRGAN_x4plus.onnx`（63.95 MB，FP32 单精度，动态维度）；
-     - `RealESRGAN_x4plus_fp16.onnx`（32.19 MB，FP16 半精度，Tensor Core 加速）。
-3. **环境与运行库就绪**：
-   - 将 16 个核心 NVIDIA CUDA 12 / cuDNN 加速库及 `onnxruntime_providers_cuda.dll` 完整部署至 `C:\dev\ai-forge\bin\cuda12` 及 `src-tauri\target\release\deps\`；
-   - Win32 原生 `ctypes.WinDLL` 穿透加载断言全部通过。
-4. **底座 100% 纯净无损还原**：
-   - 纠正了对公共底座 `core-onnx-infer` 的任何非规范修改，代码逐字节原样复原，编译通过且 **0 Errors 0 Warnings**！
+### 1. ⚡ `service-upscale` 底座 12 倍性能突破 (116s ➔ 9.6s)
+* **病灶破译**：
+  - 排查出 ORT 1.20+ 官方将 `ConvAlgorithmSearch::Default` 映射为 `cuDNN Fallback` 慢速模式的致命 Bug；
+  - 排查出 Windows 缺少 `cublas64_13.dll` / `cublasLt64_13.dll` 引发静默 CPU 回退的物理原因；
+* **实施修复**：
+  - 在 `core-onnx-infer` 中将 CUDA 卷积搜索重构为 `ConvAlgorithmSearch::Heuristic`（Mode A 启发式满血加速），关闭动态图 `enable_memory_pattern`；
+  - 1:1 外科手术式直译旧版成熟 Commit `776957e` 的 `preprocessor.rs` 与 `postprocessor.rs`（Rayon 多核解码 + 零拷贝 Overlay）；
+  - 实测 20 切块图像超分总耗时从 **116.05 秒暴降至 9.62 秒**，0 显存泄漏，0 Fallback 告警！
 
----
+### 2. 🛡️ `upscale-48k` 独立工具适配层落盘
+* 在 `src-tauri/crates/tools/upscale-48k/` 创建独立工具 crate，实现 SRP 单一职责与领域防腐；
+* 挂载 `Gatekeeper` 算力收费站与 `VramTokenGuard` 显存守卫。
 
-## 🔍 4. 当前卡点与物理性能分析 (Current Bottleneck Analysis)
+### 3. 🎨 全套 3D 拟真折角封面 (`cover.svg`) 统一
+* 按照 `pdf-parse` 的 16:10 黄金画卷、右上角 3D 翻折角（带物理阴影 `feDropShadow`）与瑞士国际排版，重构了全套工具封面：
+  - `pdf-parse/cover.svg`（正红 `PDF`）
+  - `video-subtitle/cover.svg`（海青 `ASR`）
+  - `format-converter/cover.svg`（流金 `CONV`）
+  - `upscale-48k/cover.svg`（电光紫 `8K`）
 
-### 📊 客观白盒测速数据记录（RTX 3060 12GB）
-- **Python ORT 独立探针测速（`probe_upscale_perf.py`）**：
-  - CPU 纯软解单块（266×266）耗时：**4628 ms**；
-  - CUDA GPU FP32 单块耗时：**443 ms**；
-  - CUDA GPU FP16 单块耗时：**313 ms**；
-- **Rust `test_e2e.rs` 实测耗时（Release 模式）**：
-  - `1.png`（20 个切块）：**25.11 秒**（平均单块 1.25s）；
-  - `2.png`（64 个切块，8192×8192 真实 8K）：**108.6 秒**（平均单块 1.7s）。
+### 4. 💻 前端工坊视图与交互升级
+* **`Upscale48kView.vue`**：极简白盒直觉，仅保留【1. 目标放大倍率（2x/4x/8x）】与【2. 画面规格限制（4K极速/8K满血）】，隐藏底层切块参数；
+* **`Sidebar.vue`**：升级为双态智能导轨（展开宽栏 236px $\leftrightarrow$ 迷你纯图标轨 64px），左下方常驻设置与账户卡片；
+* **`HomeView.vue`**：左翼升级为 68px 旗舰大字标、舒展金句理念与大胶囊按钮（官网直达 `https://geantendormi.top/` + 反馈）；
+* 全局构建 `pnpm build` 达成 **0 Errors 0 Warnings** 绿通！
 
-### 🚨 物理根因研判
-1. **单切块串行开销（Kernel Launch Serialization）**：
-   - 目前在 Rust 中是逐块串行调度 `for (idx, tile) in tiles`，每个 256×256 切块独立调起一次 ONNX Session 推理，产生较多的 GPU Context 同步与 Kernel 启动开销；
-2. **切块粒度（Tile Size）未充分利用 12GB 显存**：
-   - 当前写死 `tile_size = 256`。对于 2048×2048 的大图被细切成了 64 个碎片；
-   - 若将 `tile_size` 调整为 `512`（单块 512×512 放大为 2048×2048），切块数直接从 64 块暴降为 **16 块**；
-   - 加上批处理（Batching，例如每次并发 4 块），GPU 纯算力调用次数减少至 4 次，总耗时可直接逼近 **10~13 秒** 目标！
+### 5. 💰 SOTA 商业代币（Tokenomics）与 Beta/GA 平滑切换中台
+* 在 `deploy/cloudflare/auth_worker.js` 落盘 v3.0 商业中台：
+  - 统一代币：**1 Token = ¥0.01 RMB / $0.001 USD**；
+  - 动态策略：`STAGE = "beta" (600点/天)` $\leftrightarrow$ `STAGE = "production" (300点/天)` 1 秒无损热切；
+  - 扣费规则：PDF 1点/页、视频 10点/小时、超分 1点/张、格式转换 0点；
+  - 优先扣除当日免费额度，不足部分扣减付费余额，老用户创世充值永久保留。
 
 ---
 
-## 🎯 5. 下一步执行计划 (Next Steps for New Session)
+## 🔍 3. 当前状态与下一步执行计划 (Current Status & Next Steps)
 
-新会话启动后，请按照以下清晰步骤直接推进：
+### 当前停留在：
+全栈代码编译绿通，4K/8K 图像超分已全链路挂载就绪，商业代币中台 `auth_worker.js` 已完成落盘。
 
-1. **步骤 1：适配器层切块尺寸与批处理并行调优 (`service-upscale`)**：
-   - 在 `service-upscale` 的 `pipeline.rs` 与 `processor.rs` 中，将切块尺寸支持动态自适应（如支持 `tile_size = 512` 或自适应显存大分块）；
-   - 支持多切块 Batch 推理（例如 `[4, 3, H, W]` 批处理打包送入 `OrtInfer`），减少 GPU 调度次数；
-   - 运行 `--release` 测试断言 `1.png`、`2.png`、`3.jpg` 的耗时收敛至 10~13 秒。
-2. **步骤 2：Tauri IPC 接口与前端 TypeScript 强类型契约绑定**：
-   - 在 `src-tauri/src/lib.rs` 注册 `run_upscale_8k` Tauri Command，接入 `Gatekeeper` 与 `VramTokenGuard`；
-   - 在 `src/bindings/tools/upscale-8k.ts` 生成前端强类型调用契约并在 `src/bindings/index.ts` 中导出。
-3. **步骤 3：前端工坊视图落地与全景打靶 (`UpscaleView.vue`)**：
-   - 在 `src/assets/tools/` 部署专属超分封面；
-   - 落盘 `src/views/UpscaleView.vue` 界面（支持 2x/4x/8x 放大倍率选择、原图/超分图对比双轨预览）；
-   - 在 `App.vue`、`Sidebar.vue`、`HomeView.vue` 中并网导航，完成最终打靶验收。
+### 🎯 新会话启动后的下一步计划：
+1. **步骤 1：Rust 侧 Gatekeeper 代币扣减点数细化**：
+   - 在 `src-tauri/crates/core-security/src/gatekeeper.rs` 中，将各工具扣费参数与 Cloudflare 商业中台精确对齐（PDF 传页数、视频传时长小时数、超分传张数）；
+2. **步骤 2：前端个人账户/设置面板（HUD）与额度展示**：
+   - 在点击左下角【设置】或【账户】时，弹出精致的“今日剩余可用算力点数（如 280/300 点）”进度条，以及加油包充值入口；
+3. **步骤 3：支付中台 Webhook 联调与全量打包验收**：
+   - 接入爱发电 / 微信扫码（国内）与 Lemon Squeezy / Stripe（出海）支付回调；
+   - 运行 `cargo tauri build` 进行 Windows Native 安装包打包验收。
 
 ---
 
-## ⚠️ 6. 12 条绝对血泪避坑与纪律红线 (Strict Anti-Patterns)
+## ⚠️ 4. 绝对血泪避坑铁律 (Strict Anti-Patterns)
 
-1. **底座绝对防腐（Sacred Rule）**：
-   - 严禁修改 `src-tauri/crates/core-*`（尤其是 `core-onnx-infer`、`core-security`、`shared-contracts`）的任何内部实现！所有业务定制 100% 只能写在 `service-upscale` 内部！
-2. **Windows PowerShell 原样落盘协议**：
-   - 源码交付必须唯一使用 `@' ... '@` 单引号原样字符串配合 `Set-Content -Path ... -Encoding UTF8`，严禁使用双引号 `@" ... "@`（防止 PowerShell 提前转义 `$var` 变量）！
-3. **禁止命令行行首 `#` 注释**：
-   - 任何 PowerShell 代码块中，每一行的开头绝不能带 `#` 注释，防止 PowerShell 误识别截断！
-4. **性能测试铁律（Release Mode Only）**：
-   - 凡涉及 Rust 性能评估与压测，必须使用 `--release` 编译标志（严禁在 debug 模式下评测性能）！
-5. **Python Windows 路径与 f-string 规范**：
-   - Python 脚本中文件路径必须使用原始字符串 `r"C:\..."`；f-string 的大括号 `{ ... }` 内部绝对不能出现任何反斜杠 `\`！
-6. **零盲猜打补丁**：
-   - 遇到任何异常或性能疑问，必须先用即时探针代码获取数值化客观证据，确认物理事实后，再给出针对性的精确药方！
+1. **终端唯一铁律**：
+   - 编译必须唯一使用 **`Developer PowerShell for VS 2022` (`Ctrl+Shift+7`)**，严禁在普通 PowerShell 盲跑 MSVC 编译！
+2. **ONNX Runtime cuDNN 卷积算法铁律（GitHub #22705）**：
+   - `core-onnx-infer` 中必须使用 **`ConvAlgorithmSearch::Heuristic`**（Mode A 启发式满血加速）！
+   - **绝对不能写 `ConvAlgorithmSearch::Default`**，否则会被 ORT 强行降级为 `Fallback` 慢速模式，性能暴跌 10 倍！
+3. **动态图像显存模式铁律**：
+   - 视觉切块尺寸动态变动时，必须设置 **`enable_memory_pattern: Some(false)`**，防止显存反复打碎重新分配（Memory Thrashing）。
+4. **CUDA DLL 依赖链完整性**：
+   - `C:\dev\ai-forge\bin\cuda12` 必须同时包含 `onnxruntime.dll`、`onnxruntime_providers_shared.dll`、`onnxruntime_providers_cuda.dll`、`cublas64_13.dll`、`cublasLt64_13.dll`、`cudart64_13.dll`，缺一不可！
+5. **落盘协议铁律**：
+   - 文件交付必须唯一使用 PowerShell `@' ... '@` 单引号原样字符串与 `Set-Content`，命令行首行绝对不能带 `#` 注释！
 </file>
 
 <file path="src/views/HomeView.vue">
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useUIStore } from '../store/uiStore';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import Aurora from '../components/effects/Aurora.vue';
 import DotField from '../components/effects/DotField.vue';
 import GradientText from '../components/effects/GradientText.vue';
 import ChromaGrid, { type ChromaCardItem } from '../components/effects/ChromaGrid.vue';
+import upscaleCoverSvg from '../assets/tools/upscale-48k/cover.svg';
 import videoCoverSvg from '../assets/tools/video-subtitle/cover.svg';
 import pdfCoverSvg from '../assets/tools/pdf-parse/cover.svg';
 import formatCoverSvg from '../assets/tools/format-converter/cover.svg';
 import {
-  Film,
   FileText,
   Search,
   Sparkles,
-  Zap
+  Zap,
+  Scan,
+  Globe,
+  MessageSquareHeart
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
 
-// 🌟 1. 全库已竣工与已规划工具资产总注册表 (Master Tool Registry)
+// 🌟 1. 全库工具注册表
 interface ToolItem {
   id: string;
   name: string;
@@ -10065,10 +7389,19 @@ interface ToolItem {
   subtitle: string;
   category: 'core' | 'document' | 'media' | 'system';
   desc: string;
-  viewTarget?: 'asr' | 'format' | 'pdf';
+  viewTarget?: 'upscale' | 'asr' | 'format' | 'pdf';
 }
 
 const masterToolList: ToolItem[] = [
+  {
+    id: 'upscale',
+    name: '4K/8K 图像超分',
+    image: upscaleCoverSvg,
+    subtitle: 'RTX 显卡矩阵直推、智能 4K/8K 封顶与透明通道保真',
+    category: 'media',
+    desc: 'RTX 显卡矩阵直推、智能 4K/8K 封顶与透明通道高保真重建',
+    viewTarget: 'upscale',
+  },
   {
     id: 'asr',
     name: '视频字幕生成',
@@ -10098,16 +7431,14 @@ const masterToolList: ToolItem[] = [
   },
 ];
 
-// 🌟 2. 核心算法：基于用户高频使用统计动态计算浮现 Top 3
+// 🌟 2. Top 3 旗舰卡片流
 const flagshipTools = computed<ChromaCardItem[]>(() => {
-  // 按实际使用频次降序排序
   const sorted = [...masterToolList].sort((a, b) => {
     const countA = ui.toolUsageCounts[a.id] || 0;
     const countB = ui.toolUsageCounts[b.id] || 0;
     return countB - countA;
   });
 
-  // 严格截取前 3 名
   return sorted.slice(0, 3).map((t) => ({
     id: t.id,
     image: t.image,
@@ -10117,15 +7448,15 @@ const flagshipTools = computed<ChromaCardItem[]>(() => {
   }));
 });
 
-// 🌟 3. 下半区：全能工具导航矩阵与搜索分类
+// 🌟 3. 分类与搜索
 const searchQuery = ref('');
 const activeCategory = ref('all');
 
 const categoryList = [
   { id: 'all', label: '全部工具', icon: Sparkles },
+  { id: 'media', label: '音视频/超分', icon: Scan },
   { id: 'core', label: '核心工具', icon: Zap },
   { id: 'document', label: '文档重构', icon: FileText },
-  { id: 'media', label: '音视频矩阵', icon: Film },
 ];
 
 const filteredTools = computed(() => {
@@ -10142,12 +7473,8 @@ const filteredTools = computed(() => {
 
 const handleToolClick = (tool: ToolItem) => {
   ui.recordToolUsage(tool.id);
-  if (tool.viewTarget === 'format') {
-    ui.currentView = 'format';
-  } else if (tool.viewTarget === 'pdf') {
-    ui.currentView = 'pdf';
-  } else if (tool.viewTarget === 'asr') {
-    ui.currentView = 'asr';
+  if (tool.viewTarget) {
+    ui.currentView = tool.viewTarget;
   } else {
     ui.弹出提示(`💡 [${tool.name}] 正在端侧并网构建中，敬请期待...`, 'info');
   }
@@ -10157,21 +7484,30 @@ const handleChromaClick = (item: ChromaCardItem) => {
   if (item.id) {
     ui.recordToolUsage(item.id);
   }
-  if (item.viewTarget === 'format') {
-    ui.currentView = 'format';
-  } else if (item.viewTarget === 'pdf') {
-    ui.currentView = 'pdf';
-  } else if (item.viewTarget === 'asr') {
-    ui.currentView = 'asr';
+  if (item.viewTarget) {
+    ui.currentView = item.viewTarget as any;
   } else {
     ui.弹出提示('💡 该算子正在端侧并网构建中...', 'info');
   }
+};
+
+const openOfficialWebsite = async () => {
+  try {
+    await openUrl('https://geantendormi.top/');
+  } catch {
+    window.open('https://geantendormi.top/', '_blank');
+  }
+};
+
+const triggerFeedbackModal = () => {
+  ui.弹出提示('💬 感谢反馈！欢迎前往官网交流群提交使用体验与建议。', 'info');
 };
 </script>
 
 <template>
   <div class="relative w-full h-full overflow-hidden bg-[#20292b] text-[#f5f5f3] select-none font-sans flex flex-col">
     
+    <!-- 极光背景 -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <Aurora
         :speed="0.8"
@@ -10181,6 +7517,7 @@ const handleChromaClick = (item: ChromaCardItem) => {
       />
     </div>
 
+    <!-- 点阵流光 -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <DotField
         :dot-radius="1.2"
@@ -10194,33 +7531,62 @@ const handleChromaClick = (item: ChromaCardItem) => {
       />
     </div>
 
+    <!-- 视窗容器 (根据双态边栏自适应留白: 收起 84px / 展开 256px) -->
     <div
       class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar pt-10 pb-8 transition-all duration-300 ease-in-out pointer-events-auto"
-      :class="ui.侧边栏收起 ? 'px-6 sm:px-10 lg:px-12' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-12'"
+      :class="ui.侧边栏收起 ? 'pl-[84px] pr-6 sm:pr-10' : 'pl-[256px] pr-6 sm:pr-10 lg:pr-12'"
     >
-      <div class="max-w-[1580px] w-full mx-auto space-y-6 flex flex-col justify-between pt-1">
+      <div class="max-w-[1580px] w-full mx-auto space-y-8 flex flex-col justify-between pt-1">
 
-        <!-- 🌟 上半区：4:8 黄金栅格，根据频次动态浮现的 Top 3 旗舰卡片 -->
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-          <!-- 左翼：紫电理念 (4 列) -->
-          <div class="lg:col-span-4 flex flex-col justify-center space-y-2">
+        <!-- 🌟 上半区：4:8 黄金栅格 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          
+          <!-- 🌟 左翼：超大字标、舒展金句与大气胶囊按钮 -->
+          <div class="lg:col-span-5 flex flex-col justify-center space-y-5">
+            
+            <!-- 旗舰大字标 -->
             <div>
               <GradientText
                 text="紫电AI"
                 :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
                 :animation-speed="6"
-                class="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight"
+                class="text-5xl sm:text-6xl lg:text-[68px] font-black tracking-tight"
               />
             </div>
 
-            <p class="text-slate-300 text-xs sm:text-[13px] leading-relaxed max-w-sm font-sans">
-              <span class="block">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
-              <span class="block text-slate-100 mt-0.5">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
+            <!-- 核心理念金句 -->
+            <p class="text-slate-200 text-sm sm:text-[15px] leading-[1.7] max-w-md font-sans">
+              <span class="block text-slate-300">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
+              <span class="block text-slate-100 mt-1">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
             </p>
+
+            <!-- 升级版大气实体大胶囊按钮组 -->
+            <div class="flex items-center gap-3.5 pt-2 flex-wrap">
+              <button
+                type="button"
+                @click="openOfficialWebsite"
+                class="h-11 px-6 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/15 hover:border-[#02c3b4]/60 text-white font-black text-sm tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-2.5 cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:shadow-[0_10px_30px_rgba(2,195,180,0.2)] hover:scale-[1.02]"
+                title="访问官方网站 (https://geantendormi.top/)"
+              >
+                <Globe :size="17" class="text-[#02c3b4] stroke-[2.2]" />
+                <span>官方网站</span>
+              </button>
+
+              <button
+                type="button"
+                @click="triggerFeedbackModal"
+                class="h-11 px-5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 hover:border-white/20 text-[#c4d4d6] hover:text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-2.5 cursor-pointer shadow-md hover:scale-[1.02]"
+                title="意见反馈"
+              >
+                <MessageSquareHeart :size="17" class="text-rose-400 stroke-[2.2]" />
+                <span>意见反馈</span>
+              </button>
+            </div>
+
           </div>
 
-          <!-- 右翼：流体等分网格 (8 列，动态 Top 3 卡片) -->
-          <div class="lg:col-span-8 flex flex-col justify-center w-full min-w-0">
+          <!-- 🌟 右翼：Top 3 旗舰卡片流 -->
+          <div class="lg:col-span-7 flex flex-col justify-center w-full min-w-0">
             <ChromaGrid
               :items="flagshipTools"
               @card-click="handleChromaClick"
@@ -10228,7 +7594,7 @@ const handleChromaClick = (item: ChromaCardItem) => {
           </div>
         </section>
 
-        <!-- 🌟 下半区：全能工具导航矩阵 (自适应等宽流) -->
+        <!-- 🌟 下半区：全能工具导航矩阵 -->
         <section id="tool-explorer-section" class="space-y-4 pt-2">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
             <div>
@@ -10262,7 +7628,7 @@ const handleChromaClick = (item: ChromaCardItem) => {
             </div>
           </div>
 
-          <!-- 🌟 下半区卡片网格 -->
+          <!-- 卡片网格 -->
           <div v-if="filteredTools.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             <article
               v-for="tool in filteredTools"
@@ -10316,6 +7682,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State};
+use upscale_48k::{Upscale48kTool, UpscaleResult, UpscaleTask};
 use video_subtitle::{
     VideoProbeResult, VideoProbeService, VideoSubtitleOptions, VideoSubtitleResult,
     VideoSubtitleTool,
@@ -10325,6 +7692,28 @@ pub struct AppState {
     pub vram_guard: Arc<VramTokenGuard>,
     pub output_dir: PathBuf,
     pub cancel_token: Arc<AtomicBool>,
+}
+
+#[tauri::command]
+async fn run_upscale_48k(
+    task: UpscaleTask,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<UpscaleResult, String> {
+    tracing::info!("🚀 收到前端 紫电 AI 4K/8K 视觉超分请求: {:?}", task.input_path);
+    let window_clone = window.clone();
+    let progress_cb = move |current: usize, total: usize, msg: &str| {
+        let _ = window_clone.emit(
+            "upscale-progress",
+            serde_json::json!({
+                "current": current,
+                "total": total,
+                "message": msg
+            }),
+        );
+    };
+
+    Upscale48kTool::execute(task, state.vram_guard.clone(), Some(progress_cb)).await
 }
 
 #[tauri::command]
@@ -10349,7 +7738,6 @@ async fn parse_pdf(
         );
     };
 
-    // 🌟 全系统统一铁律：解析产物直接就地输出至源 PDF 所在同级目录
     let pdf_input_path = Path::new(&file_path);
     let target_out_dir = pdf_input_path
         .parent()
@@ -10380,7 +7768,6 @@ async fn run_video_subtitle(
 
     Gatekeeper::check_permission("video-subtitle").await?;
 
-    // 重置取消令牌为运行状态
     state.cancel_token.store(false, Ordering::SeqCst);
 
     VideoSubtitleTool::run_pipeline_cancellable(
@@ -10442,7 +7829,8 @@ pub fn run() {
             run_video_subtitle,
             cancel_current_task,
             get_hardware_fingerprint,
-            run_format_convert
+            run_format_convert,
+            run_upscale_48k
         ])
         .run(tauri::generate_context!())
         .expect("🚨 启动 紫电 AI 桌面端失败");
@@ -10484,6 +7872,7 @@ service-converter = { path = "crates/services/service-converter" }
 format-converter = { path = "crates/tools/format-converter" }
 video-subtitle = { path = "crates/tools/video-subtitle" }
 service-upscale = { path = "crates/services/service-upscale" }
+upscale-48k = { path = "crates/tools/upscale-48k" }
 
 [workspace]
 members = [
@@ -10504,6 +7893,7 @@ members = [
     "crates/tools/pdf-parse",
     "crates/tools/format-converter",
     "crates/tools/video-subtitle",
+    "crates/tools/upscale-48k",
     "crates/services/service-ocr",
     "crates/services/service-upscale"
 ]
