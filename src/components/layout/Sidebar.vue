@@ -16,9 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   User,
-  X,
-  Flame,
-  Clock
+  Flame
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
@@ -41,7 +39,7 @@ const extensionOperators = [
 
 const switchView = (id: string) => {
   if (['home', 'upscale', 'format', 'asr', 'pdf'].includes(id)) {
-    ui.currentView = id as any;
+    ui.navigateToTool(id as any);
   } else {
     const target = extensionOperators.find((o) => o.id === id);
     ui.弹出提示(`💡 [${target ? target.label : '算子'}] 正在端侧并网构建中，敬请期待...`, 'info');
@@ -51,22 +49,6 @@ const switchView = (id: string) => {
 const openQuotaModal = () => {
   ui.refreshQuota();
   ui.showQuotaModal = true;
-};
-
-const formatToolName = (name: string) => {
-  const map: Record<string, string> = {
-    'upscale-48k': '🔍 4K/8K 图像超分',
-    'tool-upscale-48k': '🔍 4K/8K 图像超分',
-    'service-upscale': '🔍 4K/8K 图像超分',
-    'video-subtitle': '🎬 视频字幕生成',
-    'tool-ASR': '🎬 视频字幕生成',
-    'service-asr': '🎬 视频字幕生成',
-    'pdf-parse': '📄 PDF 智能解析',
-    'tool-pdf-parse': '📄 PDF 智能解析',
-    'format-converter': '⚡ 全能格式转换',
-    'tool-format-convert': '⚡ 全能格式转换',
-  };
-  return map[name] || name;
 };
 
 onMounted(() => {
@@ -79,13 +61,12 @@ onMounted(() => {
     class="fixed left-3 top-3 bottom-3 bg-[#182022]/95 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.6)] flex flex-col pt-2.5 pb-3 z-50 transition-all duration-300 ease-in-out select-none border border-white/[0.08] overflow-hidden"
     :class="ui.侧边栏收起 ? 'w-[64px]' : 'w-[236px]'"
   >
-    <!-- ==================== 顶部品牌与切换开关 (对齐右上角 44px 高度基线) ==================== -->
+    <!-- ==================== 顶部品牌与切换开关 ==================== -->
     <div class="px-2.5 h-10 mb-2 flex items-center justify-between pointer-events-auto shrink-0 relative z-50" style="-webkit-app-region: no-drag !important;">
-      
       <!-- 展开态头部 -->
       <div v-if="!ui.侧边栏收起" class="flex items-center justify-between w-full">
         <div
-          @click="ui.currentView = 'home'"
+          @click="ui.navigateToTool('home')"
           class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2 pl-1"
           title="返回紫电主页"
         >
@@ -112,7 +93,7 @@ onMounted(() => {
         </button>
       </div>
 
-      <!-- 收起态头部 (居中大热区按钮) -->
+      <!-- 收起态头部 -->
       <div v-else class="flex items-center justify-center w-full">
         <button
           type="button"
@@ -189,7 +170,7 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- 底部：纯 Token HUD 胶囊 -->
+    <!-- 底部：Tokens 胶囊 -->
     <div class="px-2 pt-2 border-t border-white/[0.06] space-y-2 pointer-events-auto shrink-0 overflow-hidden" style="-webkit-app-region: no-drag;">
       <div
         @click="openQuotaModal"
@@ -203,20 +184,17 @@ onMounted(() => {
             </span>
             <span class="text-white font-bold">{{ ui.quota.remaining_points }} <span class="text-[#5b696b] font-normal">/ {{ ui.quota.daily_limit }}</span></span>
           </div>
-
           <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-[#02c3b4] to-[#ffb74d] rounded-full transition-all duration-300"
               :style="{ width: `${Math.min(100, Math.max(5, (ui.quota.remaining_points / (ui.quota.daily_limit || 1)) * 100))}%` }"
             />
           </div>
-
           <div class="flex items-center justify-between text-[9.5px] font-mono text-[#5b696b]">
             <span>每日重置</span>
             <span class="text-[#ffb74d]">已用 {{ ui.quota.used_today }} Tokens</span>
           </div>
         </div>
-
         <div v-else class="flex flex-col items-center justify-center py-1 text-[#02c3b4]">
           <Flame :size="16" class="fill-[#02c3b4]" />
           <span class="text-[9px] font-mono font-bold mt-0.5 text-white">{{ ui.quota.remaining_points }}</span>
@@ -237,7 +215,6 @@ onMounted(() => {
             <User :size="13" class="stroke-[2.5]" />
           </div>
         </div>
-        
         <div v-if="!ui.侧边栏收起" class="flex flex-col min-w-0 flex-1">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-white truncate">紫电探索者</span>
@@ -248,91 +225,4 @@ onMounted(() => {
       </div>
     </div>
   </aside>
-
-  <!-- 全景极简毛玻璃 Tokens 算力弹窗 -->
-  <div
-    v-if="ui.showQuotaModal"
-    class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 select-none pointer-events-auto"
-  >
-    <div class="max-w-[440px] w-full p-7 rounded-[32px] bg-[#161e20] border border-white/15 shadow-[0_25px_60px_rgba(0,0,0,0.8)] text-white space-y-5 animate-in zoom-in-95 duration-150 relative">
-      
-      <button
-        type="button"
-        @click="ui.showQuotaModal = false"
-        class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-[#8b999b] hover:text-white flex items-center justify-center absolute top-6 right-6 transition-colors cursor-pointer"
-      >
-        <X :size="16" />
-      </button>
-
-      <!-- 头部 -->
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#bc05ff] to-[#02c3b4] flex items-center justify-center shadow-[0_0_16px_rgba(2,195,180,0.35)]">
-          <Flame :size="20" class="text-white fill-white" />
-        </div>
-        <div>
-          <h3 class="text-base font-black text-white">
-            Tokens 算力中心
-          </h3>
-        </div>
-      </div>
-
-      <!-- Tokens 核心大卡片 -->
-      <div class="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
-        <div class="flex items-center justify-between">
-          <span class="text-xs text-[#8b999b] font-medium">可用 Tokens 余额</span>
-          <span class="text-2xl font-black font-mono text-[#02c3b4]">{{ ui.quota.remaining_points }} <span class="text-xs text-[#8b999b] font-normal">Tokens</span></span>
-        </div>
-
-        <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-          <div
-            class="h-full bg-gradient-to-r from-[#02c3b4] to-[#ffb74d] rounded-full transition-all duration-500"
-            :style="{ width: `${Math.min(100, Math.max(5, (ui.quota.remaining_points / (ui.quota.daily_limit || 1)) * 100))}%` }"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 gap-2 text-xs font-mono pt-1 text-[#8b999b]">
-          <div>每日基础额度: <strong class="text-white">{{ ui.quota.daily_limit }} Tokens</strong></div>
-          <div>今日已消耗: <strong class="text-white">{{ ui.quota.used_today }} Tokens</strong></div>
-        </div>
-      </div>
-
-      <!-- 实时扣费明细流水 -->
-      <div class="space-y-2.5">
-        <div class="text-xs font-bold text-[#8b999b] px-1 flex items-center gap-1.5">
-          <Clock :size="13" />
-          <span>今日任务消费账单</span>
-        </div>
-
-        <div v-if="ui.quota.recent_logs && ui.quota.recent_logs.length > 0" class="space-y-2 max-h-[190px] overflow-y-auto custom-scrollbar pr-0.5">
-          <div
-            v-for="log in ui.quota.recent_logs"
-            :key="log.id"
-            class="p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] flex items-center justify-between text-xs transition-all"
-          >
-            <div class="flex items-center gap-2.5">
-              <span class="font-bold text-slate-200">{{ formatToolName(log.tool_name) }}</span>
-              <span class="text-[10px] font-mono text-[#5b696b]">{{ log.created_at.split(' ')[1] || log.created_at }}</span>
-            </div>
-            <strong class="font-mono text-rose-400 font-bold text-xs bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
-              -{{ log.points_deducted }} Tokens
-            </strong>
-          </div>
-        </div>
-
-        <div v-else class="py-6 text-center text-xs text-[#5b696b] bg-white/[0.01] rounded-2xl border border-white/[0.03]">
-          今日暂无扣费记录，开始你的第一个任务吧！
-        </div>
-      </div>
-
-      <!-- 确定按钮 -->
-      <button
-        type="button"
-        @click="ui.showQuotaModal = false"
-        class="w-full py-3 rounded-2xl bg-white hover:bg-slate-100 text-black font-bold text-sm transition-all active:scale-95 cursor-pointer shadow-lg mt-2"
-      >
-        确定
-      </button>
-
-    </div>
-  </div>
 </template>

@@ -79,7 +79,6 @@ const flagshipTools = computed<ChromaCardItem[]>(() => {
     const countB = ui.toolUsageCounts[b.id] || 0;
     return countB - countA;
   });
-
   return sorted.slice(0, 3).map((t) => ({
     id: t.id,
     image: t.image,
@@ -92,7 +91,6 @@ const flagshipTools = computed<ChromaCardItem[]>(() => {
 // 3. 分类与搜索
 const searchQuery = ref('');
 const activeCategory = ref('all');
-
 const categoryList = [
   { id: 'all', label: '全部工具', icon: Sparkles },
   { id: 'media', label: '音视频/超分', icon: Scan },
@@ -113,20 +111,16 @@ const filteredTools = computed(() => {
 });
 
 const handleToolClick = (tool: ToolItem) => {
-  ui.recordToolUsage(tool.id);
   if (tool.viewTarget) {
-    ui.currentView = tool.viewTarget;
+    ui.navigateToTool(tool.viewTarget);
   } else {
     ui.弹出提示(`💡 [${tool.name}] 正在端侧并网构建中，敬请期待...`, 'info');
   }
 };
 
 const handleChromaClick = (item: ChromaCardItem) => {
-  if (item.id) {
-    ui.recordToolUsage(item.id);
-  }
   if (item.viewTarget) {
-    ui.currentView = item.viewTarget as any;
+    ui.navigateToTool(item.viewTarget as any);
   } else {
     ui.弹出提示('💡 该算子正在端侧并网构建中...', 'info');
   }
@@ -147,7 +141,6 @@ const triggerFeedbackModal = () => {
 
 <template>
   <div class="relative w-full h-full overflow-hidden bg-[#20292b] text-[#f5f5f3] select-none font-sans flex flex-col">
-    
     <!-- 极光背景 -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <Aurora
@@ -172,17 +165,15 @@ const triggerFeedbackModal = () => {
       />
     </div>
 
-    <!-- 🌟 视窗容器 (已增大左侧留白间距，营造黄金呼吸感) -->
+    <!-- 视窗容器 -->
     <div
       class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar pt-10 pb-8 transition-all duration-300 ease-in-out pointer-events-auto"
       :class="ui.侧边栏收起 ? 'pl-[112px] pr-8 sm:pr-12' : 'pl-[280px] pr-8 sm:pr-12'"
     >
       <div class="max-w-[1580px] w-full mx-auto space-y-8 flex flex-col justify-between pt-1">
-
         <!-- 上半区：4:8 黄金栅格 -->
         <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
-          
-          <!-- 左翼：大字标、理念与大胶囊按钮 (增加轻微内边距) -->
+          <!-- 左翼：大字标与理念 -->
           <div class="lg:col-span-5 flex flex-col justify-center space-y-5 pl-1 sm:pl-2">
             <div>
               <GradientText
@@ -192,7 +183,6 @@ const triggerFeedbackModal = () => {
                 class="text-5xl sm:text-6xl lg:text-[68px] font-black tracking-tight"
               />
             </div>
-
             <p class="text-slate-200 text-sm sm:text-[15px] leading-[1.7] max-w-md font-sans">
               <span class="block text-slate-300">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
               <span class="block text-slate-100 mt-1">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
@@ -208,7 +198,6 @@ const triggerFeedbackModal = () => {
                 <Globe :size="17" class="text-[#02c3b4] stroke-[2.2]" />
                 <span>官方网站</span>
               </button>
-
               <button
                 type="button"
                 @click="triggerFeedbackModal"
@@ -236,7 +225,6 @@ const triggerFeedbackModal = () => {
             <div>
               <h2 class="text-base sm:text-lg font-bold text-white tracking-wide">全能工具导航矩阵</h2>
             </div>
-
             <div class="flex items-center gap-3 flex-wrap">
               <div class="flex items-center gap-1.5">
                 <button
@@ -251,7 +239,6 @@ const triggerFeedbackModal = () => {
                   <span>{{ cat.label }}</span>
                 </button>
               </div>
-
               <div class="relative w-full sm:w-[240px]">
                 <Search :size="13" class="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b999b]" />
                 <input
@@ -280,7 +267,6 @@ const triggerFeedbackModal = () => {
                   class="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500 block select-none pointer-events-none"
                 />
               </div>
-
               <div class="relative z-10 px-2 pt-2.5 pb-1 space-y-1 flex-1 flex flex-col justify-between">
                 <div class="flex items-center justify-between">
                   <h3 class="text-sm sm:text-base font-black text-white tracking-tight group-hover:text-[#02c3b4] transition-colors truncate">
@@ -301,9 +287,7 @@ const triggerFeedbackModal = () => {
             <p class="text-xs">未找到与 "{{ searchQuery }}" 匹配的工具算子</p>
           </div>
         </section>
-
       </div>
     </div>
-
   </div>
 </template>

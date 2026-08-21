@@ -1,0 +1,4360 @@
+<repomix><file_summary>This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+The content has been processed where empty lines have been removed, content has been formatted for parsing in xml style.<purpose>This file contains a packed representation of a subset of the repository&apos;s contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.</purpose><file_format>The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file</file_format><usage_guidelines>- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.</usage_guidelines><notes>- Some files may have been excluded based on .gitignore rules and Repomix&apos;s configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: HANDOFF_DEPLOY.md, deploy/website/package.json, deploy/website/vite.config.ts, deploy/website/tailwind.config.js, deploy/website/postcss.config.js, deploy/website/index.html, deploy/website/src/**, deploy/cloudflare/auth_worker.js, deploy/cloudflare/wrangler.toml, src-tauri/crates/core-security/src/gatekeeper.rs, src/bindings/index.ts
+- Files matching these patterns are excluded: **/node_modules/**, src-tauri/target/**, **/.venv/**, **/__pycache__/**, **/*.onnx, **/*.gguf, **/*.bin, **/*.pdf, **/*.dll, **/*.exe, test/**, data/**, **/*.sqlite3*, dist/**, deploy/website/dist/**, src_backup_before_migration/**
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Empty lines have been removed from all files
+- Content has been formatted for parsing in xml style
+- Files are sorted by Git change count (files with more changes are at the bottom)</notes></file_summary><directory_structure>deploy/
+  cloudflare/
+    auth_worker.js
+    wrangler.toml
+  website/
+    src/
+      assets/
+        vue.svg
+      components/
+        AITerminal.vue
+        ASCIIText.vue
+        Aurora.vue
+        BorderGlow.vue
+        CategorySelector.vue
+        ComponentMarquee.vue
+        CountUp.vue
+        CTA.vue
+        DecryptedText.vue
+        DemoPlaceholder.vue
+        DotField.vue
+        ElectricBorder.vue
+        FeatureIcon.vue
+        Footer.vue
+        GradientText.vue
+        HeroBand.vue
+        HeroCodeWindow.vue
+        LiveDemo.vue
+        QuickStart.vue
+        SpotlightCard.vue
+        StarCard.vue
+        VariantTabs.vue
+      App.vue
+      main.ts
+      style.css
+      vite-env.d.ts
+    index.html
+    package.json
+    postcss.config.js
+    tailwind.config.js
+    vite.config.ts
+src/
+  bindings/
+    index.ts
+src-tauri/
+  crates/
+    core-security/
+      src/
+        gatekeeper.rs</directory_structure><files>This section contains the contents of the repository&apos;s files.<file path="deploy/cloudflare/wrangler.toml">name = &quot;ai-toolkit-relay&quot;
+main = &quot;auth_worker.js&quot;
+compatibility_date = &quot;2024-09-23&quot;
+
+[[d1_databases]]
+binding = &quot;DB&quot;
+database_name = &quot;zidian-db&quot;
+database_id = &quot;ab86d430-c3c9-4b16-934a-717aa4024fea&quot;
+
+[vars]
+RELAY_SECRET = &quot;ai-forge-commercial-secret-2026&quot;</file><file path="deploy/website/src/assets/vue.svg">&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; xmlns:xlink=&quot;http://www.w3.org/1999/xlink&quot; aria-hidden=&quot;true&quot; role=&quot;img&quot; class=&quot;iconify iconify--logos&quot; width=&quot;37.07&quot; height=&quot;36&quot; preserveAspectRatio=&quot;xMidYMid meet&quot; viewBox=&quot;0 0 256 198&quot;&gt;&lt;path fill=&quot;#41B883&quot; d=&quot;M204.8 0H256L128 220.8L0 0h97.92L128 51.2L157.44 0h47.36Z&quot;&gt;&lt;/path&gt;&lt;path fill=&quot;#41B883&quot; d=&quot;m0 0l128 220.8L256 0h-51.2L128 132.48L50.56 0H0Z&quot;&gt;&lt;/path&gt;&lt;path fill=&quot;#35495E&quot; d=&quot;M50.56 0L128 133.12L204.8 0h-47.36L128 51.2L97.92 0H50.56Z&quot;&gt;&lt;/path&gt;&lt;/svg&gt;</file><file path="deploy/website/src/components/AITerminal.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { computed, onMounted, onUnmounted, ref, watch } from &apos;vue&apos;;
+import CountUp from &apos;./CountUp.vue&apos;;
+type Token = { cls: &apos;kw&apos; | &apos;comp&apos; | &apos;attr&apos; | &apos;punc&apos; | &apos;num&apos; | &apos;str&apos;; text: string };
+type Convo = {
+  q: string;
+  line1: Token[];
+  line2: Token[];
+  badgeText: string;
+  highlightNum: number;
+  highlightUnit: string;
+  decimals?: number;
+};
+const AI_CONVOS: Convo[] = [
+  {
+    q: &apos;translate &quot;system-level optimization&quot; --to zh&apos;,
+    line1: [
+      { cls: &apos;kw&apos;, text: &apos;import &apos; },
+      { cls: &apos;punc&apos;, text: &apos;{ &apos; },
+      { cls: &apos;comp&apos;, text: &apos;translate&apos; },
+      { cls: &apos;punc&apos;, text: &apos; } &apos; },
+      { cls: &apos;kw&apos;, text: &apos;from &apos; },
+      { cls: &apos;str&apos;, text: &apos;&quot;@ai-toolkit/core&quot;&apos; }
+    ],
+    line2: [
+      { cls: &apos;kw&apos;, text: &apos;const &apos; },
+      { cls: &apos;comp&apos;, text: &apos;res&apos; },
+      { cls: &apos;punc&apos;, text: &apos; = &apos; },
+      { cls: &apos;kw&apos;, text: &apos;await &apos; },
+      { cls: &apos;comp&apos;, text: &apos;translate&apos; },
+      { cls: &apos;punc&apos;, text: &apos;({ &apos; },
+      { cls: &apos;attr&apos;, text: &apos;target&apos; },
+      { cls: &apos;punc&apos;, text: &apos;: &apos; },
+      { cls: &apos;str&apos;, text: &apos;&quot;Chinese&quot;&apos; },
+      { cls: &apos;punc&apos;, text: &apos; })&apos; }
+    ],
+    badgeText: &apos;Hy-MT2 1.8B 热推演耗时:&apos;,
+    highlightNum: 386.67,
+    highlightUnit: &apos;ms (120+ Tokens/s)&apos;,
+    decimals: 2
+  },
+  {
+    q: &apos;translate cache query (SQLite WAL)&apos;,
+    line1: [
+      { cls: &apos;kw&apos;, text: &apos;import &apos; },
+      { cls: &apos;punc&apos;, text: &apos;{ &apos; },
+      { cls: &apos;comp&apos;, text: &apos;cacheQuery&apos; },
+      { cls: &apos;punc&apos;, text: &apos; } &apos; },
+      { cls: &apos;kw&apos;, text: &apos;from &apos; },
+      { cls: &apos;str&apos;, text: &apos;&quot;@ai-toolkit/core&quot;&apos; }
+    ],
+    line2: [
+      { cls: &apos;kw&apos;, text: &apos;const &apos; },
+      { cls: &apos;comp&apos;, text: &apos;hit&apos; },
+      { cls: &apos;punc&apos;, text: &apos; = &apos; },
+      { cls: &apos;kw&apos;, text: &apos;await &apos; },
+      { cls: &apos;comp&apos;, text: &apos;cacheQuery&apos; },
+      { cls: &apos;punc&apos;, text: &apos;({ &apos; },
+      { cls: &apos;attr&apos;, text: &apos;hash&apos; },
+      { cls: &apos;punc&apos;, text: &apos;: &apos; },
+      { cls: &apos;str&apos;, text: &apos;&quot;0x9f2a&quot;&apos; },
+      { cls: &apos;punc&apos;, text: &apos; })&apos; }
+    ],
+    badgeText: &apos;SQLite WAL 缓存碰撞:&apos;,
+    highlightNum: 1.39,
+    highlightUnit: &apos;ms (提速 1080 倍)&apos;,
+    decimals: 2
+  },
+  {
+    q: &apos;upscale image to 8k (RealESRGAN x4)&apos;,
+    line1: [
+      { cls: &apos;kw&apos;, text: &apos;import &apos; },
+      { cls: &apos;punc&apos;, text: &apos;{ &apos; },
+      { cls: &apos;comp&apos;, text: &apos;upscale8k&apos; },
+      { cls: &apos;punc&apos;, text: &apos; } &apos; },
+      { cls: &apos;kw&apos;, text: &apos;from &apos; },
+      { cls: &apos;str&apos;, text: &apos;&quot;@ai-toolkit/core&quot;&apos; }
+    ],
+    line2: [
+      { cls: &apos;kw&apos;, text: &apos;const &apos; },
+      { cls: &apos;comp&apos;, text: &apos;img&apos; },
+      { cls: &apos;punc&apos;, text: &apos; = &apos; },
+      { cls: &apos;kw&apos;, text: &apos;await &apos; },
+      { cls: &apos;comp&apos;, text: &apos;upscale8k&apos; },
+      { cls: &apos;punc&apos;, text: &apos;({ &apos; },
+      { cls: &apos;attr&apos;, text: &apos;scale&apos; },
+      { cls: &apos;punc&apos;, text: &apos;: &apos; },
+      { cls: &apos;num&apos;, text: &apos;4&apos; },
+      { cls: &apos;punc&apos;, text: &apos; })&apos; }
+    ],
+    badgeText: &apos;纯 GPU 渲染吞吐:&apos;,
+    highlightNum: 2.54,
+    highlightUnit: &apos;MPixels/s (6008万像素)&apos;,
+    decimals: 2
+  }
+];
+const idx = ref(0);
+const typed = ref(&apos;&apos;);
+const phase = ref&lt;&apos;prompt&apos; | &apos;thinking&apos; | &apos;code&apos;&gt;(&apos;prompt&apos;);
+const codeLines = ref(0);
+let timers: ReturnType&lt;typeof setTimeout&gt;[] = [];
+const conv = computed(() =&gt; AI_CONVOS[idx.value]);
+function clearTimers() {
+  timers.forEach(clearTimeout);
+  timers = [];
+}
+function schedule(fn: () =&gt; void, ms: number) {
+  const id = setTimeout(fn, ms);
+  timers.push(id);
+}
+function runConvo(i: number) {
+  const c = AI_CONVOS[i];
+  typed.value = &apos;&apos;;
+  phase.value = &apos;prompt&apos;;
+  codeLines.value = 0;
+  let delay = 300;
+  for (let k = 0; k &lt;= c.q.length; k++) {
+    const slice = c.q.slice(0, k);
+    schedule(() =&gt; {
+      typed.value = slice;
+    }, delay);
+    delay += 40;
+  }
+  schedule(() =&gt; {
+    phase.value = &apos;thinking&apos;;
+  }, delay);
+  delay += 600;
+  schedule(() =&gt; {
+    phase.value = &apos;code&apos;;
+    codeLines.value = 1;
+  }, delay);
+  delay += 250;
+  schedule(() =&gt; {
+    codeLines.value = 2;
+  }, delay);
+  delay += 2600;
+  schedule(() =&gt; {
+    idx.value = (idx.value + 1) % AI_CONVOS.length;
+  }, delay);
+}
+onMounted(() =&gt; {
+  runConvo(0);
+});
+onUnmounted(() =&gt; {
+  clearTimers();
+});
+watch(idx, i =&gt; {
+  if (i === 0) return;
+  clearTimers();
+  runConvo(i);
+});
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div class=&quot;ln-feat-aichat w-full h-56 p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 font-mono text-xs flex flex-col justify-between overflow-hidden shadow-inner&quot;&gt;
+    &lt;div :key=&quot;idx&quot; class=&quot;ln-feat-aichat-inner space-y-2.5&quot;&gt;
+      &lt;div class=&quot;flex items-center justify-between pb-2 border-b border-slate-800/80&quot;&gt;
+        &lt;div class=&quot;flex items-center gap-1.5&quot;&gt;
+          &lt;span class=&quot;w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block&quot;&gt;&lt;/span&gt;
+          &lt;span class=&quot;w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block&quot;&gt;&lt;/span&gt;
+          &lt;span class=&quot;w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block&quot;&gt;&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;span class=&quot;text-[10px] text-slate-400 flex items-center gap-1&quot;&gt;
+          &lt;span&gt;Gateway UDS IPC&lt;/span&gt;
+          &lt;span class=&quot;w-1.5 h-1.5 rounded-full bg-emerald-400&quot;&gt;&lt;/span&gt;
+        &lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;flex items-center gap-2 text-slate-200&quot;&gt;
+        &lt;span class=&quot;text-[#A5F3FC] font-bold&quot;&gt;$&lt;/span&gt;
+        &lt;span class=&quot;text-slate-100 font-semibold&quot;&gt;{{ typed }}&lt;/span&gt;
+        &lt;span v-if=&quot;phase === &apos;prompt&apos;&quot; class=&quot;w-2 h-4 bg-[#A5F3FC] animate-pulse inline-block&quot;&gt;&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div v-if=&quot;phase === &apos;thinking&apos;&quot; class=&quot;flex items-center gap-1.5 py-1.5&quot;&gt;
+        &lt;span class=&quot;w-2 h-2 rounded-full bg-[#A5F3FC] animate-ping&quot;&gt;&lt;/span&gt;
+        &lt;span class=&quot;w-2 h-2 rounded-full bg-[#D8B4F8] animate-ping [animation-delay:0.2s]&quot;&gt;&lt;/span&gt;
+        &lt;span class=&quot;w-2 h-2 rounded-full bg-emerald-400 animate-ping [animation-delay:0.4s]&quot;&gt;&lt;/span&gt;
+        &lt;span class=&quot;text-[11px] text-slate-400 ml-1&quot;&gt;Rust UDS 协议解码中...&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div v-if=&quot;phase === &apos;code&apos;&quot; class=&quot;space-y-1 pt-0.5&quot;&gt;
+        &lt;div v-if=&quot;codeLines &gt;= 1&quot; class=&quot;flex items-center gap-3 text-slate-300&quot;&gt;
+          &lt;span class=&quot;text-slate-600 select-none&quot;&gt;1&lt;/span&gt;
+          &lt;div class=&quot;truncate&quot;&gt;
+            &lt;template v-for=&quot;(t, j) in conv.line1&quot; :key=&quot;j&quot;&gt;
+              &lt;span :data-token-idx=&quot;j&quot; :class=&quot;t.cls === &apos;kw&apos; ? &apos;text-[#D8B4F8] font-bold&apos; : t.cls === &apos;comp&apos; ? &apos;text-[#A5F3FC]&apos; : t.cls === &apos;str&apos; ? &apos;text-amber-200&apos; : &apos;text-slate-300&apos;&quot;&gt;
+                {{ t.text }}
+              &lt;/span&gt;
+            &lt;/template&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div v-if=&quot;codeLines &gt;= 2&quot; class=&quot;flex items-center gap-3 text-slate-300&quot;&gt;
+          &lt;span class=&quot;text-slate-600 select-none&quot;&gt;2&lt;/span&gt;
+          &lt;div class=&quot;truncate&quot;&gt;
+            &lt;template v-for=&quot;(t, j) in conv.line2&quot; :key=&quot;j&quot;&gt;
+              &lt;span :data-token-idx=&quot;j&quot; :class=&quot;t.cls === &apos;kw&apos; ? &apos;text-[#D8B4F8] font-bold&apos; : t.cls === &apos;comp&apos; ? &apos;text-[#A5F3FC]&apos; : t.cls === &apos;attr&apos; ? &apos;text-cyan-300&apos; : t.cls === &apos;num&apos; ? &apos;text-emerald-400&apos; : &apos;text-slate-300&apos;&quot;&gt;
+                {{ t.text }}
+              &lt;/span&gt;
+            &lt;/template&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px]&quot;&gt;
+          &lt;span class=&quot;text-slate-400&quot;&gt;{{ conv.badgeText }}&lt;/span&gt;
+          &lt;span class=&quot;px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/30 text-[#A5F3FC] font-bold flex items-center gap-1&quot;&gt;
+            &lt;CountUp :to=&quot;conv.highlightNum&quot; :decimals=&quot;conv.decimals || 0&quot; :duration=&quot;1.2&quot; /&gt;
+            &lt;span&gt;{{ conv.highlightUnit }}&lt;/span&gt;
+          &lt;/span&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/ASCIIText.vue">&lt;template&gt;
+  &lt;div ref=&quot;containerRef&quot; class=&quot;ascii-text-container&quot; style=&quot;position: absolute; width: 100%; height: 100%&quot; /&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import * as THREE from &apos;three&apos;;
+import { onMounted, onUnmounted, ref, watch } from &apos;vue&apos;;
+interface ASCIITextProps {
+  text?: string;
+  asciiFontSize?: number;
+  textFontSize?: number;
+  textColor?: string;
+  planeBaseHeight?: number;
+  enableWaves?: boolean;
+}
+const props = withDefaults(defineProps&lt;ASCIITextProps&gt;(), {
+  text: &apos;AI Toolkit&apos;,
+  asciiFontSize: 10,
+  textFontSize: 300,
+  textColor: &apos;#ffffff&apos;,
+  planeBaseHeight: 12,
+  enableWaves: false
+});
+const containerRef = ref&lt;HTMLDivElement | null&gt;(null);
+const vertexShader = `
+varying vec2 vUv;
+uniform float uTime;
+uniform float mouse;
+uniform float uEnableWaves;
+void main() {
+    vUv = uv;
+    float time = uTime * 3.;
+    float waveFactor = uEnableWaves;
+    vec3 transformed = position;
+    transformed.x += sin(time + position.y) * 0.2 * waveFactor;
+    transformed.y += cos(time + position.z) * 0.1 * waveFactor;
+    transformed.z += sin(time + position.x) * 0.2 * waveFactor;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
+}
+`;
+const fragmentShader = `
+varying vec2 vUv;
+uniform float mouse;
+uniform float uTime;
+uniform sampler2D uTexture;
+void main() {
+    float time = uTime;
+    vec2 pos = vUv;
+    float r = texture2D(uTexture, pos).r;
+    float g = texture2D(uTexture, pos).g;
+    float b = texture2D(uTexture, pos).b;
+    float a = texture2D(uTexture, pos).a;
+    gl_FragColor = vec4(r, g, b, a);
+}
+`;
+const PX_RATIO = typeof window !== &apos;undefined&apos; ? window.devicePixelRatio : 1;
+function mapRange(n: number, start: number, stop: number, start2: number, stop2: number) {
+  return ((n - start) / (stop - start)) * (stop2 - start2) + start2;
+}
+interface AsciiFilterOptions {
+  fontSize?: number;
+  fontFamily?: string;
+  charset?: string;
+  invert?: boolean;
+}
+class AsciiFilter {
+  renderer: THREE.WebGLRenderer;
+  domElement: HTMLDivElement;
+  pre: HTMLPreElement;
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D | null;
+  deg: number;
+  invert: boolean;
+  fontSize: number;
+  fontFamily: string;
+  charset: string;
+  width: number = 0;
+  height: number = 0;
+  center: { x: number; y: number } = { x: 0, y: 0 };
+  mouse: { x: number; y: number } = { x: 0, y: 0 };
+  cols: number = 0;
+  rows: number = 0;
+  constructor(renderer: THREE.WebGLRenderer, { fontSize, fontFamily, charset, invert }: AsciiFilterOptions = {}) {
+    this.renderer = renderer;
+    this.domElement = document.createElement(&apos;div&apos;);
+    this.domElement.style.position = &apos;absolute&apos;;
+    this.domElement.style.top = &apos;0&apos;;
+    this.domElement.style.left = &apos;0&apos;;
+    this.domElement.style.width = &apos;100%&apos;;
+    this.domElement.style.height = &apos;100%&apos;;
+    this.pre = document.createElement(&apos;pre&apos;);
+    this.pre.style.margin = &apos;0&apos;;
+    this.pre.style.userSelect = &apos;none&apos;;
+    this.pre.style.padding = &apos;0&apos;;
+    this.pre.style.lineHeight = &apos;1em&apos;;
+    this.pre.style.textAlign = &apos;left&apos;;
+    this.pre.style.position = &apos;absolute&apos;;
+    this.pre.style.left = &apos;0&apos;;
+    this.pre.style.top = &apos;0&apos;;
+    // 💡 采用强对比度的极光纯白-荧光青白渐变，彻底解决字体暗淡难辨
+    this.pre.style.backgroundImage = &apos;linear-gradient(180deg, #ffffff 0%, #e2e8f0 60%, #00ffa9 100%)&apos;;
+    this.pre.style.backgroundAttachment = &apos;fixed&apos;;
+    this.pre.style.webkitTextFillColor = &apos;transparent&apos;;
+    this.pre.style.webkitBackgroundClip = &apos;text&apos;;
+    this.pre.style.zIndex = &apos;9&apos;;
+    // 💡 移除破坏暗色的 difference 混色模式
+    this.domElement.appendChild(this.pre);
+    this.canvas = document.createElement(&apos;canvas&apos;);
+    this.canvas.style.position = &apos;absolute&apos;;
+    this.canvas.style.left = &apos;0&apos;;
+    this.canvas.style.top = &apos;0&apos;;
+    this.canvas.style.width = &apos;100%&apos;;
+    this.canvas.style.height = &apos;100%&apos;;
+    this.canvas.style.imageRendering = &apos;pixelated&apos;;
+    this.context = this.canvas.getContext(&apos;2d&apos;);
+    this.domElement.appendChild(this.canvas);
+    this.deg = 0;
+    this.invert = invert ?? true;
+    this.fontSize = fontSize ?? 10;
+    this.fontFamily = fontFamily ?? &quot;&apos;Courier New&apos;, monospace&quot;;
+    this.charset = charset ?? &apos; .\&apos;`^&quot;,:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&amp;8%B@$&apos;;
+    if (this.context) {
+      this.context.imageSmoothingEnabled = false;
+    }
+    this.onMouseMove = this.onMouseMove.bind(this);
+    document.addEventListener(&apos;mousemove&apos;, this.onMouseMove);
+  }
+  setSize(width: number, height: number) {
+    this.width = width;
+    this.height = height;
+    this.renderer.setSize(width, height);
+    this.reset();
+    this.center = { x: width / 2, y: height / 2 };
+    this.mouse = { x: this.center.x, y: this.center.y };
+  }
+  reset() {
+    if (!this.context) return;
+    this.context.font = `${this.fontSize}px ${this.fontFamily}`;
+    const charWidth = this.context.measureText(&apos;A&apos;).width;
+    this.cols = Math.floor(this.width / (this.fontSize * (charWidth / this.fontSize)));
+    this.rows = Math.floor(this.height / this.fontSize);
+    this.canvas.width = this.cols;
+    this.canvas.height = this.rows;
+    this.pre.style.fontFamily = this.fontFamily;
+    this.pre.style.fontSize = `${this.fontSize}px`;
+  }
+  render(scene: THREE.Scene, camera: THREE.Camera) {
+    this.renderer.render(scene, camera);
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    if (!this.context || !w || !h) return;
+    this.context.clearRect(0, 0, w, h);
+    this.context.drawImage(this.renderer.domElement, 0, 0, w, h);
+    this.asciify(this.context, w, h);
+  }
+  onMouseMove(e: MouseEvent) {
+    this.mouse = { x: e.clientX * PX_RATIO, y: e.clientY * PX_RATIO };
+  }
+  asciify(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    if (!w || !h) return;
+    const imgData = ctx.getImageData(0, 0, w, h).data;
+    let str = &apos;&apos;;
+    for (let y = 0; y &lt; h; y++) {
+      for (let x = 0; x &lt; w; x++) {
+        const i = x * 4 + y * 4 * w;
+        const r = imgData[i];
+        const g = imgData[i + 1];
+        const b = imgData[i + 2];
+        const a = imgData[i + 3];
+        if (a === 0) {
+          str += &apos; &apos;;
+          continue;
+        }
+        const gray = (0.3 * r + 0.6 * g + 0.1 * b) / 255;
+        let idx = Math.floor((1 - gray) * (this.charset.length - 1));
+        if (this.invert) idx = this.charset.length - idx - 1;
+        str += this.charset[idx];
+      }
+      str += &apos;\n&apos;;
+    }
+    this.pre.innerHTML = str;
+  }
+  dispose() {
+    document.removeEventListener(&apos;mousemove&apos;, this.onMouseMove);
+  }
+}
+interface CanvasTxtOptions {
+  fontSize?: number;
+  fontFamily?: string;
+  color?: string;
+}
+class CanvasTxt {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D | null;
+  txt: string;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+  font: string;
+  constructor(txt: string, { fontSize = 300, fontFamily = &apos;Arial&apos;, color = &apos;#ffffff&apos; }: CanvasTxtOptions = {}) {
+    this.canvas = document.createElement(&apos;canvas&apos;);
+    this.context = this.canvas.getContext(&apos;2d&apos;);
+    this.txt = txt;
+    this.fontSize = fontSize;
+    this.fontFamily = fontFamily;
+    this.color = color;
+    this.font = `700 ${this.fontSize}px ${this.fontFamily}`;
+  }
+  resize() {
+    if (!this.context) return;
+    this.context.font = this.font;
+    const metrics = this.context.measureText(this.txt);
+    const textWidth = Math.ceil(metrics.width) + 20;
+    const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + 20;
+    this.canvas.width = textWidth;
+    this.canvas.height = textHeight;
+  }
+  render() {
+    if (!this.context) return;
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.context.fillStyle = this.color;
+    this.context.font = this.font;
+    const metrics = this.context.measureText(this.txt);
+    const yPos = 10 + metrics.actualBoundingBoxAscent;
+    this.context.fillText(this.txt, 10, yPos);
+  }
+  get width() {
+    return this.canvas.width;
+  }
+  get height() {
+    return this.canvas.height;
+  }
+  get texture() {
+    return this.canvas;
+  }
+}
+interface CanvAsciiOptions {
+  text: string;
+  asciiFontSize: number;
+  textFontSize: number;
+  textColor: string;
+  planeBaseHeight: number;
+  enableWaves: boolean;
+}
+class CanvAscii {
+  textString: string;
+  asciiFontSize: number;
+  textFontSize: number;
+  textColor: string;
+  planeBaseHeight: number;
+  container: HTMLElement;
+  width: number;
+  height: number;
+  enableWaves: boolean;
+  camera: THREE.PerspectiveCamera;
+  scene: THREE.Scene;
+  mouse: { x: number; y: number };
+  textCanvas!: CanvasTxt;
+  texture!: THREE.CanvasTexture;
+  geometry!: THREE.PlaneGeometry;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  renderer!: THREE.WebGLRenderer;
+  filter!: AsciiFilter;
+  center!: { x: number; y: number };
+  animationFrameId: number = 0;
+  constructor(
+    { text, asciiFontSize, textFontSize, textColor, planeBaseHeight, enableWaves }: CanvAsciiOptions,
+    containerElem: HTMLElement,
+    width: number,
+    height: number
+  ) {
+    this.textString = text;
+    this.asciiFontSize = asciiFontSize;
+    this.textFontSize = textFontSize;
+    this.textColor = textColor;
+    this.planeBaseHeight = planeBaseHeight;
+    this.container = containerElem;
+    this.width = width;
+    this.height = height;
+    this.enableWaves = enableWaves;
+    this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 1, 1000);
+    this.camera.position.z = 30;
+    this.scene = new THREE.Scene();
+    this.mouse = { x: this.width / 2, y: this.height / 2 };
+    this.onMouseMove = this.onMouseMove.bind(this);
+  }
+  async init() {
+    try {
+      await document.fonts.load(&apos;700 300px &quot;IBM Plex Mono&quot;&apos;);
+      await document.fonts.load(&apos;500 10px &quot;IBM Plex Mono&quot;&apos;);
+    } catch {}
+    await document.fonts.ready;
+    this.setMesh();
+    this.setRenderer();
+  }
+  setMesh() {
+    this.textCanvas = new CanvasTxt(this.textString, {
+      fontSize: this.textFontSize,
+      fontFamily: &apos;IBM Plex Mono&apos;,
+      color: this.textColor
+    });
+    this.textCanvas.resize();
+    this.textCanvas.render();
+    this.texture = new THREE.CanvasTexture(this.textCanvas.texture);
+    this.texture.minFilter = THREE.NearestFilter;
+    const textAspect = this.textCanvas.width / this.textCanvas.height;
+    const baseH = this.planeBaseHeight;
+    const planeW = baseH * textAspect;
+    this.geometry = new THREE.PlaneGeometry(planeW, baseH, 36, 36);
+    this.material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      uniforms: {
+        uTime: { value: 0 },
+        mouse: { value: 1.0 },
+        uTexture: { value: this.texture },
+        uEnableWaves: { value: this.enableWaves ? 1.0 : 0.0 }
+      }
+    });
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.scene.add(this.mesh);
+  }
+  setRenderer() {
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+    this.renderer.setPixelRatio(1);
+    this.renderer.setClearColor(0x000000, 0);
+    this.filter = new AsciiFilter(this.renderer, {
+      fontFamily: &apos;IBM Plex Mono&apos;,
+      fontSize: this.asciiFontSize,
+      invert: true
+    });
+    this.container.appendChild(this.filter.domElement);
+    this.setSize(this.width, this.height);
+    this.container.addEventListener(&apos;mousemove&apos;, this.onMouseMove);
+    this.container.addEventListener(&apos;touchmove&apos;, this.onMouseMove as EventListener);
+  }
+  setSize(w: number, h: number) {
+    this.width = w;
+    this.height = h;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.filter.setSize(w, h);
+    this.center = { x: w / 2, y: h / 2 };
+  }
+  load() {
+    this.animate();
+  }
+  onMouseMove(evt: MouseEvent | TouchEvent) {
+    const e = (evt as TouchEvent).touches ? (evt as TouchEvent).touches[0] : (evt as MouseEvent);
+    const bounds = this.container.getBoundingClientRect();
+    const x = e.clientX - bounds.left;
+    const y = e.clientY - bounds.top;
+    this.mouse = { x, y };
+  }
+  animate() {
+    const animateFrame = () =&gt; {
+      this.animationFrameId = requestAnimationFrame(animateFrame);
+      this.render();
+    };
+    animateFrame();
+  }
+  render() {
+    const time = new Date().getTime() * 0.001;
+    this.textCanvas.render();
+    this.texture.needsUpdate = true;
+    (this.mesh.material as THREE.ShaderMaterial).uniforms.uTime.value = Math.sin(time);
+    this.updateRotation();
+    this.filter.render(this.scene, this.camera);
+  }
+  updateRotation() {
+    const x = mapRange(this.mouse.y, 0, this.height, 0.2, -0.2);
+    const y = mapRange(this.mouse.x, 0, this.width, -0.2, 0.2);
+    this.mesh.rotation.x += (x - this.mesh.rotation.x) * 0.05;
+    this.mesh.rotation.y += (y - this.mesh.rotation.y) * 0.05;
+  }
+  clear() {
+    this.scene.traverse((object: any) =&gt; {
+      const obj = object as unknown as THREE.Mesh;
+      if (!obj.isMesh) return;
+      [obj.material].flat().forEach(mat =&gt; {
+        const m = mat as THREE.Material &amp; Record&lt;string, unknown&gt;;
+        m.dispose();
+        Object.keys(m).forEach(key =&gt; {
+          const prop = m[key];
+          if (
+            prop &amp;&amp;
+            typeof prop === &apos;object&apos; &amp;&amp;
+            &apos;dispose&apos; in prop &amp;&amp;
+            typeof (prop as { dispose: unknown }).dispose === &apos;function&apos;
+          ) {
+            (prop as { dispose: () =&gt; void }).dispose();
+          }
+        });
+      });
+      obj.geometry.dispose();
+    });
+    this.scene.clear();
+  }
+  dispose() {
+    cancelAnimationFrame(this.animationFrameId);
+    if (this.filter) {
+      this.filter.dispose();
+      if (this.filter.domElement.parentNode) {
+        this.container.removeChild(this.filter.domElement);
+      }
+    }
+    this.container.removeEventListener(&apos;mousemove&apos;, this.onMouseMove);
+    this.container.removeEventListener(&apos;touchmove&apos;, this.onMouseMove as EventListener);
+    this.clear();
+    if (this.renderer) {
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+    }
+  }
+}
+let asciiInstance: CanvAscii | null = null;
+let intersectionObserver: IntersectionObserver | null = null;
+let resizeObserver: ResizeObserver | null = null;
+let cancelled = false;
+async function createAndInit(container: HTMLDivElement, w: number, h: number): Promise&lt;CanvAscii&gt; {
+  const instance = new CanvAscii(
+    {
+      text: props.text,
+      asciiFontSize: props.asciiFontSize,
+      textFontSize: props.textFontSize,
+      textColor: props.textColor,
+      planeBaseHeight: props.planeBaseHeight,
+      enableWaves: props.enableWaves
+    },
+    container,
+    w,
+    h
+  );
+  await instance.init();
+  return instance;
+}
+async function setup() {
+  const container = containerRef.value;
+  if (!container) return;
+  const { width, height } = container.getBoundingClientRect();
+  if (width === 0 || height === 0) {
+    intersectionObserver = new IntersectionObserver(
+      async ([entry]) =&gt; {
+        if (cancelled) return;
+        if (entry.isIntersecting &amp;&amp; entry.boundingClientRect.width &gt; 0 &amp;&amp; entry.boundingClientRect.height &gt; 0) {
+          const { width: w, height: h } = entry.boundingClientRect;
+          intersectionObserver?.disconnect();
+          intersectionObserver = null;
+          if (!cancelled &amp;&amp; containerRef.value) {
+            asciiInstance = await createAndInit(containerRef.value, w, h);
+            if (!cancelled &amp;&amp; asciiInstance) asciiInstance.load();
+          }
+        }
+      },
+      { threshold: 0.1 }
+    );
+    intersectionObserver.observe(container);
+    return;
+  }
+  asciiInstance = await createAndInit(container, width, height);
+  if (!cancelled &amp;&amp; asciiInstance) {
+    asciiInstance.load();
+    resizeObserver = new ResizeObserver(entries =&gt; {
+      if (!entries[0] || !asciiInstance) return;
+      const { width: w, height: h } = entries[0].contentRect;
+      if (w &gt; 0 &amp;&amp; h &gt; 0) asciiInstance.setSize(w, h);
+    });
+    resizeObserver.observe(container);
+  }
+}
+function cleanup() {
+  cancelled = true;
+  intersectionObserver?.disconnect();
+  intersectionObserver = null;
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  asciiInstance?.dispose();
+  asciiInstance = null;
+}
+onMounted(() =&gt; {
+  const link = document.createElement(&apos;link&apos;);
+  link.rel = &apos;stylesheet&apos;;
+  link.href = &apos;https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;display=swap&apos;;
+  document.head.appendChild(link);
+  cancelled = false;
+  setup();
+});
+onUnmounted(() =&gt; {
+  cleanup();
+});
+watch(
+  () =&gt; [
+    props.text,
+    props.asciiFontSize,
+    props.textFontSize,
+    props.textColor,
+    props.planeBaseHeight,
+    props.enableWaves
+  ],
+  () =&gt; {
+    if (!asciiInstance) return;
+    asciiInstance.textString = props.text;
+    asciiInstance.asciiFontSize = props.asciiFontSize;
+    asciiInstance.textFontSize = props.textFontSize;
+    asciiInstance.textColor = props.textColor;
+    asciiInstance.planeBaseHeight = props.planeBaseHeight;
+    asciiInstance.enableWaves = props.enableWaves;
+    asciiInstance.dispose();
+    asciiInstance.init().then(() =&gt; asciiInstance?.load());
+  }
+);
+&lt;/script&gt;
+&lt;style scoped&gt;
+div :deep(canvas) {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: optimizeSpeed;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -o-crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+div :deep(pre) {
+  margin: 0;
+  user-select: none;
+  padding: 0;
+  line-height: 1em;
+  text-align: left;
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-image: linear-gradient(180deg, #ffffff 0%, #f1f5f9 60%, #00ffa9 100%);
+  background-attachment: fixed;
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  z-index: 9;
+}
+&lt;/style&gt;</file><file path="deploy/website/src/components/Aurora.vue">&lt;template&gt;
+  &lt;div ref=&quot;ctnDom&quot; class=&quot;aurora-container&quot; /&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { Color, Mesh, Program, Renderer, Triangle } from &apos;ogl&apos;;
+import { onMounted, onUnmounted, ref } from &apos;vue&apos;;
+const VERT = `#version 300 es
+in vec2 position;
+void main() {
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+const FRAG = `#version 300 es
+precision highp float;
+uniform float uTime;
+uniform float uAmplitude;
+uniform vec3 uColorStops[3];
+uniform vec2 uResolution;
+uniform float uBlend;
+out vec4 fragColor;
+vec3 permute(vec3 x) {
+  return mod(((x * 34.0) + 1.0) * x, 289.0);
+}
+float snoise(vec2 v){
+  const vec4 C = vec4(
+      0.211324865405187, 0.366025403784439,
+      -0.577350269189626, 0.024390243902439
+  );
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x &gt; x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+  vec3 p = permute(
+      permute(i.y + vec3(0.0, i1.y, 1.0))
+    + i.x + vec3(0.0, i1.x, 1.0)
+  );
+  vec3 m = max(
+      0.5 - vec3(
+          dot(x0, x0),
+          dot(x12.xy, x12.xy),
+          dot(x12.zw, x12.zw)
+      ),
+      0.0
+  );
+  m = m * m;
+  m = m * m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+struct ColorStop {
+  vec3 color;
+  float position;
+};
+#define COLOR_RAMP(colors, factor, finalColor) {              \
+  int index = 0;                                            \
+  for (int i = 0; i &lt; 2; i++) {                               \
+     ColorStop currentColor = colors[i];                    \
+     bool isInBetween = currentColor.position &lt;= factor;    \
+     index = int(mix(float(index), float(i), float(isInBetween))); \
+  }                                                         \
+  ColorStop currentColor = colors[index];                   \
+  ColorStop nextColor = colors[index + 1];                  \
+  float range = nextColor.position - currentColor.position; \
+  float lerpFactor = (factor - currentColor.position) / range; \
+  finalColor = mix(currentColor.color, nextColor.color, lerpFactor); \
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  ColorStop colors[3];
+  colors[0] = ColorStop(uColorStops[0], 0.0);
+  colors[1] = ColorStop(uColorStops[1], 0.5);
+  colors[2] = ColorStop(uColorStops[2], 1.0);
+  vec3 rampColor;
+  COLOR_RAMP(colors, uv.x, rampColor);
+  float height = snoise(vec2(uv.x * 2.0 + uTime * 0.1, uTime * 0.25)) * 0.5 * uAmplitude;
+  height = exp(height);
+  height = (uv.y * 2.0 - height + 0.2);
+  // 💡 提升光强表达，增强极光散发感
+  float intensity = 1.1 * height;
+  float midPoint = 0.15;
+  float auroraAlpha = smoothstep(midPoint - uBlend * 0.5, midPoint + uBlend * 0.5, intensity);
+  vec3 auroraColor = intensity * rampColor;
+  fragColor = vec4(auroraColor * auroraAlpha, auroraAlpha);
+}
+`;
+interface AuroraProps {
+  colorStops?: string[];
+  amplitude?: number;
+  blend?: number;
+  time?: number;
+  speed?: number;
+}
+// 💡 对齐 Vue Bits 官方高亮荧光极光配色 [深墨绿, 荧光青绿, 极光明蓝]
+const props = withDefaults(defineProps&lt;AuroraProps&gt;(), {
+  colorStops: () =&gt; [&apos;#03140e&apos;, &apos;#00ffa9&apos;, &apos;#00d2ff&apos;],
+  amplitude: 1.2,
+  blend: 0.6,
+  speed: 0.8
+});
+const ctnDom = ref&lt;HTMLDivElement | null&gt;(null);
+let animateId = 0;
+let renderer: InstanceType&lt;typeof Renderer&gt; | null = null;
+let program: InstanceType&lt;typeof Program&gt; | null = null;
+let resizeHandler: (() =&gt; void) | null = null;
+onMounted(() =&gt; {
+  const ctn = ctnDom.value;
+  if (!ctn) return;
+  renderer = new Renderer({
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: true
+  });
+  const gl = renderer.gl;
+  gl.clearColor(0, 0, 0, 0);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.canvas.style.backgroundColor = &apos;transparent&apos;;
+  resizeHandler = () =&gt; {
+    if (!ctn || !renderer) return;
+    const width = ctn.offsetWidth;
+    const height = ctn.offsetHeight;
+    renderer.setSize(width, height);
+    if (program) {
+      program.uniforms.uResolution.value = [width, height];
+    }
+  };
+  window.addEventListener(&apos;resize&apos;, resizeHandler);
+  const geometry = new Triangle(gl);
+  if (geometry.attributes.uv) {
+    delete geometry.attributes.uv;
+  }
+  const colorStopsArray = props.colorStops.map((hex: string) =&gt; {
+    const c = new Color(hex);
+    return [c.r, c.g, c.b];
+  });
+  program = new Program(gl, {
+    vertex: VERT,
+    fragment: FRAG,
+    uniforms: {
+      uTime: { value: 0 },
+      uAmplitude: { value: props.amplitude },
+      uColorStops: { value: colorStopsArray },
+      uResolution: { value: [ctn.offsetWidth, ctn.offsetHeight] },
+      uBlend: { value: props.blend }
+    }
+  });
+  const mesh = new Mesh(gl, { geometry, program });
+  ctn.appendChild(gl.canvas);
+  const update = (t: number) =&gt; {
+    animateId = requestAnimationFrame(update);
+    const time = props.time ?? t * 0.01;
+    const speed = props.speed ?? 1.0;
+    if (program &amp;&amp; renderer) {
+      program.uniforms.uTime.value = time * speed * 0.1;
+      program.uniforms.uAmplitude.value = props.amplitude ?? 1.2;
+      program.uniforms.uBlend.value = props.blend ?? 0.6;
+      program.uniforms.uColorStops.value = (props.colorStops ?? [&apos;#03140e&apos;, &apos;#00ffa9&apos;, &apos;#00d2ff&apos;]).map(
+        (hex: string) =&gt; {
+          const c = new Color(hex);
+          return [c.r, c.g, c.b];
+        }
+      );
+      renderer.render({ scene: mesh });
+    }
+  };
+  animateId = requestAnimationFrame(update);
+  resizeHandler();
+});
+onUnmounted(() =&gt; {
+  cancelAnimationFrame(animateId);
+  if (resizeHandler) {
+    window.removeEventListener(&apos;resize&apos;, resizeHandler);
+  }
+  if (renderer) {
+    const ctn = ctnDom.value;
+    const canvas = renderer.gl.canvas;
+    if (ctn &amp;&amp; canvas.parentNode === ctn) {
+      ctn.removeChild(canvas);
+    }
+    renderer.gl.getExtension(&apos;WEBGL_lose_context&apos;)?.loseContext();
+  }
+});
+&lt;/script&gt;
+&lt;style scoped&gt;
+.aurora-container {
+  width: 100%;
+  height: 100%;
+}
+&lt;/style&gt;</file><file path="deploy/website/src/components/BorderGlow.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { computed, ref, useTemplateRef, watch } from &apos;vue&apos;;
+interface BorderGlowProps {
+  className?: string;
+  edgeSensitivity?: number;
+  glowColor?: string;
+  backgroundColor?: string;
+  borderRadius?: number;
+  glowRadius?: number;
+  glowIntensity?: number;
+  coneSpread?: number;
+  animated?: boolean;
+  colors?: string[];
+  fillOpacity?: number;
+}
+function parseHSL(hslStr: string): { h: number; s: number; l: number } {
+  const match = hslStr.match(/([\d.]+)\s*([\d.]+)%?\s*([\d.]+)%?/);
+  if (!match) return { h: 40, s: 80, l: 80 };
+  return { h: parseFloat(match[1]), s: parseFloat(match[2]), l: parseFloat(match[3]) };
+}
+function buildBoxShadow(glowColor: string, intensity: number): string {
+  const { h, s, l } = parseHSL(glowColor);
+  const base = `${h}deg ${s}% ${l}%`;
+  const layers: [number, number, number, number, number, boolean][] = [
+    [0, 0, 0, 1, 100, true],
+    [0, 0, 1, 0, 60, true],
+    [0, 0, 3, 0, 50, true],
+    [0, 0, 6, 0, 40, true],
+    [0, 0, 15, 0, 30, true],
+    [0, 0, 25, 2, 20, true],
+    [0, 0, 50, 2, 10, true],
+    [0, 0, 1, 0, 60, false],
+    [0, 0, 3, 0, 50, false],
+    [0, 0, 6, 0, 40, false],
+    [0, 0, 15, 0, 30, false],
+    [0, 0, 25, 2, 20, false],
+    [0, 0, 50, 2, 10, false]
+  ];
+  return layers
+    .map(([x, y, blur, spread, alpha, inset]) =&gt; {
+      const a = Math.min(alpha * intensity, 100);
+      return `${inset ? &apos;inset &apos; : &apos;&apos;}${x}px ${y}px ${blur}px ${spread}px hsl(${base} / ${a}%)`;
+    })
+    .join(&apos;, &apos;);
+}
+function easeOutCubic(x: number) {
+  return 1 - Math.pow(1 - x, 3);
+}
+function easeInCubic(x: number) {
+  return x * x * x;
+}
+interface AnimateOpts {
+  start?: number;
+  end?: number;
+  duration?: number;
+  delay?: number;
+  ease?: (t: number) =&gt; number;
+  onUpdate: (v: number) =&gt; void;
+  onEnd?: () =&gt; void;
+}
+function animateValue({
+  start = 0,
+  end = 100,
+  duration = 1000,
+  delay = 0,
+  ease = easeOutCubic,
+  onUpdate,
+  onEnd
+}: AnimateOpts) {
+  const t0 = performance.now() + delay;
+  function tick() {
+    const elapsed = performance.now() - t0;
+    const t = Math.min(elapsed / duration, 1);
+    onUpdate(start + (end - start) * ease(t));
+    if (t &lt; 1) requestAnimationFrame(tick);
+    else if (onEnd) onEnd();
+  }
+  setTimeout(() =&gt; requestAnimationFrame(tick), delay);
+}
+const GRADIENT_POSITIONS = [&apos;80% 55%&apos;, &apos;69% 34%&apos;, &apos;8% 6%&apos;, &apos;41% 38%&apos;, &apos;86% 85%&apos;, &apos;82% 18%&apos;, &apos;51% 4%&apos;];
+const COLOR_MAP = [0, 1, 2, 0, 1, 2, 1];
+function buildMeshGradients(colors: string[]): string[] {
+  const gradients: string[] = [];
+  for (let i = 0; i &lt; 7; i++) {
+    const c = colors[Math.min(COLOR_MAP[i], colors.length - 1)];
+    gradients.push(`radial-gradient(at ${GRADIENT_POSITIONS[i]}, ${c} 0px, transparent 50%)`);
+  }
+  gradients.push(`linear-gradient(${colors[0]} 0 100%)`);
+  return gradients;
+}
+const props = withDefaults(defineProps&lt;BorderGlowProps&gt;(), {
+  className: &apos;&apos;,
+  edgeSensitivity: 30,
+  glowColor: &apos;180 100 80&apos;,
+  backgroundColor: &apos;#030712&apos;,
+  borderRadius: 24,
+  glowRadius: 40,
+  glowIntensity: 1.0,
+  coneSpread: 25,
+  animated: false,
+  colors: () =&gt; [&apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;, &apos;#A5F3FC&apos;],
+  fillOpacity: 0.5
+});
+const cardRef = useTemplateRef&lt;HTMLDivElement&gt;(&apos;cardRef&apos;);
+const isHovered = ref(false);
+const cursorAngle = ref(45);
+const edgeProximity = ref(0);
+const sweepActive = ref(false);
+const getCenterOfElement = (el: HTMLElement) =&gt; {
+  const { width, height } = el.getBoundingClientRect();
+  return [width / 2, height / 2];
+};
+const getEdgeProximity = (el: HTMLElement, x: number, y: number) =&gt; {
+  const [cx, cy] = getCenterOfElement(el);
+  const dx = x - cx;
+  const dy = y - cy;
+  let kx = Infinity;
+  let ky = Infinity;
+  if (dx !== 0) kx = cx / Math.abs(dx);
+  if (dy !== 0) ky = cy / Math.abs(dy);
+  return Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
+};
+const getCursorAngle = (el: HTMLElement, x: number, y: number) =&gt; {
+  const [cx, cy] = getCenterOfElement(el);
+  const dx = x - cx;
+  const dy = y - cy;
+  if (dx === 0 &amp;&amp; dy === 0) return 0;
+  const radians = Math.atan2(dy, dx);
+  let degrees = radians * (180 / Math.PI) + 90;
+  if (degrees &lt; 0) degrees += 360;
+  return degrees;
+};
+const handlePointerMove = (e: PointerEvent) =&gt; {
+  const card = cardRef.value;
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  edgeProximity.value = getEdgeProximity(card, x, y);
+  cursorAngle.value = getCursorAngle(card, x, y);
+};
+watch(
+  () =&gt; [props.animated],
+  () =&gt; {
+    if (!props.animated) return;
+    const angleStart = 110;
+    const angleEnd = 465;
+    sweepActive.value = true;
+    cursorAngle.value = angleStart;
+    animateValue({ duration: 500, onUpdate: v =&gt; (edgeProximity.value = v / 100) });
+    animateValue({
+      ease: easeInCubic,
+      duration: 1500,
+      end: 50,
+      onUpdate: v =&gt; {
+        cursorAngle.value = (angleEnd - angleStart) * (v / 100) + angleStart;
+      }
+    });
+    animateValue({
+      ease: easeOutCubic,
+      delay: 1500,
+      duration: 2250,
+      start: 50,
+      end: 100,
+      onUpdate: v =&gt; {
+        cursorAngle.value = (angleEnd - angleStart) * (v / 100) + angleStart;
+      }
+    });
+    animateValue({
+      ease: easeInCubic,
+      delay: 2500,
+      duration: 1500,
+      start: 100,
+      end: 0,
+      onUpdate: v =&gt; (edgeProximity.value = v / 100),
+      onEnd: () =&gt; (sweepActive.value = false)
+    });
+  },
+  {
+    deep: true,
+    immediate: true
+  }
+);
+const colorSensitivity = computed(() =&gt; props.edgeSensitivity + 20);
+const isVisible = computed(() =&gt; isHovered.value || sweepActive.value);
+const borderOpacity = computed(() =&gt;
+  isVisible.value
+    ? Math.max(0, (edgeProximity.value * 100 - colorSensitivity.value) / (100 - colorSensitivity.value))
+    : 0
+);
+const glowOpacity = computed(() =&gt;
+  isVisible.value ? Math.max(0, (edgeProximity.value * 100 - props.edgeSensitivity) / (100 - props.edgeSensitivity)) : 0
+);
+const meshGradients = computed(() =&gt; buildMeshGradients(props.colors));
+const borderBg = computed(() =&gt; meshGradients.value.map(g =&gt; `${g} border-box`));
+const fillBg = computed(() =&gt; meshGradients.value.map(g =&gt; `${g} padding-box`));
+const angleDeg = computed(() =&gt; `${cursorAngle.value.toFixed(3)}deg`);
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div
+    ref=&quot;cardRef&quot;
+    @pointermove=&quot;handlePointerMove&quot;
+    @pointerenter=&quot;isHovered = true&quot;
+    @pointerleave=&quot;isHovered = false&quot;
+    :class=&quot;`relative grid isolate border border-white/15 ${props.className}`&quot;
+    :style=&quot;{
+      background: props.backgroundColor,
+      borderRadius: props.borderRadius + &apos;px&apos;,
+      transform: &apos;translate3d(0, 0, 0.01px)&apos;,
+      boxShadow:
+        &apos;rgba(0,0,0,0.1) 0 1px 2px, rgba(0,0,0,0.1) 0 2px 4px, rgba(0,0,0,0.1) 0 4px 8px, rgba(0,0,0,0.1) 0 8px 16px, rgba(0,0,0,0.1) 0 16px 32px, rgba(0,0,0,0.1) 0 32px 64px&apos;
+    }&quot;
+  &gt;
+    &lt;!-- mesh gradient border --&gt;
+    &lt;div
+      class=&quot;-z-[1] absolute inset-0 rounded-[inherit]&quot;
+      :style=&quot;{
+        border: &apos;1px solid transparent&apos;,
+        background: [
+          `linear-gradient(${props.backgroundColor} 0 100%) padding-box`,
+          &apos;linear-gradient(rgb(255 255 255 / 0%) 0% 100%) border-box&apos;,
+          ...borderBg
+        ].join(&apos;, &apos;),
+        opacity: borderOpacity,
+        maskImage: `conic-gradient(from ${angleDeg} at center, black ${props.coneSpread}%, transparent ${
+          props.coneSpread + 15
+        }%, transparent ${100 - props.coneSpread - 15}%, black ${100 - props.coneSpread}%)`,
+        WebkitMaskImage: `conic-gradient(from ${angleDeg} at center, black ${props.coneSpread}%, transparent ${
+          props.coneSpread + 15
+        }%, transparent ${100 - props.coneSpread - 15}%, black ${100 - props.coneSpread}%)`,
+        transition: isVisible ? &apos;opacity 0.25s ease-out&apos; : &apos;opacity 0.75s ease-in-out&apos;
+      }&quot;
+    /&gt;
+    &lt;!-- mesh gradient fill --&gt;
+    &lt;div
+      class=&quot;-z-[1] absolute inset-0 rounded-[inherit]&quot;
+      :style=&quot;{
+        border: &apos;1px solid transparent&apos;,
+        background: fillBg.join(&apos;, &apos;),
+        maskImage: [
+          &apos;linear-gradient(to bottom, black, black)&apos;,
+          &apos;radial-gradient(ellipse at 50% 50%, black 40%, transparent 65%)&apos;,
+          &apos;radial-gradient(ellipse at 66% 66%, black 5%, transparent 40%)&apos;,
+          &apos;radial-gradient(ellipse at 33% 33%, black 5%, transparent 40%)&apos;,
+          &apos;radial-gradient(ellipse at 66% 33%, black 5%, transparent 40%)&apos;,
+          &apos;radial-gradient(ellipse at 33% 66%, black 5%, transparent 40%)&apos;,
+          `conic-gradient(from ${angleDeg} at center, transparent 5%, black 15%, black 85%, transparent 95%)`
+        ].join(&apos;, &apos;),
+        WebkitMaskImage: [
+          &apos;linear-gradient(to bottom, black, black)&apos;,
+          &apos;radial-gradient(ellipse at 50% 50%, black 40%, transparent 65%)&apos;,
+          &apos;radial-gradient(ellipse at 66% 66%, black 5%, transparent 40%)&apos;,
+          &apos;radial-gradient(ellipse at 33% 33%, black 5%, transparent 40%)&apos;,
+          &apos;radial-gradient(ellipse at 66% 33%, black 5%, transparent 40%)&apos;,
+          &apos;radial-gradient(ellipse at 33% 66%, black 5%, transparent 40%)&apos;,
+          `conic-gradient(from ${angleDeg} at center, transparent 5%, black 15%, black 85%, transparent 95%)`
+        ].join(&apos;, &apos;),
+        maskComposite: &apos;subtract, add, add, add, add, add&apos;,
+        WebkitMaskComposite: &apos;source-out, source-over, source-over, source-over, source-over, source-over&apos;,
+        opacity: borderOpacity * props.fillOpacity,
+        mixBlendMode: &apos;soft-light&apos;,
+        transition: isVisible ? &apos;opacity 0.25s ease-out&apos; : &apos;opacity 0.75s ease-in-out&apos;
+      }&quot;
+    /&gt;
+    &lt;!-- outer glow --&gt;
+    &lt;span
+      class=&quot;z-[1] absolute rounded-[inherit] pointer-events-none&quot;
+      :style=&quot;{
+        inset: `-${props.glowRadius}px`,
+        maskImage: `conic-gradient(from ${angleDeg} at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%)`,
+        WebkitMaskImage: `conic-gradient(from ${angleDeg} at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%)`,
+        opacity: glowOpacity,
+        mixBlendMode: &apos;plus-lighter&apos;,
+        transition: isVisible ? &apos;opacity 0.25s ease-out&apos; : &apos;opacity 0.75s ease-in-out&apos;
+      }&quot;
+    &gt;
+      &lt;span
+        class=&quot;absolute rounded-[inherit]&quot;
+        :style=&quot;{
+          inset: `${props.glowRadius}px`,
+          boxShadow: buildBoxShadow(props.glowColor, props.glowIntensity)
+        }&quot;
+      /&gt;
+    &lt;/span&gt;
+    &lt;!-- content --&gt;
+    &lt;div class=&quot;z-[1] relative flex flex-col overflow-auto&quot;&gt;
+      &lt;slot /&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/CategorySelector.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { Sparkles, Mic, FileText, Zap, Languages, Video, Code, Cpu, Eye, ShieldCheck, Database } from &apos;lucide-vue-next&apos;;
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div class=&quot;ln-feat-orbit relative w-full h-56 flex items-center justify-center overflow-hidden&quot;&gt;
+    &lt;!-- 中心 AI 算力核心 --&gt;
+    &lt;div class=&quot;relative z-20 w-12 h-12 rounded-2xl bg-slate-900 border border-[#A5F3FC]/40 flex items-center justify-center shadow-lg shadow-[#A5F3FC]/20 animate-pulse&quot;&gt;
+      &lt;Sparkles class=&quot;w-6 h-6 text-[#A5F3FC]&quot; /&gt;
+    &lt;/div&gt;
+    &lt;!-- 内轨道 (顺时针公转) --&gt;
+    &lt;div class=&quot;absolute w-32 h-32 rounded-full border border-dashed border-[#A5F3FC]/25 animate-orbit-cw z-10 flex items-center justify-center&quot;&gt;
+      &lt;div class=&quot;absolute -top-3.5 p-1.5 rounded-full bg-slate-900 border border-[#A5F3FC]/40 text-[#A5F3FC] shadow-sm animate-orbit-ccw&quot;&gt;
+        &lt;Mic class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute -bottom-3.5 p-1.5 rounded-full bg-slate-900 border border-[#A5F3FC]/40 text-[#A5F3FC] shadow-sm animate-orbit-ccw&quot;&gt;
+        &lt;FileText class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute -left-3.5 p-1.5 rounded-full bg-slate-900 border border-[#A5F3FC]/40 text-[#A5F3FC] shadow-sm animate-orbit-ccw&quot;&gt;
+        &lt;Zap class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute -right-3.5 p-1.5 rounded-full bg-slate-900 border border-[#A5F3FC]/40 text-[#A5F3FC] shadow-sm animate-orbit-ccw&quot;&gt;
+        &lt;Languages class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;!-- 外轨道 (逆时针公转) --&gt;
+    &lt;div class=&quot;absolute w-48 h-48 rounded-full border border-dashed border-[#D8B4F8]/20 animate-orbit-ccw-slow z-0 flex items-center justify-center&quot;&gt;
+      &lt;div class=&quot;absolute -top-3.5 p-1.5 rounded-full bg-slate-900 border border-[#D8B4F8]/40 text-[#D8B4F8] shadow-sm animate-orbit-cw-slow&quot;&gt;
+        &lt;Video class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute -bottom-3.5 p-1.5 rounded-full bg-slate-900 border border-[#D8B4F8]/40 text-[#D8B4F8] shadow-sm animate-orbit-cw-slow&quot;&gt;
+        &lt;Cpu class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute -left-3.5 p-1.5 rounded-full bg-slate-900 border border-[#D8B4F8]/40 text-[#D8B4F8] shadow-sm animate-orbit-cw-slow&quot;&gt;
+        &lt;Code class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute -right-3.5 p-1.5 rounded-full bg-slate-900 border border-[#D8B4F8]/40 text-[#D8B4F8] shadow-sm animate-orbit-cw-slow&quot;&gt;
+        &lt;ShieldCheck class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute top-6 left-6 p-1.5 rounded-full bg-slate-900 border border-[#D8B4F8]/40 text-[#D8B4F8] shadow-sm animate-orbit-cw-slow&quot;&gt;
+        &lt;Eye class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;absolute bottom-6 right-6 p-1.5 rounded-full bg-slate-900 border border-[#D8B4F8]/40 text-[#D8B4F8] shadow-sm animate-orbit-cw-slow&quot;&gt;
+        &lt;Database class=&quot;w-3.5 h-3.5&quot; /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;style scoped&gt;
+@keyframes orbit-cw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes orbit-ccw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+.animate-orbit-cw {
+  animation: orbit-cw 20s linear infinite;
+}
+.animate-orbit-ccw {
+  animation: orbit-ccw 20s linear infinite;
+}
+.animate-orbit-ccw-slow {
+  animation: orbit-ccw 28s linear infinite;
+}
+.animate-orbit-cw-slow {
+  animation: orbit-cw 28s linear infinite;
+}
+&lt;/style&gt;</file><file path="deploy/website/src/components/ComponentMarquee.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+type Item = { name: string; route: string; highlight?: boolean };
+const ROW_A: Item[] = [
+  { name: &apos;MOSS 0.9B ASR (3.47x 实时)&apos;, route: &apos;/asr&apos;, highlight: true },
+  { name: &apos;RealESRGAN x4 (2.54 MPixels/s)&apos;, route: &apos;/upscale-8k&apos;, highlight: true },
+  { name: &apos;Hy-MT2 1.8B (386ms 热推演)&apos;, route: &apos;/translate&apos;, highlight: true },
+  { name: &apos;PP-DocLayoutV3 (8.53s 降维解析)&apos;, route: &apos;/pdf-parse&apos;, highlight: true },
+  { name: &apos;PyMuPDF C++ (233ms / 98.5% 瘦身)&apos;, route: &apos;/pdf-edit&apos;, highlight: true },
+  { name: &apos;SQLite WAL (1.39ms 缓存碰撞)&apos;, route: &apos;/translate&apos; },
+];
+const ROW_B: Item[] = [
+  { name: &apos;Axum 0.7 算力网关 (9600 端口)&apos;, route: &apos;/&apos; },
+  { name: &apos;VramTokenGuard (11,000 MB 硬锁)&apos;, route: &apos;/&apos;, highlight: true },
+  { name: &apos;RTX 3060 12G CUDA 13.0&apos;, route: &apos;/&apos; },
+  { name: &apos;UDS 常驻进程池 (&lt;1ms IPC)&apos;, route: &apos;/&apos; },
+  { name: &apos;HMAC-SHA256 签名鉴权&apos;, route: &apos;/&apos; },
+  { name: &apos;0.01s 毫秒级字幕对齐&apos;, route: &apos;/asr&apos; },
+];
+const rowADoubled = [...ROW_A, ...ROW_A, ...ROW_A];
+const rowBDoubled = [...ROW_B, ...ROW_B, ...ROW_B];
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div class=&quot;ln-feat-marquee overflow-hidden relative w-full py-4 space-y-3 select-none&quot;&gt;
+    &lt;div class=&quot;flex whitespace-nowrap overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]&quot;&gt;
+      &lt;div class=&quot;flex shrink-0 gap-3 animate-marquee&quot;&gt;
+        &lt;router-link
+          v-for=&quot;(item, i) in rowADoubled&quot;
+          :key=&quot;&apos;a-&apos; + i&quot;
+          :to=&quot;item.route&quot;
+          class=&quot;px-3.5 py-1.5 rounded-xl bg-slate-900/90 border text-xs font-mono transition-all cursor-pointer backdrop-blur-md&quot;
+          :class=&quot;item.highlight ? &apos;border-[#A5F3FC]/50 text-[#A5F3FC] font-bold bg-[#A5F3FC]/10 hover:bg-[#A5F3FC]/20&apos; : &apos;border-slate-800 text-slate-300 hover:text-[#A5F3FC] hover:border-[#A5F3FC]/50&apos;&quot;
+        &gt;
+          {{ item.name }}
+        &lt;/router-link&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;flex whitespace-nowrap overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]&quot;&gt;
+      &lt;div class=&quot;flex shrink-0 gap-3 animate-marquee-rev&quot;&gt;
+        &lt;router-link
+          v-for=&quot;(item, i) in rowBDoubled&quot;
+          :key=&quot;&apos;b-&apos; + i&quot;
+          :to=&quot;item.route&quot;
+          class=&quot;px-3.5 py-1.5 rounded-xl bg-slate-900/90 border text-xs font-mono transition-all cursor-pointer backdrop-blur-md&quot;
+          :class=&quot;item.highlight ? &apos;border-[#D8B4F8]/50 text-[#D8B4F8] font-bold bg-[#D8B4F8]/10 hover:bg-[#D8B4F8]/20&apos; : &apos;border-slate-800 text-slate-300 hover:text-[#D8B4F8] hover:border-[#D8B4F8]/50&apos;&quot;
+        &gt;
+          {{ item.name }}
+        &lt;/router-link&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;style scoped&gt;
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-33.333%); }
+}
+@keyframes marquee-rev {
+  0% { transform: translateX(-33.333%); }
+  100% { transform: translateX(0%); }
+}
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
+.animate-marquee-rev {
+  animation: marquee-rev 25s linear infinite;
+}
+.animate-marquee:hover,
+.animate-marquee-rev:hover {
+  animation-play-state: paused;
+}
+&lt;/style&gt;</file><file path="deploy/website/src/components/CountUp.vue">&lt;template&gt;
+  &lt;span ref=&quot;elementRef&quot; :class=&quot;className&quot; /&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { ref, onMounted, onUnmounted, watch, computed, useTemplateRef } from &apos;vue&apos;;
+interface Props {
+  to: number;
+  from?: number;
+  direction?: &apos;up&apos; | &apos;down&apos;;
+  delay?: number;
+  duration?: number;
+  className?: string;
+  startWhen?: boolean;
+  separator?: string;
+  decimals?: number;
+  suffix?: string;
+  prefix?: string;
+}
+const props = withDefaults(defineProps&lt;Props&gt;(), {
+  from: 0,
+  direction: &apos;up&apos;,
+  delay: 0,
+  duration: 2,
+  className: &apos;&apos;,
+  startWhen: true,
+  separator: &apos;&apos;,
+  decimals: 0,
+  suffix: &apos;&apos;,
+  prefix: &apos;&apos;
+});
+const elementRef = useTemplateRef&lt;HTMLSpanElement&gt;(&apos;elementRef&apos;);
+const currentValue = ref(props.direction === &apos;down&apos; ? props.to : props.from);
+const isInView = ref(false);
+const animationId = ref&lt;number | null&gt;(null);
+const hasStarted = ref(false);
+let intersectionObserver: IntersectionObserver | null = null;
+const damping = computed(() =&gt; 20 + 40 * (1 / props.duration));
+const stiffness = computed(() =&gt; 100 * (1 / props.duration));
+let velocity = 0;
+let startTime = 0;
+const formatNumber = (value: number) =&gt; {
+  const options = {
+    useGrouping: !!props.separator,
+    minimumFractionDigits: props.decimals,
+    maximumFractionDigits: props.decimals
+  };
+  const formattedNumber = Intl.NumberFormat(&apos;en-US&apos;, options).format(Number(value.toFixed(props.decimals)));
+  const result = props.separator ? formattedNumber.replace(/,/g, props.separator) : formattedNumber;
+  return `${props.prefix}${result}${props.suffix}`;
+};
+const updateDisplay = () =&gt; {
+  if (elementRef.value) {
+    elementRef.value.textContent = formatNumber(currentValue.value);
+  }
+};
+const springAnimation = (timestamp: number) =&gt; {
+  if (!startTime) startTime = timestamp;
+  const target = props.direction === &apos;down&apos; ? props.from : props.to;
+  const current = currentValue.value;
+  const displacement = target - current;
+  const springForce = displacement * stiffness.value;
+  const dampingForce = velocity * damping.value;
+  const acceleration = springForce - dampingForce;
+  velocity += acceleration * 0.016;
+  currentValue.value += velocity * 0.016;
+  updateDisplay();
+  if (Math.abs(displacement) &gt; 0.001 || Math.abs(velocity) &gt; 0.001) {
+    animationId.value = requestAnimationFrame(springAnimation);
+  } else {
+    currentValue.value = target;
+    updateDisplay();
+    animationId.value = null;
+  }
+};
+const startAnimation = () =&gt; {
+  if (hasStarted.value || !isInView.value || !props.startWhen) return;
+  hasStarted.value = true;
+  setTimeout(() =&gt; {
+    startTime = 0;
+    velocity = 0;
+    animationId.value = requestAnimationFrame(springAnimation);
+  }, props.delay * 1000);
+};
+const setupIntersectionObserver = () =&gt; {
+  if (!elementRef.value) return;
+  intersectionObserver = new IntersectionObserver(
+    ([entry]) =&gt; {
+      if (entry.isIntersecting &amp;&amp; !isInView.value) {
+        isInView.value = true;
+        startAnimation();
+      }
+    },
+    { threshold: 0, rootMargin: &apos;0px&apos; }
+  );
+  intersectionObserver.observe(elementRef.value);
+};
+const cleanup = () =&gt; {
+  if (animationId.value) {
+    cancelAnimationFrame(animationId.value);
+    animationId.value = null;
+  }
+  if (intersectionObserver) {
+    intersectionObserver.disconnect();
+    intersectionObserver = null;
+  }
+};
+watch(
+  [() =&gt; props.from, () =&gt; props.to, () =&gt; props.direction],
+  () =&gt; {
+    currentValue.value = props.direction === &apos;down&apos; ? props.to : props.from;
+    updateDisplay();
+    hasStarted.value = false;
+  },
+  { immediate: true }
+);
+onMounted(() =&gt; {
+  updateDisplay();
+  setupIntersectionObserver();
+});
+onUnmounted(() =&gt; {
+  cleanup();
+});
+&lt;/script&gt;</file><file path="deploy/website/src/components/CTA.vue">&lt;template&gt;
+  &lt;section class=&quot;max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative z-10&quot;&gt;
+    &lt;div class=&quot;relative rounded-3xl border border-slate-800/80 bg-slate-900/90 p-8 sm:p-14 text-center overflow-hidden shadow-2xl backdrop-blur-xl group hover:border-[#D8B4F8]/50 transition-all&quot;&gt;
+      &lt;!-- 发光背景 --&gt;
+      &lt;div class=&quot;absolute -inset-1 bg-gradient-to-r from-[#A5F3FC]/10 via-[#D8B4F8]/10 to-[#A5F3FC]/10 rounded-3xl blur-xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;relative z-10 space-y-6 max-w-2xl mx-auto&quot;&gt;
+        &lt;GradientText
+          text=&quot;Stop paying for AI subscriptions.&quot;
+          :colors=&quot;[&apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;, &apos;#A5F3FC&apos;]&quot;
+          :animation-speed=&quot;5&quot;
+          class=&quot;text-3xl sm:text-5xl font-black tracking-tight&quot;
+        /&gt;
+        &lt;p class=&quot;text-slate-200 text-sm sm:text-base leading-relaxed&quot;&gt;
+          100% 离线、脱网稳定运行。基于本地 RTX 3060 算力直推，无隐私泄露风险，永久免费。
+        &lt;/p&gt;
+        &lt;div class=&quot;flex flex-wrap items-center justify-center gap-4 pt-4&quot;&gt;
+          &lt;a
+            href=&quot;#tools-matrix&quot;
+            class=&quot;px-8 py-4 rounded-2xl bg-gradient-to-r from-[#A5F3FC] to-[#D8B4F8] hover:opacity-90 text-slate-950 font-extrabold text-sm tracking-wide transition-all shadow-xl shadow-purple-500/20 hover:scale-[1.02] flex items-center gap-2&quot;
+          &gt;
+            &lt;span&gt;立即体验全套 AI 工具&lt;/span&gt;
+            &lt;ArrowRight class=&quot;w-4 h-4&quot; /&gt;
+          &lt;/a&gt;
+          &lt;a
+            href=&quot;https://geantendormi.top&quot;
+            target=&quot;_blank&quot;
+            class=&quot;px-6 py-4 rounded-2xl bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 font-semibold text-sm transition-all flex items-center gap-2&quot;
+          &gt;
+            &lt;Globe class=&quot;w-4 h-4 text-[#A5F3FC]&quot; /&gt;
+            &lt;span&gt;访问公网主站&lt;/span&gt;
+          &lt;/a&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { ArrowRight, Globe } from &apos;lucide-vue-next&apos;;
+import GradientText from &apos;./GradientText.vue&apos;;
+&lt;/script&gt;</file><file path="deploy/website/src/components/DecryptedText.vue">&lt;template&gt;
+  &lt;span ref=&quot;containerRef&quot; :class=&quot;`inline-block whitespace-pre-wrap ${parentClassName}`&quot; v-bind=&quot;animateListeners&quot;&gt;
+    &lt;span class=&quot;sr-only&quot;&gt;{{ displayText }}&lt;/span&gt;
+    &lt;span aria-hidden=&quot;true&quot;&gt;
+      &lt;span
+        v-for=&quot;(char, index) in displayText.split(&apos;&apos;)&quot;
+        :key=&quot;index&quot;
+        :class=&quot;isRevealedOrDone(index) ? className : encryptedClassName&quot;
+      &gt;
+        {{ char }}
+      &lt;/span&gt;
+    &lt;/span&gt;
+  &lt;/span&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { computed, onMounted, onUnmounted, ref, watch } from &apos;vue&apos;;
+type AnimateOn = &apos;view&apos; | &apos;hover&apos; | &apos;inViewHover&apos;;
+interface DecryptedTextProps {
+  text: string;
+  speed?: number;
+  maxIterations?: number;
+  useOriginalCharsOnly?: boolean;
+  characters?: string;
+  className?: string;
+  encryptedClassName?: string;
+  parentClassName?: string;
+  animateOn?: AnimateOn;
+}
+const props = withDefaults(defineProps&lt;DecryptedTextProps&gt;(), {
+  speed: 40,
+  maxIterations: 8,
+  useOriginalCharsOnly: false,
+  characters: &apos;ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&amp;*&apos;,
+  className: &apos;&apos;,
+  encryptedClassName: &apos;text-[#A5F3FC]/60 font-mono&apos;,
+  parentClassName: &apos;&apos;,
+  animateOn: &apos;view&apos;
+});
+const containerRef = ref&lt;HTMLSpanElement | null&gt;(null);
+const displayText = ref&lt;string&gt;(props.text);
+const isAnimating = ref&lt;boolean&gt;(false);
+const revealedIndices = ref&lt;Set&lt;number&gt;&gt;(new Set());
+const hasAnimated = ref&lt;boolean&gt;(false);
+const isDecrypted = ref&lt;boolean&gt;(false);
+let intervalId: ReturnType&lt;typeof setInterval&gt; | null = null;
+const availableChars = computed&lt;string[]&gt;(() =&gt; {
+  return props.useOriginalCharsOnly
+    ? Array.from(new Set(props.text.split(&apos;&apos;))).filter(char =&gt; char !== &apos; &apos;)
+    : props.characters.split(&apos;&apos;);
+});
+function shuffleText(originalText: string, currentRevealed: Set&lt;number&gt;): string {
+  return originalText
+    .split(&apos;&apos;)
+    .map((char, i) =&gt; {
+      if (char === &apos; &apos;) return &apos; &apos;;
+      if (currentRevealed.has(i)) return originalText[i];
+      return availableChars.value[Math.floor(Math.random() * availableChars.value.length)];
+    })
+    .join(&apos;&apos;);
+}
+function triggerDecrypt() {
+  revealedIndices.value = new Set();
+  isAnimating.value = true;
+}
+function stopInterval() {
+  if (intervalId !== null) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+}
+function startInterval() {
+  stopInterval();
+  let currentIteration = 0;
+  intervalId = setInterval(() =&gt; {
+    displayText.value = shuffleText(props.text, revealedIndices.value);
+    currentIteration++;
+    if (currentIteration &gt;= props.maxIterations) {
+      stopInterval();
+      isAnimating.value = false;
+      displayText.value = props.text;
+      isDecrypted.value = true;
+    }
+  }, props.speed);
+}
+watch(isAnimating, val =&gt; {
+  if (val) startInterval();
+  else stopInterval();
+});
+function triggerHoverDecrypt() {
+  if (isAnimating.value) return;
+  revealedIndices.value = new Set();
+  isDecrypted.value = false;
+  displayText.value = props.text;
+  isAnimating.value = true;
+}
+function resetToPlainText() {
+  stopInterval();
+  isAnimating.value = false;
+  revealedIndices.value = new Set();
+  displayText.value = props.text;
+  isDecrypted.value = true;
+}
+const animateListeners = computed(() =&gt; {
+  if (props.animateOn === &apos;hover&apos; || props.animateOn === &apos;inViewHover&apos;) {
+    return {
+      onMouseenter: triggerHoverDecrypt,
+      onMouseleave: resetToPlainText
+    };
+  }
+  return {};
+});
+function isRevealedOrDone(index: number): boolean {
+  return revealedIndices.value.has(index) || (!isAnimating.value &amp;&amp; isDecrypted.value);
+}
+let intersectionObserver: IntersectionObserver | null = null;
+onMounted(() =&gt; {
+  if (props.animateOn === &apos;view&apos; || props.animateOn === &apos;inViewHover&apos;) {
+    intersectionObserver = new IntersectionObserver(
+      entries =&gt; {
+        entries.forEach(entry =&gt; {
+          if (entry.isIntersecting &amp;&amp; !hasAnimated.value) {
+            triggerDecrypt();
+            hasAnimated.value = true;
+          }
+        });
+      },
+      { rootMargin: &apos;0px&apos;, threshold: 0.1 }
+    );
+    if (containerRef.value) intersectionObserver.observe(containerRef.value);
+  } else {
+    displayText.value = props.text;
+    isDecrypted.value = true;
+  }
+});
+onUnmounted(() =&gt; {
+  stopInterval();
+  intersectionObserver?.disconnect();
+});
+&lt;/script&gt;</file><file path="deploy/website/src/components/DemoPlaceholder.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { ref } from &apos;vue&apos;;
+type Variant = &apos;shapegrid&apos; | &apos;magicrings&apos; | &apos;shinytext&apos; | &apos;dock&apos;;
+interface Props {
+  variant: Variant;
+  active?: boolean;
+}
+withDefaults(defineProps&lt;Props&gt;(), {
+  active: false
+});
+const dockItems = [
+  { label: &apos;Home&apos;, icon: &apos;M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10&apos; },
+  { label: &apos;Archive&apos;, icon: &apos;M21 8v13H3V8 M1 3h22v5H1z M10 12h4&apos; },
+  { label: &apos;Search&apos;, icon: &apos;M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35&apos; },
+  { label: &apos;Profile&apos;, icon: &apos;M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z&apos; },
+  { label: &apos;Settings&apos;, icon: &apos;M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z&apos; }
+];
+const hoveredDockIndex = ref&lt;number | null&gt;(null);
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div class=&quot;demo-fill relative w-full h-full min-h-[200px] bg-slate-950/90 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800/80&quot;&gt;
+    &lt;!-- 1. ShapeGrid: 蜂窝六边形网格 --&gt;
+    &lt;div v-if=&quot;variant === &apos;shapegrid&apos;&quot; class=&quot;absolute inset-0 flex items-center justify-center p-2 opacity-80&quot;&gt;
+      &lt;svg class=&quot;w-full h-full&quot; viewBox=&quot;0 0 400 200&quot; fill=&quot;none&quot;&gt;
+        &lt;pattern id=&quot;hexGrid&quot; width=&quot;40&quot; height=&quot;34.64&quot; patternUnits=&quot;userSpaceOnUse&quot;&gt;
+          &lt;path d=&quot;M 40 0 L 30 17.32 L 10 17.32 L 0 0 L 10 -17.32 L 30 -17.32 Z&quot; fill=&quot;none&quot; stroke=&quot;rgba(148, 163, 184, 0.15)&quot; stroke-width=&quot;1&quot; /&gt;
+          &lt;path d=&quot;M 20 17.32 L 10 34.64 L -10 34.64 L -20 17.32 L -10 0 L 10 0 Z&quot; fill=&quot;none&quot; stroke=&quot;rgba(148, 163, 184, 0.15)&quot; stroke-width=&quot;1&quot; /&gt;
+        &lt;/pattern&gt;
+        &lt;rect width=&quot;100%&quot; height=&quot;100%&quot; fill=&quot;url(#hexGrid)&quot; /&gt;
+        &lt;path d=&quot;M 120 34.64 L 110 51.96 L 90 51.96 L 80 34.64 L 90 17.32 L 110 17.32 Z&quot; fill=&quot;rgba(0, 255, 169, 0.35)&quot; stroke=&quot;#00ffa9&quot; stroke-width=&quot;1.5&quot; class=&quot;animate-pulse&quot; /&gt;
+        &lt;path d=&quot;M 200 69.28 L 190 86.6 L 170 86.6 L 160 69.28 L 170 51.96 L 190 51.96 Z&quot; fill=&quot;rgba(0, 210, 255, 0.4)&quot; stroke=&quot;#00d2ff&quot; stroke-width=&quot;1.5&quot; class=&quot;animate-pulse [animation-delay:0.5s]&quot; /&gt;
+      &lt;/svg&gt;
+    &lt;/div&gt;
+    &lt;!-- 2. MagicRings: 荧光光晕圆环 --&gt;
+    &lt;div v-else-if=&quot;variant === &apos;magicrings&apos;&quot; class=&quot;absolute inset-0 flex items-center justify-center&quot;&gt;
+      &lt;div class=&quot;relative w-48 h-48 flex items-center justify-center&quot;&gt;
+        &lt;div class=&quot;absolute inset-0 rounded-full border-2 border-[#00ffa9]/60 shadow-[0_0_30px_rgba(0,255,169,0.3)] animate-ping [animation-duration:3s]&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;absolute w-36 h-36 rounded-full border-2 border-[#42fcff]/60 shadow-[0_0_20px_rgba(66,252,255,0.3)] animate-pulse&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;absolute w-24 h-24 rounded-full border border-[#00ffa9]/80 shadow-[0_0_15px_rgba(0,255,169,0.4)]&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;w-12 h-12 rounded-full bg-[#00ffa9]/20 border border-[#00ffa9] backdrop-blur-md flex items-center justify-center shadow-lg&quot;&gt;
+          &lt;div class=&quot;w-3 h-3 rounded-full bg-[#00ffa9] animate-pulse&quot;&gt;&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;!-- 3. ShinyText: 金属漫反射流光字 --&gt;
+    &lt;div v-else-if=&quot;variant === &apos;shinytext&apos;&quot; class=&quot;absolute inset-0 flex items-center justify-center p-4&quot;&gt;
+      &lt;div class=&quot;text-3xl sm:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-500 via-white to-slate-500 bg-clip-text text-transparent animate-shimmer bg-[length:200%_100%]&quot;&gt;
+        Shiny Text
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;!-- 4. Dock: macOS 悬浮浮动工具栏 --&gt;
+    &lt;div v-else-if=&quot;variant === &apos;dock&apos;&quot; class=&quot;absolute inset-0 flex items-center justify-center p-4&quot;&gt;
+      &lt;div class=&quot;flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/90 border border-slate-800/90 shadow-2xl backdrop-blur-xl&quot;&gt;
+        &lt;div
+          v-for=&quot;(item, idx) in dockItems&quot;
+          :key=&quot;idx&quot;
+          @mouseenter=&quot;hoveredDockIndex = idx&quot;
+          @mouseleave=&quot;hoveredDockIndex = null&quot;
+          class=&quot;p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-[#A5F3FC] transition-all duration-200 cursor-pointer transform hover:-translate-y-1.5 hover:scale-125 hover:shadow-lg hover:shadow-[#A5F3FC]/20&quot;
+        &gt;
+          &lt;svg class=&quot;w-5 h-5 text-[#A5F3FC]&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;&gt;
+            &lt;path :d=&quot;item.icon&quot; /&gt;
+          &lt;/svg&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;style scoped&gt;
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  animation: shimmer 3s infinite linear;
+}
+&lt;/style&gt;</file><file path="deploy/website/src/components/DotField.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from &apos;vue&apos;;
+const TWO_PI = Math.PI * 2;
+type Dot = {
+  ax: number;
+  ay: number;
+  sx: number;
+  sy: number;
+  vx: number;
+  vy: number;
+  x: number;
+  y: number;
+};
+const props = withDefaults(
+  defineProps&lt;{
+    dotRadius?: number;
+    dotSpacing?: number;
+    cursorRadius?: number;
+    cursorForce?: number;
+    bulgeOnly?: boolean;
+    bulgeStrength?: number;
+    glowRadius?: number;
+    sparkle?: boolean;
+    waveAmplitude?: number;
+    gradientFrom?: string;
+    gradientTo?: string;
+    glowColor?: string;
+    className?: string;
+  }&gt;(),
+  {
+    dotRadius: 1.5,
+    dotSpacing: 14,
+    cursorRadius: 500,
+    cursorForce: 0.1,
+    bulgeOnly: true,
+    bulgeStrength: 67,
+    glowRadius: 200,
+    sparkle: false,
+    waveAmplitude: 0,
+    gradientFrom: &apos;rgba(0, 255, 169, 0.45)&apos;,
+    gradientTo: &apos;rgba(0, 210, 255, 0.35)&apos;,
+    glowColor: &apos;#00ffa9&apos;,
+    className: &apos;&apos;
+  }
+);
+const root = ref&lt;HTMLDivElement | null&gt;(null);
+const canvas = ref&lt;HTMLCanvasElement | null&gt;(null);
+const glowEl = ref&lt;SVGCircleElement | null&gt;(null);
+const glowId = `dot-field-glow-${Math.random().toString(36).slice(2, 9)}`;
+let dots: Dot[] = [];
+const mouse = {
+  x: -9999,
+  y: -9999,
+  prevX: -9999,
+  prevY: -9999,
+  speed: 0
+};
+let size = {
+  w: 0,
+  h: 0,
+  offsetX: 0,
+  offsetY: 0
+};
+let glowOpacity = 0;
+let engagement = 0;
+let raf = 0;
+let resizeTimer: ReturnType&lt;typeof setTimeout&gt;;
+let speedInterval: ReturnType&lt;typeof setInterval&gt;;
+let frameCount = 0;
+function buildDots(w: number, h: number) {
+  const step = props.dotRadius + props.dotSpacing;
+  const cols = Math.floor(w / step);
+  const rows = Math.floor(h / step);
+  const padX = (w % step) / 2;
+  const padY = (h % step) / 2;
+  const nextDots: Dot[] = new Array(rows * cols);
+  let idx = 0;
+  for (let row = 0; row &lt; rows; row++) {
+    for (let col = 0; col &lt; cols; col++) {
+      const ax = padX + col * step + step / 2;
+      const ay = padY + row * step + step / 2;
+      nextDots[idx++] = {
+        ax,
+        ay,
+        sx: ax,
+        sy: ay,
+        vx: 0,
+        vy: 0,
+        x: ax,
+        y: ay
+      };
+    }
+  }
+  dots = nextDots;
+}
+function updateMouseSpeed() {
+  const dx = mouse.prevX - mouse.x;
+  const dy = mouse.prevY - mouse.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  mouse.speed += (dist - mouse.speed) * 0.5;
+  if (mouse.speed &lt; 0.001) {
+    mouse.speed = 0;
+  }
+  mouse.prevX = mouse.x;
+  mouse.prevY = mouse.y;
+}
+function doResize() {
+  if (!root.value || !canvas.value) return;
+  const ctx = canvas.value.getContext(&apos;2d&apos;, { alpha: true });
+  if (!ctx) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = root.value.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  canvas.value.width = w * dpr;
+  canvas.value.height = h * dpr;
+  canvas.value.style.width = `${w}px`;
+  canvas.value.style.height = `${h}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  size = {
+    w,
+    h,
+    offsetX: rect.left + window.scrollX,
+    offsetY: rect.top + window.scrollY
+  };
+  buildDots(w, h);
+}
+function onWindowResize() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(doResize, 100);
+}
+function onMouseMove(e: MouseEvent) {
+  mouse.x = e.pageX - size.offsetX;
+  mouse.y = e.pageY - size.offsetY;
+}
+function tick() {
+  if (!canvas.value) return;
+  const ctx = canvas.value.getContext(&apos;2d&apos;);
+  if (!ctx) return;
+  frameCount++;
+  const { w, h } = size;
+  const t = frameCount * 0.02;
+  const targetEngagement = Math.min(mouse.speed / 5, 1);
+  engagement += (targetEngagement - engagement) * 0.06;
+  if (engagement &lt; 0.001) {
+    engagement = 0;
+  }
+  glowOpacity += (engagement - glowOpacity) * 0.08;
+  if (glowEl.value) {
+    glowEl.value.setAttribute(&apos;cx&apos;, String(mouse.x));
+    glowEl.value.setAttribute(&apos;cy&apos;, String(mouse.y));
+    glowEl.value.style.opacity = String(glowOpacity);
+  }
+  ctx.clearRect(0, 0, w, h);
+  const grad = ctx.createLinearGradient(0, 0, w, h);
+  grad.addColorStop(0, props.gradientFrom);
+  grad.addColorStop(1, props.gradientTo);
+  ctx.fillStyle = grad;
+  const crSq = props.cursorRadius * props.cursorRadius;
+  const rad = props.dotRadius / 2;
+  ctx.beginPath();
+  for (let i = 0; i &lt; dots.length; i++) {
+    const d = dots[i];
+    const dx = mouse.x - d.ax;
+    const dy = mouse.y - d.ay;
+    const distSq = dx * dx + dy * dy;
+    if (distSq &lt; crSq &amp;&amp; engagement &gt; 0.01) {
+      const dist = Math.sqrt(distSq);
+      const angle = Math.atan2(dy, dx);
+      if (props.bulgeOnly) {
+        const falloff = 1 - dist / props.cursorRadius;
+        const push = falloff * falloff * props.bulgeStrength * engagement;
+        d.sx += (d.ax - Math.cos(angle) * push - d.sx) * 0.15;
+        d.sy += (d.ay - Math.sin(angle) * push - d.sy) * 0.15;
+      } else {
+        const safeDist = Math.max(dist, 0.001);
+        const move = (500 / safeDist) * (mouse.speed * props.cursorForce);
+        d.vx += Math.cos(angle) * -move;
+        d.vy += Math.sin(angle) * -move;
+      }
+    } else if (props.bulgeOnly) {
+      d.sx += (d.ax - d.sx) * 0.1;
+      d.sy += (d.ay - d.sy) * 0.1;
+    }
+    if (!props.bulgeOnly) {
+      d.vx *= 0.9;
+      d.vy *= 0.9;
+      d.x = d.ax + d.vx;
+      d.y = d.ay + d.vy;
+      d.sx += (d.x - d.sx) * 0.1;
+      d.sy += (d.y - d.sy) * 0.1;
+    }
+    let drawX = d.sx;
+    let drawY = d.sy;
+    if (props.waveAmplitude &gt; 0) {
+      drawY += Math.sin(d.ax * 0.03 + t) * props.waveAmplitude;
+      drawX += Math.cos(d.ay * 0.03 + t * 0.7) * props.waveAmplitude * 0.5;
+    }
+    if (props.sparkle) {
+      const hash = ((i * 2654435761) ^ (frameCount &gt;&gt; 3)) &gt;&gt;&gt; 0;
+      if (hash % 100 &lt; 3) {
+        ctx.moveTo(drawX + rad * 1.8, drawY);
+        ctx.arc(drawX, drawY, rad * 1.8, 0, TWO_PI);
+      } else {
+        ctx.moveTo(drawX + rad, drawY);
+        ctx.arc(drawX, drawY, rad, 0, TWO_PI);
+      }
+    } else {
+      ctx.moveTo(drawX + rad, drawY);
+      ctx.arc(drawX, drawY, rad, 0, TWO_PI);
+    }
+  }
+  ctx.fill();
+  raf = requestAnimationFrame(tick);
+}
+function setupCanvas() {
+  doResize();
+  window.addEventListener(&apos;resize&apos;, onWindowResize);
+  window.addEventListener(&apos;mousemove&apos;, onMouseMove, { passive: true });
+  speedInterval = setInterval(updateMouseSpeed, 20);
+  raf = requestAnimationFrame(tick);
+}
+function cleanup() {
+  cancelAnimationFrame(raf);
+  clearInterval(speedInterval);
+  clearTimeout(resizeTimer);
+  window.removeEventListener(&apos;resize&apos;, onWindowResize);
+  window.removeEventListener(&apos;mousemove&apos;, onMouseMove);
+}
+watch(
+  () =&gt; [props.dotRadius, props.dotSpacing],
+  async () =&gt; {
+    await nextTick();
+    if (size.w &gt; 0 &amp;&amp; size.h &gt; 0) {
+      buildDots(size.w, size.h);
+    }
+  }
+);
+onMounted(() =&gt; {
+  setupCanvas();
+});
+onBeforeUnmount(() =&gt; {
+  cleanup();
+});
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div ref=&quot;root&quot; class=&quot;relative w-full h-full overflow-hidden&quot; :class=&quot;className&quot;&gt;
+    &lt;canvas ref=&quot;canvas&quot; class=&quot;absolute inset-0 w-full h-full&quot; /&gt;
+    &lt;svg class=&quot;absolute inset-0 w-full h-full pointer-events-none&quot; aria-hidden=&quot;true&quot;&gt;
+      &lt;defs&gt;
+        &lt;radialGradient :id=&quot;glowId&quot;&gt;
+          &lt;stop offset=&quot;0%&quot; :stop-color=&quot;glowColor&quot; stop-opacity=&quot;0.35&quot; /&gt;
+          &lt;stop offset=&quot;100%&quot; stop-color=&quot;transparent&quot; /&gt;
+        &lt;/radialGradient&gt;
+      &lt;/defs&gt;
+      &lt;circle
+        ref=&quot;glowEl&quot;
+        cx=&quot;-9999&quot;
+        cy=&quot;-9999&quot;
+        :r=&quot;glowRadius&quot;
+        :fill=&quot;`url(#${glowId})`&quot;
+        style=&quot;opacity: 0; will-change: opacity&quot;
+      /&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/ElectricBorder.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch, type CSSProperties } from &apos;vue&apos;;
+interface ElectricBorderProps {
+  color?: string;
+  speed?: number;
+  chaos?: number;
+  borderRadius?: number;
+  className?: string;
+  style?: CSSProperties;
+}
+const props = withDefaults(defineProps&lt;ElectricBorderProps&gt;(), {
+  color: &apos;#A5F3FC&apos;,
+  speed: 0.8,
+  chaos: 0.1,
+  borderRadius: 24,
+  className: &apos;&apos;,
+  style: () =&gt; ({})
+});
+function hexToRgba(hex: string, alpha: number = 1): string {
+  if (!hex) return `rgba(165,243,252,${alpha})`;
+  let h = hex.replace(&apos;#&apos;, &apos;&apos;);
+  if (h.length === 3) {
+    h = h.split(&apos;&apos;).map(c =&gt; c + c).join(&apos;&apos;);
+  }
+  const int = parseInt(h, 16);
+  if (isNaN(int)) return `rgba(165,243,252,${alpha})`;
+  const r = (int &gt;&gt; 16) &amp; 255;
+  const g = (int &gt;&gt; 8) &amp; 255;
+  const b = int &amp; 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+const canvasRef = useTemplateRef&lt;HTMLCanvasElement&gt;(&apos;canvasRef&apos;);
+const containerRef = useTemplateRef&lt;HTMLDivElement&gt;(&apos;containerRef&apos;);
+const animationRef = ref&lt;number | null&gt;(null);
+const timeRef = ref(0);
+const lastFrameTimeRef = ref(0);
+function random(x: number): number {
+  return (Math.sin(x * 12.9898) * 43758.5453) % 1;
+}
+function noise2D(x: number, y: number): number {
+  const i = Math.floor(x);
+  const j = Math.floor(y);
+  const fx = x - i;
+  const fy = y - j;
+  const a = random(i + j * 57);
+  const b = random(i + 1 + j * 57);
+  const c = random(i + (j + 1) * 57);
+  const d = random(i + 1 + (j + 1) * 57);
+  const ux = fx * fx * (3.0 - 2.0 * fx);
+  const uy = fy * fy * (3.0 - 2.0 * fy);
+  return a * (1 - ux) * (1 - uy) + b * ux * (1 - uy) + c * (1 - ux) * uy + d * ux * uy;
+}
+function octavedNoise(
+  x: number,
+  octaves: number,
+  lacunarity: number,
+  gain: number,
+  amplitude: number,
+  frequency: number,
+  time: number,
+  seed: number
+): number {
+  let y = 0;
+  let amp = amplitude;
+  let freq = frequency;
+  for (let i = 0; i &lt; octaves; i++) {
+    y += amp * noise2D(freq * x + seed * 100, time * freq * 0.3);
+    freq *= lacunarity;
+    amp *= gain;
+  }
+  return y;
+}
+function getCornerPoint(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  arcLength: number,
+  progress: number
+): { x: number; y: number } {
+  const angle = startAngle + progress * arcLength;
+  return {
+    x: centerX + radius * Math.cos(angle),
+    y: centerY + radius * Math.sin(angle)
+  };
+}
+function getRoundedRectPoint(
+  t: number,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  radius: number
+): { x: number; y: number } {
+  const straightWidth = width - 2 * radius;
+  const straightHeight = height - 2 * radius;
+  const cornerArc = (Math.PI * radius) / 2;
+  const totalPerimeter = 2 * straightWidth + 2 * straightHeight + 4 * cornerArc;
+  const distance = t * totalPerimeter;
+  let accumulated = 0;
+  if (distance &lt;= accumulated + straightWidth) {
+    const progress = (distance - accumulated) / straightWidth;
+    return { x: left + radius + progress * straightWidth, y: top };
+  }
+  accumulated += straightWidth;
+  if (distance &lt;= accumulated + cornerArc) {
+    const progress = (distance - accumulated) / cornerArc;
+    return getCornerPoint(left + width - radius, top + radius, radius, -Math.PI / 2, Math.PI / 2, progress);
+  }
+  accumulated += cornerArc;
+  if (distance &lt;= accumulated + straightHeight) {
+    const progress = (distance - accumulated) / straightHeight;
+    return { x: left + width, y: top + radius + progress * straightHeight };
+  }
+  accumulated += straightHeight;
+  if (distance &lt;= accumulated + cornerArc) {
+    const progress = (distance - accumulated) / cornerArc;
+    return getCornerPoint(left + width - radius, top + height - radius, radius, 0, Math.PI / 2, progress);
+  }
+  accumulated += cornerArc;
+  if (distance &lt;= accumulated + straightWidth) {
+    const progress = (distance - accumulated) / straightWidth;
+    return { x: left + width - radius - progress * straightWidth, y: top + height };
+  }
+  accumulated += straightWidth;
+  if (distance &lt;= accumulated + cornerArc) {
+    const progress = (distance - accumulated) / cornerArc;
+    return getCornerPoint(left + radius, top + height - radius, radius, Math.PI / 2, Math.PI / 2, progress);
+  }
+  accumulated += cornerArc;
+  if (distance &lt;= accumulated + straightHeight) {
+    const progress = (distance - accumulated) / straightHeight;
+    return { x: left, y: top + height - radius - progress * straightHeight };
+  }
+  accumulated += straightHeight;
+  const progress = (distance - accumulated) / cornerArc;
+  return getCornerPoint(left + radius, top + radius, radius, Math.PI, Math.PI / 2, progress);
+}
+let cleanupFn: (() =&gt; void) | null = null;
+function setupCanvas() {
+  const canvas = canvasRef.value;
+  const container = containerRef.value;
+  if (!canvas || !container) return;
+  const ctx = canvas.getContext(&apos;2d&apos;);
+  if (!ctx) return;
+  const displacement = 25;
+  const borderOffset = 25;
+  const updateSize = () =&gt; {
+    const rect = container.getBoundingClientRect();
+    const width = rect.width + borderOffset * 2;
+    const height = rect.height + borderOffset * 2;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.scale(dpr, dpr);
+    return { width, height };
+  };
+  let { width, height } = updateSize();
+  let lastDpr = Math.min(window.devicePixelRatio || 1, 2);
+  const drawElectricBorder = (currentTime: number) =&gt; {
+    if (!canvas || !ctx) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (dpr !== lastDpr) {
+      lastDpr = dpr;
+      const newSize = updateSize();
+      width = newSize.width;
+      height = newSize.height;
+    }
+    const deltaTime = (currentTime - lastFrameTimeRef.value) / 1000;
+    timeRef.value += deltaTime * props.speed;
+    lastFrameTimeRef.value = currentTime;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = props.color;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = &apos;round&apos;;
+    ctx.lineJoin = &apos;round&apos;;
+    const left = borderOffset;
+    const top = borderOffset;
+    const borderWidth = width - 2 * borderOffset;
+    const borderHeight = height - 2 * borderOffset;
+    const maxRadius = Math.min(borderWidth, borderHeight) / 2;
+    const radius = Math.min(props.borderRadius, maxRadius);
+    const approximatePerimeter = 2 * (borderWidth + borderHeight) + 2 * Math.PI * radius;
+    const sampleCount = Math.floor(approximatePerimeter / 3);
+    ctx.beginPath();
+    for (let i = 0; i &lt;= sampleCount; i++) {
+      const progress = i / sampleCount;
+      const point = getRoundedRectPoint(progress, left, top, borderWidth, borderHeight, radius);
+      const xNoise = octavedNoise(progress * 6, 6, 1.6, 0.7, props.chaos, 8, timeRef.value, 0);
+      const yNoise = octavedNoise(progress * 6, 6, 1.6, 0.7, props.chaos, 8, timeRef.value, 1);
+      const displacedX = point.x + xNoise * displacement;
+      const displacedY = point.y + yNoise * displacement;
+      if (i === 0) {
+        ctx.moveTo(displacedX, displacedY);
+      } else {
+        ctx.lineTo(displacedX, displacedY);
+      }
+    }
+    ctx.closePath();
+    ctx.stroke();
+    animationRef.value = requestAnimationFrame(drawElectricBorder);
+  };
+  const resizeObserver = new ResizeObserver(() =&gt; {
+    const newSize = updateSize();
+    width = newSize.width;
+    height = newSize.height;
+  });
+  resizeObserver.observe(container);
+  animationRef.value = requestAnimationFrame(drawElectricBorder);
+  cleanupFn = () =&gt; {
+    if (animationRef.value) {
+      cancelAnimationFrame(animationRef.value);
+    }
+    resizeObserver.disconnect();
+  };
+}
+watch(
+  () =&gt; [props.color, props.speed, props.chaos, props.borderRadius],
+  () =&gt; {
+    cleanupFn?.();
+    requestAnimationFrame(() =&gt; {
+      setupCanvas();
+    });
+  }
+);
+onMounted(() =&gt; {
+  setupCanvas();
+});
+onBeforeUnmount(() =&gt; {
+  cleanupFn?.();
+});
+const wrapperStyle = computed&lt;CSSProperties&gt;(() =&gt; ({
+  borderRadius: `${props.borderRadius}px`,
+  ...props.style
+}));
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div ref=&quot;containerRef&quot; :class=&quot;[&apos;relative overflow-visible isolate&apos;, className]&quot; :style=&quot;wrapperStyle&quot;&gt;
+    &lt;div class=&quot;top-1/2 left-1/2 z-2 absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none&quot;&gt;
+      &lt;canvas ref=&quot;canvasRef&quot; class=&quot;block&quot; /&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;z-0 absolute inset-0 rounded-[inherit] pointer-events-none&quot;&gt;
+      &lt;div
+        class=&quot;absolute inset-0 rounded-[inherit] pointer-events-none&quot;
+        :style=&quot;{
+          border: `1.5px solid ${hexToRgba(color, 0.5)}`,
+          filter: &apos;blur(1px)&apos;
+        }&quot;
+      /&gt;
+      &lt;div
+        class=&quot;absolute inset-0 rounded-[inherit] pointer-events-none&quot;
+        :style=&quot;{
+          border: `2px solid ${color}`,
+          filter: &apos;blur(3px)&apos;
+        }&quot;
+      /&gt;
+      &lt;div
+        class=&quot;-z-[1] absolute inset-0 opacity-20 rounded-[inherit] scale-105 pointer-events-none&quot;
+        :style=&quot;{
+          filter: &apos;blur(20px)&apos;,
+          background: `radial-gradient(circle at center, ${color}, transparent 70%)`
+        }&quot;
+      /&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;z-[1] relative rounded-[inherit] h-full w-full&quot;&gt;
+      &lt;slot /&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/FeatureIcon.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+type IconName =
+  | &apos;palette&apos;
+  | &apos;shapes&apos;
+  | &apos;image&apos;
+  | &apos;type&apos;
+  | &apos;circle&apos;
+  | &apos;layers&apos;
+  | &apos;code&apos;
+  | &apos;grid&apos;
+  | &apos;zap&apos;
+  | &apos;box&apos;
+  | &apos;star&apos;
+  | &apos;heart&apos;
+  | &apos;eye&apos;
+  | &apos;compass&apos;;
+interface Props {
+  name: IconName;
+  size?: number;
+  strokeWidth?: number;
+}
+withDefaults(defineProps&lt;Props&gt;(), {
+  size: 16,
+  strokeWidth: 2
+});
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;svg
+    v-if=&quot;name === &apos;palette&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;circle cx=&quot;13.5&quot; cy=&quot;6.5&quot; r=&quot;.5&quot; fill=&quot;currentColor&quot; /&gt;
+    &lt;circle cx=&quot;17.5&quot; cy=&quot;10.5&quot; r=&quot;.5&quot; fill=&quot;currentColor&quot; /&gt;
+    &lt;circle cx=&quot;8.5&quot; cy=&quot;7.5&quot; r=&quot;.5&quot; fill=&quot;currentColor&quot; /&gt;
+    &lt;circle cx=&quot;6.5&quot; cy=&quot;12.5&quot; r=&quot;.5&quot; fill=&quot;currentColor&quot; /&gt;
+    &lt;path
+      d=&quot;M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z&quot;
+    /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;shapes&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;path d=&quot;M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z&quot; /&gt;
+    &lt;rect x=&quot;3&quot; y=&quot;14&quot; width=&quot;7&quot; height=&quot;7&quot; rx=&quot;1&quot; /&gt;
+    &lt;circle cx=&quot;17.5&quot; cy=&quot;17.5&quot; r=&quot;3.5&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;image&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;18&quot; height=&quot;18&quot; rx=&quot;2&quot; ry=&quot;2&quot; /&gt;
+    &lt;circle cx=&quot;8.5&quot; cy=&quot;8.5&quot; r=&quot;1.5&quot; /&gt;
+    &lt;polyline points=&quot;21 15 16 10 5 21&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;type&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;polyline points=&quot;4 7 4 4 20 4 20 7&quot; /&gt;
+    &lt;line x1=&quot;9&quot; y1=&quot;20&quot; x2=&quot;15&quot; y2=&quot;20&quot; /&gt;
+    &lt;line x1=&quot;12&quot; y1=&quot;4&quot; x2=&quot;12&quot; y2=&quot;20&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;circle&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;10&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;layers&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;polygon points=&quot;12 2 2 7 12 12 22 7 12 2&quot; /&gt;
+    &lt;polyline points=&quot;2 17 12 22 22 17&quot; /&gt;
+    &lt;polyline points=&quot;2 12 12 17 22 12&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;code&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;polyline points=&quot;16 18 22 12 16 6&quot; /&gt;
+    &lt;polyline points=&quot;8 6 2 12 8 18&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;grid&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;7&quot; height=&quot;7&quot; /&gt;
+    &lt;rect x=&quot;14&quot; y=&quot;3&quot; width=&quot;7&quot; height=&quot;7&quot; /&gt;
+    &lt;rect x=&quot;14&quot; y=&quot;14&quot; width=&quot;7&quot; height=&quot;7&quot; /&gt;
+    &lt;rect x=&quot;3&quot; y=&quot;14&quot; width=&quot;7&quot; height=&quot;7&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;zap&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;polygon points=&quot;13 2 3 14 12 14 11 22 21 10 12 10 13 2&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;box&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;path
+      d=&quot;M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z&quot;
+    /&gt;
+    &lt;polyline points=&quot;3.27 6.96 12 12.01 20.73 6.96&quot; /&gt;
+    &lt;line x1=&quot;12&quot; y1=&quot;22.08&quot; x2=&quot;12&quot; y2=&quot;12&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;star&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;polygon points=&quot;12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;heart&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;path
+      d=&quot;M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z&quot;
+    /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;eye&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;path d=&quot;M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z&quot; /&gt;
+    &lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;3&quot; /&gt;
+  &lt;/svg&gt;
+  &lt;svg
+    v-else-if=&quot;name === &apos;compass&apos;&quot;
+    :width=&quot;size&quot;
+    :height=&quot;size&quot;
+    viewBox=&quot;0 0 24 24&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    :stroke-width=&quot;strokeWidth&quot;
+    stroke-linecap=&quot;round&quot;
+    stroke-linejoin=&quot;round&quot;
+    aria-hidden=&quot;true&quot;
+  &gt;
+    &lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;10&quot; /&gt;
+    &lt;polygon points=&quot;16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76&quot; /&gt;
+  &lt;/svg&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/Footer.vue">&lt;template&gt;
+  &lt;footer class=&quot;relative z-10 border-t border-slate-900 bg-slate-950 py-12 text-xs text-slate-400&quot;&gt;
+    &lt;div class=&quot;max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8&quot;&gt;
+      &lt;div class=&quot;grid grid-cols-1 md:grid-cols-12 gap-8 items-start justify-between&quot;&gt;
+        &lt;!-- 品牌栏 --&gt;
+        &lt;div class=&quot;md:col-span-6 space-y-3&quot;&gt;
+          &lt;div class=&quot;flex items-center gap-2 font-extrabold text-base text-slate-100&quot;&gt;
+            &lt;Sparkles class=&quot;w-5 h-5 text-[#A5F3FC]&quot; /&gt;
+            &lt;span&gt;AI Toolkit&lt;/span&gt;
+            &lt;span class=&quot;px-2 py-0.5 rounded bg-[#A5F3FC]/10 border border-[#A5F3FC]/30 text-[#A5F3FC] font-mono text-[10px]&quot;&gt;SOTA 2026&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;p class=&quot;text-slate-400 max-w-sm leading-relaxed&quot;&gt;
+            基于钱学森工程思维哲学的工业级 AI 算力工具箱。极速全栈协同优化，让算力触手可及。
+          &lt;/p&gt;
+        &lt;/div&gt;
+        &lt;!-- 硬件与链接栏 --&gt;
+        &lt;div class=&quot;md:col-span-6 grid grid-cols-2 gap-6 font-mono&quot;&gt;
+          &lt;div class=&quot;space-y-2&quot;&gt;
+            &lt;span class=&quot;text-slate-200 font-bold&quot;&gt;硬件与环境&lt;/span&gt;
+            &lt;ul class=&quot;space-y-1 text-slate-400&quot;&gt;
+              &lt;li&gt;• NVIDIA RTX 3060 12GB&lt;/li&gt;
+              &lt;li&gt;• Intel i5-13600FK / 32G&lt;/li&gt;
+              &lt;li&gt;• CUDA 13.0 / WSL2 Ubuntu&lt;/li&gt;
+            &lt;/ul&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;space-y-2&quot;&gt;
+            &lt;span class=&quot;text-slate-200 font-bold&quot;&gt;公网与通道&lt;/span&gt;
+            &lt;ul class=&quot;space-y-1 text-slate-400&quot;&gt;
+              &lt;li&gt;• https://geantendormi.top&lt;/li&gt;
+              &lt;li&gt;• 网关: 127.0.0.1:9600&lt;/li&gt;
+              &lt;li&gt;• Specta 强类型契约&lt;/li&gt;
+            &lt;/ul&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;!-- Copyright --&gt;
+      &lt;div class=&quot;pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 font-mono&quot;&gt;
+        &lt;p&gt;© 2026 AI Toolkit | geantendormi.top All rights reserved.&lt;/p&gt;
+        &lt;p&gt;Made with ❤️ by AI Toolkit Team&lt;/p&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/footer&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { Sparkles } from &apos;lucide-vue-next&apos;;
+&lt;/script&gt;</file><file path="deploy/website/src/components/GradientText.vue">&lt;template&gt;
+  &lt;div
+    :class=&quot;[
+      &apos;relative flex max-w-fit flex-row items-center justify-center rounded-2xl transition-all duration-500 font-extrabold tracking-tight select-none&apos;,
+      showBorder ? &apos;border border-slate-800 bg-slate-950/80 px-4 py-1.5 backdrop-blur-md shadow-lg shadow-purple-500/10&apos; : &apos;border-transparent bg-transparent&apos;,
+      className,
+    ]&quot;
+  &gt;
+    &lt;div
+      class=&quot;inline-block font-black select-none tracking-normal leading-tight&quot;
+      :style=&quot;gradientStyle&quot;
+    &gt;
+      &lt;slot&gt;{{ text }}&lt;/slot&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { computed, ref, onMounted, onUnmounted } from &apos;vue&apos;;
+interface GradientTextProps {
+  text?: string;
+  colors?: string[];
+  animationSpeed?: number;
+  showBorder?: boolean;
+  className?: string;
+  yoyo?: boolean;
+}
+const props = withDefaults(defineProps&lt;GradientTextProps&gt;(), {
+  text: &apos;&apos;,
+  colors: () =&gt; [&apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;, &apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;],
+  animationSpeed: 6,
+  showBorder: false,
+  className: &apos;&apos;,
+  yoyo: true,
+});
+const progress = ref(0);
+let animationFrameId: number | null = null;
+let startTime: number | null = null;
+function animate(timestamp: number) {
+  if (!startTime) startTime = timestamp;
+  const elapsed = (timestamp - startTime) / 1000;
+  const duration = props.animationSpeed;
+  const cycle = (elapsed % duration) / duration;
+  if (props.yoyo) {
+    progress.value = (Math.sin(cycle * Math.PI * 2) + 1) / 2;
+  } else {
+    progress.value = cycle;
+  }
+  animationFrameId = requestAnimationFrame(animate);
+}
+onMounted(() =&gt; {
+  animationFrameId = requestAnimationFrame(animate);
+});
+onUnmounted(() =&gt; {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+  }
+});
+const gradientStyle = computed(() =&gt; {
+  const colorString = props.colors.join(&apos;, &apos;);
+  const shift = progress.value * 100;
+  return {
+    backgroundImage: `linear-gradient(135deg, ${colorString})`,
+    backgroundSize: &apos;300% 300%&apos;,
+    backgroundRepeat: &apos;repeat&apos;,
+    backgroundPosition: `${shift}% 50%`,
+    backgroundClip: &apos;text&apos;,
+    WebkitBackgroundClip: &apos;text&apos;,
+    WebkitTextFillColor: &apos;transparent&apos;,
+    color: &apos;transparent&apos;,
+  };
+});
+&lt;/script&gt;</file><file path="deploy/website/src/components/HeroBand.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import * as THREE from &apos;three&apos;;
+import { onMounted, onUnmounted, ref, watch } from &apos;vue&apos;;
+type Props = {
+  class?: string;
+  color?: string;
+  rotation?: number;
+  speed?: number;
+  scale?: number;
+  frequency?: number;
+  warpStrength?: number;
+  noise?: number;
+  bandWidth?: number;
+  yOffset?: number;
+  fadeTop?: number;
+  mouseInfluence?: number;
+  iterations?: number;
+  intensity?: number;
+};
+const props = withDefaults(defineProps&lt;Props&gt;(), {
+  class: &apos;&apos;,
+  color: &apos;#00ffa9&apos;,
+  rotation: 90,
+  speed: 0.2,
+  scale: 1,
+  frequency: 1,
+  warpStrength: 1,
+  noise: 0.05,
+  bandWidth: 0.14,
+  yOffset: 0.3,
+  fadeTop: 0.75,
+  mouseInfluence: 0.3,
+  iterations: 1,
+  intensity: 1.25
+});
+const frag = `
+precision mediump float;
+uniform vec2 uCanvas;
+uniform float uTime;
+uniform float uSpeed;
+uniform vec2 uRot;
+uniform vec3 uColor;
+uniform float uScale;
+uniform float uFrequency;
+uniform float uWarpStrength;
+uniform float uNoise;
+uniform float uBandWidth;
+uniform float uYOffset;
+uniform float uFadeTop;
+uniform vec2 uPointer;
+uniform float uMouseInfluence;
+uniform int uIterations;
+uniform float uIntensity;
+varying vec2 vUv;
+void main() {
+  float t = uTime * uSpeed;
+  vec2 uv = vUv;
+  uv.y += uYOffset;
+  vec2 p = uv * 2.0 - 1.0;
+  vec2 rp = vec2(p.x * uRot.x - p.y * uRot.y, p.x * uRot.y + p.y * uRot.x);
+  float aspect = uCanvas.x / uCanvas.y;
+  vec2 q = vec2(rp.x * aspect, rp.y);
+  float invScale = 1.0 / max(uScale, 0.0001);
+  q *= invScale;
+  q /= 0.5 + 0.2 * dot(q, q);
+  q += (uPointer - rp) * uMouseInfluence * 0.2;
+  q += 0.2 * cos(t) - 7.56;
+  for (int i = 0; i &lt; 5; i++) {
+    if (i &gt;= uIterations) break;
+    vec2 r = sin(1.5 * (q.yx * uFrequency) + 2.0 * cos(q * uFrequency));
+    q = q + (r - q) * uWarpStrength;
+  }
+  float m = length(q + sin(5.0 * q.y * uFrequency - 3.0 * t) * 0.25);
+  float w = 1.0 - exp(-6.0 / exp(6.0 * m));
+  w = pow(clamp(w, 0.0, 1.0), uBandWidth);
+  w *= smoothstep(uFadeTop, 0.0, vUv.y);
+  w *= uIntensity;
+  vec3 col = uColor * w;
+  col += (fract(sin(dot(gl_FragCoord.xy + vec2(uTime), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * uNoise;
+  col = clamp(col, 0.0, 1.0) * w;
+  gl_FragColor = vec4(col, w);
+}
+`;
+const vert = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 1.0);
+}
+`;
+function toVec3(hex: string) {
+  const h = hex.replace(&apos;#&apos;, &apos;&apos;).trim();
+  return new THREE.Vector3(
+    parseInt(h.slice(0, 2), 16) / 255,
+    parseInt(h.slice(2, 4), 16) / 255,
+    parseInt(h.slice(4, 6), 16) / 255
+  );
+}
+const container = ref&lt;HTMLDivElement | null&gt;(null);
+let renderer: THREE.WebGLRenderer | null = null;
+let material: THREE.ShaderMaterial | null = null;
+let resizeObserver: ResizeObserver | null = null;
+let raf: number | null = null;
+const pointerTarget = new THREE.Vector2(0, 0);
+const pointerCurrent = new THREE.Vector2(0, 0);
+let rect = {
+  left: 0,
+  top: 0,
+  width: 1,
+  height: 1
+};
+function updateUniforms() {
+  if (!material) return;
+  material.uniforms.uSpeed.value = props.speed;
+  material.uniforms.uScale.value = props.scale;
+  material.uniforms.uFrequency.value = props.frequency;
+  material.uniforms.uWarpStrength.value = props.warpStrength;
+  material.uniforms.uNoise.value = props.noise;
+  material.uniforms.uBandWidth.value = props.bandWidth;
+  material.uniforms.uYOffset.value = props.yOffset;
+  material.uniforms.uFadeTop.value = props.fadeTop;
+  material.uniforms.uMouseInfluence.value = props.mouseInfluence;
+  material.uniforms.uIterations.value = props.iterations;
+  material.uniforms.uIntensity.value = props.intensity;
+  (material.uniforms.uColor.value as THREE.Vector3).copy(toVec3(props.color));
+  const rad = (props.rotation * Math.PI) / 180;
+  (material.uniforms.uRot.value as THREE.Vector2).set(Math.cos(rad), Math.sin(rad));
+}
+onMounted(() =&gt; {
+  if (!container.value) return;
+  const currentContainer = container.value;
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const geometry = new THREE.PlaneGeometry(2, 2);
+  material = new THREE.ShaderMaterial({
+    vertexShader: vert,
+    fragmentShader: frag,
+    uniforms: {
+      uCanvas: { value: new THREE.Vector2(1, 1) },
+      uTime: { value: 0 },
+      uSpeed: { value: props.speed },
+      uRot: { value: new THREE.Vector2(1, 0) },
+      uColor: { value: new THREE.Vector3(0, 1, 0.66) },
+      uScale: { value: props.scale },
+      uFrequency: { value: props.frequency },
+      uWarpStrength: { value: props.warpStrength },
+      uNoise: { value: props.noise },
+      uBandWidth: { value: props.bandWidth },
+      uYOffset: { value: props.yOffset },
+      uFadeTop: { value: props.fadeTop },
+      uPointer: { value: new THREE.Vector2(0, 0) },
+      uMouseInfluence: { value: props.mouseInfluence },
+      uIterations: { value: props.iterations },
+      uIntensity: { value: props.intensity }
+    },
+    premultipliedAlpha: true,
+    transparent: true
+  });
+  scene.add(new THREE.Mesh(geometry, material));
+  try {
+    renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: &apos;high-performance&apos;,
+      alpha: true
+    });
+  } catch {
+    return;
+  }
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setClearColor(0x000000, 0);
+  renderer.domElement.style.width = &apos;100%&apos;;
+  renderer.domElement.style.height = &apos;100%&apos;;
+  renderer.domElement.style.display = &apos;block&apos;;
+  currentContainer.appendChild(renderer.domElement);
+  const clock = new THREE.Clock();
+  const handleResize = () =&gt; {
+    if (!renderer || !material) return;
+    const w = currentContainer.clientWidth || 1;
+    const h = currentContainer.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    (material.uniforms.uCanvas.value as THREE.Vector2).set(w, h);
+    rect = currentContainer.getBoundingClientRect();
+  };
+  handleResize();
+  if (typeof ResizeObserver !== &apos;undefined&apos;) {
+    resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(currentContainer);
+  } else {
+    window.addEventListener(&apos;resize&apos;, handleResize);
+  }
+  const handlePointer = (e: MouseEvent) =&gt; {
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    pointerTarget.set(x, y);
+  };
+  window.addEventListener(&apos;mousemove&apos;, handlePointer, {
+    passive: true
+  });
+  const loop = () =&gt; {
+    if (!renderer || !material) return;
+    const dt = clock.getDelta();
+    material.uniforms.uTime.value = clock.elapsedTime;
+    const amt = Math.min(1, dt * 4);
+    pointerCurrent.lerp(pointerTarget, amt);
+    (material.uniforms.uPointer.value as THREE.Vector2).copy(pointerCurrent);
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(loop);
+  };
+  updateUniforms();
+  raf = requestAnimationFrame(loop);
+  onUnmounted(() =&gt; {
+    if (raf !== null) {
+      cancelAnimationFrame(raf);
+    }
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+    } else {
+      window.removeEventListener(&apos;resize&apos;, handleResize);
+    }
+    window.removeEventListener(&apos;mousemove&apos;, handlePointer);
+    geometry.dispose();
+    material?.dispose();
+    renderer?.dispose();
+    renderer?.forceContextLoss();
+    if (renderer?.domElement.parentElement === currentContainer) {
+      currentContainer.removeChild(renderer.domElement);
+    }
+    material = null;
+    renderer = null;
+  });
+});
+watch(
+  () =&gt; [
+    props.color,
+    props.rotation,
+    props.speed,
+    props.scale,
+    props.frequency,
+    props.warpStrength,
+    props.noise,
+    props.bandWidth,
+    props.yOffset,
+    props.fadeTop,
+    props.mouseInfluence,
+    props.iterations,
+    props.intensity
+  ],
+  () =&gt; {
+    updateUniforms();
+  },
+  {
+    deep: true
+  }
+);
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div ref=&quot;container&quot; :class=&quot;props.class&quot; /&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/HeroCodeWindow.vue">&lt;template&gt;
+  &lt;div class=&quot;relative w-full max-w-2xl rounded-3xl border border-white/15 bg-[#14110E]/30 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15)] overflow-hidden transition-all duration-300 group hover:border-[#00ffa9]/50 font-mono select-none p-5 sm:p-6 space-y-4&quot;&gt;
+    &lt;div class=&quot;grid grid-cols-1 sm:grid-cols-2 gap-3.5&quot;&gt;
+      &lt;div class=&quot;p-3.5 rounded-2xl bg-black/25 border border-white/10 hover:border-[#00ffa9]/60 hover:bg-black/40 backdrop-blur-md transition-all duration-300 space-y-2 shadow-lg&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between gap-1 whitespace-nowrap&quot;&gt;
+          &lt;span class=&quot;font-extrabold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5 truncate&quot;&gt;
+            &lt;span&gt;🌐 Hy-MT2 极速翻译&lt;/span&gt;
+          &lt;/span&gt;
+          &lt;span class=&quot;px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 text-[10px] font-bold border border-cyan-500/30 shrink-0&quot;&gt;
+            1.8B GGUF
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;space-y-0.5&quot;&gt;
+          &lt;div class=&quot;flex items-baseline justify-between gap-1&quot;&gt;
+            &lt;span class=&quot;text-slate-300/80 text-[11px]&quot;&gt;热推演:&lt;/span&gt;
+            &lt;span class=&quot;text-xl sm:text-2xl font-black text-[#00ffa9] whitespace-nowrap&quot;&gt;
+              &lt;CountUp :to=&quot;386.67&quot; :decimals=&quot;2&quot; suffix=&quot; ms&quot; :duration=&quot;1.8&quot; /&gt;
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;text-[10px] text-slate-400 pt-1 border-t border-white/10 flex items-center justify-between whitespace-nowrap&quot;&gt;
+            &lt;span&gt;缓存碰撞: &lt;strong class=&quot;text-emerald-400&quot;&gt;1.39 ms&lt;/strong&gt;&lt;/span&gt;
+            &lt;span class=&quot;text-slate-400&quot;&gt;120+ Tokens/s&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;p-3.5 rounded-2xl bg-black/25 border border-white/10 hover:border-amber-500/60 hover:bg-black/40 backdrop-blur-md transition-all duration-300 space-y-2 shadow-lg&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between gap-1 whitespace-nowrap&quot;&gt;
+          &lt;span class=&quot;font-extrabold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5 truncate&quot;&gt;
+            &lt;span&gt;🎨 8K 图像超分重构&lt;/span&gt;
+          &lt;/span&gt;
+          &lt;span class=&quot;px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px] font-bold border border-amber-500/30 shrink-0&quot;&gt;
+            CUDA 13.0
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;space-y-0.5&quot;&gt;
+          &lt;div class=&quot;flex items-baseline justify-between gap-1&quot;&gt;
+            &lt;span class=&quot;text-slate-300/80 text-[11px]&quot;&gt;GPU 渲染:&lt;/span&gt;
+            &lt;span class=&quot;text-xl sm:text-2xl font-black text-amber-300 whitespace-nowrap&quot;&gt;
+              &lt;CountUp :to=&quot;2.54&quot; :decimals=&quot;2&quot; suffix=&quot; MP/s&quot; :duration=&quot;1.8&quot; /&gt;
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;text-[10px] text-slate-400 pt-1 border-t border-white/10 flex items-center justify-between whitespace-nowrap&quot;&gt;
+            &lt;span&gt;极限画质:&lt;/span&gt;
+            &lt;span class=&quot;text-slate-200 font-medium&quot;&gt;8192×7335 (6008万像素)&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;p-3.5 rounded-2xl bg-black/25 border border-white/10 hover:border-[#A5F3FC]/60 hover:bg-black/40 backdrop-blur-md transition-all duration-300 space-y-2 shadow-lg&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between gap-1 whitespace-nowrap&quot;&gt;
+          &lt;span class=&quot;font-extrabold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5 truncate&quot;&gt;
+            &lt;span&gt;🎙️ MOSS 0.9B 语音听写&lt;/span&gt;
+          &lt;/span&gt;
+          &lt;span class=&quot;px-1.5 py-0.5 rounded bg-purple-500/15 text-[#D8B4F8] text-[10px] font-bold border border-purple-500/30 shrink-0&quot;&gt;
+            Speech-LLM
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;space-y-0.5&quot;&gt;
+          &lt;div class=&quot;flex items-baseline justify-between gap-1&quot;&gt;
+            &lt;span class=&quot;text-slate-300/80 text-[11px]&quot;&gt;实时转写:&lt;/span&gt;
+            &lt;span class=&quot;text-xl sm:text-2xl font-black text-[#A5F3FC] whitespace-nowrap&quot;&gt;
+              &lt;CountUp :to=&quot;3.47&quot; :decimals=&quot;2&quot; suffix=&quot;x&quot; :duration=&quot;1.8&quot; /&gt;
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;text-[10px] text-slate-400 pt-1 border-t border-white/10 flex items-center justify-between whitespace-nowrap&quot;&gt;
+            &lt;span&gt;精度 / 角色:&lt;/span&gt;
+            &lt;span class=&quot;text-emerald-400 font-bold&quot;&gt;0.01s | 100% [S01]/[S02]&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;p-3.5 rounded-2xl bg-black/25 border border-white/10 hover:border-blue-500/60 hover:bg-black/40 backdrop-blur-md transition-all duration-300 space-y-2 shadow-lg&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between gap-1 whitespace-nowrap&quot;&gt;
+          &lt;span class=&quot;font-extrabold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5 truncate&quot;&gt;
+            &lt;span&gt;📑 PDF 智能图文解析&lt;/span&gt;
+          &lt;/span&gt;
+          &lt;span class=&quot;px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 text-[10px] font-bold border border-blue-500/30 shrink-0&quot;&gt;
+            PP-DocLayout
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;space-y-0.5&quot;&gt;
+          &lt;div class=&quot;flex items-baseline justify-between gap-1&quot;&gt;
+            &lt;span class=&quot;text-slate-300/80 text-[11px]&quot;&gt;热解析耗时:&lt;/span&gt;
+            &lt;span class=&quot;text-xl sm:text-2xl font-black text-blue-300 whitespace-nowrap&quot;&gt;
+              &lt;CountUp :to=&quot;8.53&quot; :decimals=&quot;2&quot; suffix=&quot; s&quot; :duration=&quot;1.8&quot; /&gt;
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;text-[10px] text-slate-400 pt-1 border-t border-white/10 flex items-center justify-between whitespace-nowrap&quot;&gt;
+            &lt;span&gt;5维探针路由:&lt;/span&gt;
+            &lt;span class=&quot;text-emerald-400 font-bold&quot;&gt;100% 还原表格与 KaTeX&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;p-3.5 rounded-2xl bg-black/25 border border-white/10 hover:border-emerald-500/60 hover:bg-black/40 backdrop-blur-md transition-all duration-300 space-y-2 shadow-lg&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between gap-1 whitespace-nowrap&quot;&gt;
+          &lt;span class=&quot;font-extrabold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5 truncate&quot;&gt;
+            &lt;span&gt;✂️ PDF 页面切片瘦身&lt;/span&gt;
+          &lt;/span&gt;
+          &lt;span class=&quot;px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-bold border border-emerald-500/30 shrink-0&quot;&gt;
+            C++ 原生算子
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;space-y-0.5&quot;&gt;
+          &lt;div class=&quot;flex items-baseline justify-between gap-1&quot;&gt;
+            &lt;span class=&quot;text-slate-300/80 text-[11px]&quot;&gt;物理抹图:&lt;/span&gt;
+            &lt;span class=&quot;text-xl sm:text-2xl font-black text-emerald-400 whitespace-nowrap&quot;&gt;
+              &lt;CountUp :to=&quot;233&quot; suffix=&quot; ms&quot; :duration=&quot;1.8&quot; /&gt;
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;text-[10px] text-slate-400 pt-1 border-t border-white/10 flex items-center justify-between whitespace-nowrap&quot;&gt;
+            &lt;span&gt;瘦身率: &lt;strong class=&quot;text-emerald-300&quot;&gt;98.5%&lt;/strong&gt;&lt;/span&gt;
+            &lt;span class=&quot;text-slate-400&quot;&gt;14.3M ➔ 0.21M&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;p-3.5 rounded-2xl bg-black/25 border border-white/10 hover:border-rose-500/60 hover:bg-black/40 backdrop-blur-md transition-all duration-300 space-y-2 shadow-lg&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between gap-1 whitespace-nowrap&quot;&gt;
+          &lt;span class=&quot;font-extrabold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5 truncate&quot;&gt;
+            &lt;span&gt;🎬 音视频提取与裁剪&lt;/span&gt;
+          &lt;/span&gt;
+          &lt;span class=&quot;px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[10px] font-bold border border-rose-500/30 shrink-0&quot;&gt;
+            FFmpeg 引擎
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;space-y-0.5&quot;&gt;
+          &lt;div class=&quot;flex items-baseline justify-between gap-1&quot;&gt;
+            &lt;span class=&quot;text-slate-300/80 text-[11px]&quot;&gt;无损切片:&lt;/span&gt;
+            &lt;span class=&quot;text-xl sm:text-2xl font-black text-rose-300 whitespace-nowrap&quot;&gt;
+              &lt;CountUp :to=&quot;0.5&quot; :decimals=&quot;1&quot; suffix=&quot; s&quot; :duration=&quot;1.5&quot; /&gt;
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;text-[10px] text-slate-400 pt-1 border-t border-white/10 flex items-center justify-between whitespace-nowrap&quot;&gt;
+            &lt;span&gt;音视频合并:&lt;/span&gt;
+            &lt;span class=&quot;text-slate-200 font-medium&quot;&gt;B站/YouTube 4K 直提取&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import CountUp from &apos;./CountUp.vue&apos;;
+&lt;/script&gt;</file><file path="deploy/website/src/components/LiveDemo.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { ref } from &apos;vue&apos;;
+import { ArrowRight, Sparkles, ImageIcon, Mic, Languages, FileText, Zap } from &apos;lucide-vue-next&apos;;
+type ToolDemo = {
+  id: string;
+  step: string;
+  title: string;
+  inputTitle: string;
+  inputDesc: string;
+  outputTitle: string;
+  outputDesc: string;
+  icon: any;
+  accentColor: string;
+};
+const activeIdx = ref(0);
+const demos: ToolDemo[] = [
+  {
+    id: &apos;upscale-8k&apos;,
+    step: &apos;01&apos;,
+    title: &apos;8K 图像超分重构&apos;,
+    inputTitle: &apos;Input Asset&apos;,
+    inputDesc: &apos;Low-res photo (1080P / 老旧照片)&apos;,
+    outputTitle: &apos;Output Result&apos;,
+    outputDesc: &apos;8K Ultra-clear (8192 × 7335 px, 2.54 MPixels/s)&apos;,
+    icon: Sparkles,
+    accentColor: &apos;#A5F3FC&apos;
+  },
+  {
+    id: &apos;asr&apos;,
+    step: &apos;02&apos;,
+    title: &apos;MOSS 0.9B 语音听写与角色对齐&apos;,
+    inputTitle: &apos;Audio Source&apos;,
+    inputDesc: &apos;Raw audio/video (MP4 / MP3 / WAV)&apos;,
+    outputTitle: &apos;Transcribed Subtitle&apos;,
+    outputDesc: &apos;Color ASS &amp; Diarization (3.47x Realtime, [S01]/[S02])&apos;,
+    icon: Mic,
+    accentColor: &apos;#D8B4F8&apos;
+  },
+  {
+    id: &apos;translate&apos;,
+    step: &apos;03&apos;,
+    title: &apos;Hy-MT2 中英日极速翻译&apos;,
+    inputTitle: &apos;Source Document&apos;,
+    inputDesc: &apos;English/Japanese raw text (保持格式)&apos;,
+    outputTitle: &apos;Translated Output&apos;,
+    outputDesc: &apos;Fluent Chinese (386.67ms Warm, 120+ Tokens/s)&apos;,
+    icon: Languages,
+    accentColor: &apos;#00ffa9&apos;
+  },
+  {
+    id: &apos;pdf-parse&apos;,
+    step: &apos;04&apos;,
+    title: &apos;PDF 智能图文解析引擎&apos;,
+    inputTitle: &apos;Scanned Document&apos;,
+    inputDesc: &apos;Complex multi-column PDF (含公式与表格)&apos;,
+    outputTitle: &apos;Structured Markdown&apos;,
+    outputDesc: &apos;GFM Markdown &amp; LaTeX (8.53s 5-dim Probe)&apos;,
+    icon: FileText,
+    accentColor: &apos;#38BDF8&apos;
+  },
+  {
+    id: &apos;pdf-edit&apos;,
+    step: &apos;05&apos;,
+    title: &apos;C++ PDF 页面切片抹图瘦身&apos;,
+    inputTitle: &apos;Original PDF File&apos;,
+    inputDesc: &apos;Large PDF with images (14.3 MB)&apos;,
+    outputTitle: &apos;Slimmed PDF Asset&apos;,
+    outputDesc: &apos;Text-only PDF (0.21 MB, 98.5% size reduction in 233ms)&apos;,
+    icon: Zap,
+    accentColor: &apos;#34D399&apos;
+  }
+];
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;section class=&quot;max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12 select-none font-sans&quot;&gt;
+    &lt;div class=&quot;text-center space-y-3&quot;&gt;
+      &lt;h2 class=&quot;text-4xl sm:text-6xl font-black tracking-tight text-white&quot;&gt;
+        One tool. Endless content.
+      &lt;/h2&gt;
+      &lt;p class=&quot;text-slate-400 text-xs sm:text-sm font-medium max-w-lg mx-auto leading-relaxed&quot;&gt;
+        根据实际输入与处理需求，实时呈现本地 RTX 3060 算力节点的极速转换战果。
+      &lt;/p&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;space-y-6&quot;&gt;
+      &lt;div class=&quot;flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4&quot;&gt;
+        &lt;div class=&quot;flex items-center gap-3&quot;&gt;
+          &lt;span class=&quot;text-slate-500 font-mono font-bold text-base sm:text-lg&quot;&gt;{{ demos[activeIdx].step }}&lt;/span&gt;
+          &lt;span class=&quot;text-slate-600 font-light&quot;&gt;—&lt;/span&gt;
+          &lt;span class=&quot;text-white font-extrabold text-base sm:text-xl tracking-tight&quot;&gt;{{ demos[activeIdx].title }}&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar&quot;&gt;
+          &lt;button
+            v-for=&quot;(d, idx) in demos&quot;
+            :key=&quot;d.id&quot;
+            @click=&quot;activeIdx = idx&quot;
+            class=&quot;px-3 py-1 rounded-full text-xs font-mono transition-all whitespace-nowrap cursor-pointer&quot;
+            :class=&quot;activeIdx === idx
+              ? &apos;bg-white text-slate-950 font-bold&apos;
+              : &apos;text-slate-400 hover:text-white&apos;&quot;
+          &gt;
+            &lt;span&gt;{{ d.step }}&lt;/span&gt;
+            &lt;span class=&quot;ml-1 font-sans&quot;&gt;{{ d.title.split(&apos; &apos;)[0] }}&lt;/span&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;max-w-6xl mx-auto grid grid-cols-12 gap-2 sm:gap-3 items-center pt-2&quot;&gt;
+        &lt;div class=&quot;col-span-5 space-y-3&quot;&gt;
+          &lt;div class=&quot;relative w-full aspect-[3/4] rounded-4xl bg-slate-900/90 overflow-hidden shadow-2xl flex flex-col items-center justify-center p-6 group cursor-pointer hover:scale-[1.01] transition-transform&quot;&gt;
+            &lt;div class=&quot;w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-slate-400 mb-2&quot;&gt;
+              &lt;ImageIcon class=&quot;w-6 h-6 text-slate-300&quot; /&gt;
+            &lt;/div&gt;
+            &lt;span class=&quot;text-slate-400 text-xs font-mono font-medium&quot;&gt;Input Asset&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;pt-1&quot;&gt;
+            &lt;div class=&quot;font-extrabold text-white text-sm sm:text-base&quot;&gt;{{ demos[activeIdx].inputTitle }}&lt;/div&gt;
+            &lt;div class=&quot;text-xs text-slate-400 font-sans italic mt-0.5 truncate&quot;&gt;{{ demos[activeIdx].inputDesc }}&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;col-span-2 flex items-center justify-center&quot;&gt;
+          &lt;ArrowRight class=&quot;w-5 h-5 text-slate-500 stroke-[1.5]&quot; /&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;col-span-5 space-y-3&quot;&gt;
+          &lt;div class=&quot;relative w-full aspect-[3/4] rounded-4xl bg-slate-900/90 overflow-hidden shadow-2xl flex flex-col items-center justify-center p-6 group cursor-pointer hover:scale-[1.01] transition-transform&quot;&gt;
+            &lt;div class=&quot;w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-slate-400 mb-2&quot;&gt;
+              &lt;component :is=&quot;demos[activeIdx].icon&quot; class=&quot;w-6 h-6&quot; :style=&quot;{ color: demos[activeIdx].accentColor }&quot; /&gt;
+            &lt;/div&gt;
+            &lt;span class=&quot;text-slate-400 text-xs font-mono font-medium&quot;&gt;AI Result&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;pt-1&quot;&gt;
+            &lt;div class=&quot;font-extrabold text-white text-sm sm:text-base&quot;&gt;{{ demos[activeIdx].outputTitle }}&lt;/div&gt;
+            &lt;div class=&quot;text-xs text-slate-400 font-sans italic mt-0.5 truncate&quot;&gt;{{ demos[activeIdx].outputDesc }}&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/QuickStart.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { computed, ref } from &apos;vue&apos;;
+import { Check, Copy } from &apos;lucide-vue-next&apos;;
+import GradientText from &apos;./GradientText.vue&apos;;
+type Mode = &apos;tauri&apos; | &apos;gateway&apos;;
+const mode = ref&lt;Mode&gt;(&apos;gateway&apos;);
+const copied = ref(false);
+const commands = {
+  gateway: &apos;curl http://127.0.0.1:9600/health # 验证 RTX 3060 算力网关&apos;,
+  tauri: &apos;pnpm tauri dev # 启动 AI Toolkit 桌面端应用&apos;
+};
+const currentCmd = computed(() =&gt; commands[mode.value]);
+async function copyCmd() {
+  await navigator.clipboard.writeText(currentCmd.value);
+  copied.value = true;
+  setTimeout(() =&gt; { copied.value = false; }, 2000);
+}
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;section class=&quot;max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-12 relative z-10&quot;&gt;
+    &lt;!-- Header --&gt;
+    &lt;div class=&quot;text-center space-y-2&quot;&gt;
+      &lt;GradientText
+        text=&quot;Get started in seconds&quot;
+        :colors=&quot;[&apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;, &apos;#A5F3FC&apos;]&quot;
+        :animation-speed=&quot;5&quot;
+        class=&quot;text-3xl sm:text-4xl font-extrabold&quot;
+      /&gt;
+      &lt;p class=&quot;text-xs text-slate-300&quot;&gt;本地 127.0.0.1:9600 加密通道，一键唤醒 RTX 3060 算力节点&lt;/p&gt;
+    &lt;/div&gt;
+    &lt;!-- Terminal Box --&gt;
+    &lt;div class=&quot;max-w-3xl mx-auto bg-slate-900/90 border border-slate-800/90 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden&quot;&gt;
+      &lt;!-- Tab Bar --&gt;
+      &lt;div class=&quot;flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-slate-950/60&quot;&gt;
+        &lt;div class=&quot;flex items-center gap-2&quot;&gt;
+          &lt;button
+            @click=&quot;mode = &apos;gateway&apos;&quot;
+            class=&quot;px-3 py-1 rounded-lg text-xs font-mono transition-all&quot;
+            :class=&quot;mode === &apos;gateway&apos; ? &apos;bg-[#A5F3FC]/20 text-[#A5F3FC] border border-[#A5F3FC]/40 font-bold&apos; : &apos;text-slate-400 hover:text-slate-200&apos;&quot;
+          &gt;
+            Gateway API (9600)
+          &lt;/button&gt;
+          &lt;button
+            @click=&quot;mode = &apos;tauri&apos;&quot;
+            class=&quot;px-3 py-1 rounded-lg text-xs font-mono transition-all&quot;
+            :class=&quot;mode === &apos;tauri&apos; ? &apos;bg-[#D8B4F8]/20 text-[#D8B4F8] border border-[#D8B4F8]/40 font-bold&apos; : &apos;text-slate-400 hover:text-slate-200&apos;&quot;
+          &gt;
+            Tauri App
+          &lt;/button&gt;
+        &lt;/div&gt;
+        &lt;span class=&quot;text-[10px] font-mono text-slate-500&quot;&gt;Localhost Ready&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;!-- Command Line --&gt;
+      &lt;div class=&quot;p-5 flex items-center justify-between gap-4 font-mono text-xs&quot;&gt;
+        &lt;div class=&quot;flex items-center gap-3 text-slate-200 overflow-x-auto&quot;&gt;
+          &lt;span class=&quot;text-[#A5F3FC] font-bold&quot;&gt;$&lt;/span&gt;
+          &lt;span class=&quot;text-slate-100 font-semibold&quot;&gt;{{ currentCmd }}&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;button
+          @click=&quot;copyCmd&quot;
+          class=&quot;px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-mono transition-colors flex items-center gap-1.5 shrink-0&quot;
+        &gt;
+          &lt;Check v-if=&quot;copied&quot; class=&quot;w-3.5 h-3.5 text-[#A5F3FC]&quot; /&gt;
+          &lt;Copy v-else class=&quot;w-3.5 h-3.5 text-slate-400&quot; /&gt;
+          &lt;span&gt;{{ copied ? &apos;已复制&apos; : &apos;复制命令&apos; }}&lt;/span&gt;
+        &lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+&lt;/template&gt;</file><file path="deploy/website/src/components/SpotlightCard.vue">&lt;template&gt;
+  &lt;div
+    ref=&quot;divRef&quot;
+    @mousemove=&quot;handleMouseMove&quot;
+    @focus=&quot;handleFocus&quot;
+    @blur=&quot;handleBlur&quot;
+    @mouseenter=&quot;handleMouseEnter&quot;
+    @mouseleave=&quot;handleMouseLeave&quot;
+    :class=&quot;[&apos;relative rounded-3xl border border-[#222222] bg-[#121212] backdrop-blur-xl overflow-hidden p-6&apos;, className]&quot;
+  &gt;
+    &lt;div
+      class=&quot;pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 ease-in-out&quot;
+      :style=&quot;{
+        opacity,
+        background: `radial-gradient(circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`
+      }&quot;
+    /&gt;
+    &lt;slot /&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { ref, useTemplateRef } from &apos;vue&apos;;
+interface Position {
+  x: number;
+  y: number;
+}
+interface SpotlightCardProps {
+  className?: string;
+  spotlightColor?: string;
+}
+const { className = &apos;&apos;, spotlightColor = &apos;rgba(165, 243, 252, 0.12)&apos; } = defineProps&lt;SpotlightCardProps&gt;();
+const divRef = useTemplateRef&lt;HTMLDivElement&gt;(&apos;divRef&apos;);
+const isFocused = ref&lt;boolean&gt;(false);
+const position = ref&lt;Position&gt;({ x: 0, y: 0 });
+const opacity = ref&lt;number&gt;(0);
+const handleMouseMove = (e: MouseEvent) =&gt; {
+  if (!divRef.value || isFocused.value) return;
+  const rect = divRef.value.getBoundingClientRect();
+  position.value = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+};
+const handleFocus = () =&gt; {
+  isFocused.value = true;
+  opacity.value = 0.6;
+};
+const handleBlur = () =&gt; {
+  isFocused.value = false;
+  opacity.value = 0;
+};
+const handleMouseEnter = () =&gt; {
+  opacity.value = 0.6;
+};
+const handleMouseLeave = () =&gt; {
+  opacity.value = 0;
+};
+&lt;/script&gt;</file><file path="deploy/website/src/components/StarCard.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { Activity, Mic } from &apos;lucide-vue-next&apos;;
+import CountUp from &apos;./CountUp.vue&apos;;
+import ElectricBorder from &apos;./ElectricBorder.vue&apos;;
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;ElectricBorder color=&quot;#A5F3FC&quot; :speed=&quot;0.6&quot; :chaos=&quot;0.08&quot; :borderRadius=&quot;16&quot; class=&quot;w-full h-56&quot;&gt;
+    &lt;div class=&quot;relative w-full h-full p-4 sm:p-5 bg-slate-950/90 rounded-2xl flex flex-col justify-between overflow-hidden shadow-inner font-mono&quot;&gt;
+      &lt;div class=&quot;space-y-1 relative z-10&quot;&gt;
+        &lt;div class=&quot;flex items-center justify-between text-xs text-slate-400&quot;&gt;
+          &lt;span class=&quot;flex items-center gap-1.5 text-[#A5F3FC] font-semibold&quot;&gt;
+            &lt;Mic class=&quot;w-3.5 h-3.5 text-[#A5F3FC]&quot; /&gt;
+            MOSS 0.9B ASR 离线转写
+          &lt;/span&gt;
+          &lt;span class=&quot;px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px]&quot;&gt;
+            VramGuard 1.8G 锁定
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;flex items-baseline gap-2 pt-1&quot;&gt;
+          &lt;div class=&quot;text-3xl font-black tracking-tight bg-gradient-to-r from-[#A5F3FC] via-slate-100 to-[#D8B4F8] bg-clip-text text-transparent&quot;&gt;
+            &lt;CountUp :to=&quot;3.47&quot; :decimals=&quot;2&quot; suffix=&quot;x&quot; :duration=&quot;1.8&quot; /&gt;
+          &lt;/div&gt;
+          &lt;span class=&quot;text-xs text-slate-400&quot;&gt;实时转写倍速&lt;/span&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;relative w-full h-16 my-1&quot;&gt;
+        &lt;svg class=&quot;w-full h-full&quot; viewBox=&quot;0 0 200 50&quot; fill=&quot;none&quot; preserveAspectRatio=&quot;none&quot;&gt;
+          &lt;defs&gt;
+            &lt;linearGradient id=&quot;starFill&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;
+              &lt;stop offset=&quot;0%&quot; stop-color=&quot;#A5F3FC&quot; stop-opacity=&quot;0.3&quot; /&gt;
+              &lt;stop offset=&quot;100%&quot; stop-color=&quot;#D8B4F8&quot; stop-opacity=&quot;0&quot; /&gt;
+            &lt;/linearGradient&gt;
+          &lt;/defs&gt;
+          &lt;path
+            d=&quot;M0 40 C20 35, 40 38, 60 28 C80 18, 100 25, 120 15 C140 5, 160 18, 180 8 C190 3, 195 5, 200 2 L200 50 L0 50Z&quot;
+            fill=&quot;url(#starFill)&quot;
+          /&gt;
+          &lt;path
+            class=&quot;ln-feat-stars-line&quot;
+            d=&quot;M0 40 C20 35, 40 38, 60 28 C80 18, 100 25, 120 15 C140 5, 160 18, 180 8 C190 3, 195 5, 200 2&quot;
+            stroke=&quot;#A5F3FC&quot;
+            stroke-width=&quot;2&quot;
+            stroke-linecap=&quot;round&quot;
+          /&gt;
+        &lt;/svg&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/80 pt-2 relative z-10&quot;&gt;
+        &lt;span class=&quot;flex items-center gap-1.5&quot;&gt;
+          &lt;span class=&quot;w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping&quot;&gt;&lt;/span&gt;
+          时间戳精度 0.01s | 角色 [S01]/[S02]
+        &lt;/span&gt;
+        &lt;Activity class=&quot;w-3.5 h-3.5 text-[#D8B4F8] animate-pulse&quot; /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/ElectricBorder&gt;
+&lt;/template&gt;
+&lt;style scoped&gt;
+.ln-feat-stars-line {
+  stroke-dasharray: 240;
+  stroke-dashoffset: 240;
+  animation: drawLine 2s ease-out forwards;
+}
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+&lt;/style&gt;</file><file path="deploy/website/src/components/VariantTabs.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+import { Cpu, Zap, FileCheck } from &apos;lucide-vue-next&apos;;
+import CountUp from &apos;./CountUp.vue&apos;;
+&lt;/script&gt;
+&lt;template&gt;
+  &lt;div class=&quot;ln-feat-stack relative w-full h-56 overflow-hidden&quot;&gt;
+    &lt;div class=&quot;ln-feat-stack-chip ln-feat-stack-chip--rust&quot;&gt;
+      &lt;span class=&quot;ln-feat-stack-mark text-amber-400&quot;&gt;
+        &lt;Zap class=&quot;w-4 h-4&quot; /&gt;
+      &lt;/span&gt;
+      &lt;span class=&quot;ln-feat-stack-name font-mono flex items-center gap-1&quot;&gt;
+        &lt;span&gt;C++ 原生物理引擎:&lt;/span&gt;
+        &lt;span class=&quot;text-amber-300 font-bold&quot;&gt;
+          &lt;CountUp :to=&quot;233&quot; suffix=&quot;ms&quot; :duration=&quot;1.5&quot; /&gt;
+        &lt;/span&gt;
+      &lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;ln-feat-stack-chip ln-feat-stack-chip--uv&quot;&gt;
+      &lt;span class=&quot;ln-feat-stack-mark text-[#A5F3FC]&quot;&gt;
+        &lt;FileCheck class=&quot;w-4 h-4&quot; /&gt;
+      &lt;/span&gt;
+      &lt;span class=&quot;ln-feat-stack-name font-mono flex items-center gap-1&quot;&gt;
+        &lt;span&gt;物理抹图瘦身率:&lt;/span&gt;
+        &lt;span class=&quot;text-[#A5F3FC] font-bold&quot;&gt;
+          &lt;CountUp :to=&quot;98.5&quot; :decimals=&quot;1&quot; suffix=&quot;%&quot; :duration=&quot;1.8&quot; /&gt;
+        &lt;/span&gt;
+      &lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;ln-feat-stack-chip ln-feat-stack-chip--gpu&quot;&gt;
+      &lt;span class=&quot;ln-feat-stack-mark text-[#D8B4F8]&quot;&gt;
+        &lt;Cpu class=&quot;w-4 h-4&quot; /&gt;
+      &lt;/span&gt;
+      &lt;span class=&quot;ln-feat-stack-name font-mono flex items-center gap-1&quot;&gt;
+        &lt;span&gt;显存占用:&lt;/span&gt;
+        &lt;span class=&quot;text-emerald-400 font-bold&quot;&gt;0 MB (纯 C++ 算子)&lt;/span&gt;
+      &lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;style scoped&gt;
+.ln-feat-stack-chip {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+.ln-feat-stack-chip--rust {
+  top: 18%;
+  left: 8%;
+  animation:
+    driftA 7s ease-in-out infinite,
+    pulseRust 6s ease-in-out infinite;
+}
+.ln-feat-stack-chip--uv {
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  animation:
+    driftB 8s ease-in-out infinite,
+    pulseUv 6s ease-in-out infinite 2s;
+}
+.ln-feat-stack-chip--gpu {
+  bottom: 18%;
+  right: 8%;
+  animation:
+    driftC 7.5s ease-in-out infinite,
+    pulseGpu 6s ease-in-out infinite 4s;
+}
+@keyframes driftA {
+  0%, 100% { transform: translate(0, 0) rotate(-4deg); }
+  50% { transform: translate(6px, -8px) rotate(-2deg); }
+}
+@keyframes driftB {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  50% { transform: translate(calc(-50% - 5px), calc(-50% + 6px)) rotate(2deg); }
+}
+@keyframes driftC {
+  0%, 100% { transform: translate(0, 0) rotate(4deg); }
+  50% { transform: translate(-7px, -5px) rotate(6deg); }
+}
+@keyframes pulseRust {
+  0%, 70%, 100% {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  15%, 25% {
+    border-color: #f59e0b;
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.1);
+  }
+}
+@keyframes pulseUv {
+  0%, 70%, 100% {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(165, 243, 252, 0.4);
+    background: rgba(165, 243, 252, 0.1);
+  }
+}
+@keyframes pulseGpu {
+  0%, 70%, 100% {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  15%, 25% {
+    border-color: #D8B4F8;
+    box-shadow: 0 0 24px rgba(216, 180, 248, 0.4);
+    background: rgba(216, 180, 248, 0.1);
+  }
+}
+.ln-feat-stack-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ln-feat-stack-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+&lt;/style&gt;</file><file path="deploy/website/src/App.vue">&lt;template&gt;
+  &lt;div class=&quot;min-h-screen bg-[#14110E] text-[#f5f5f3] flex flex-col justify-between selection:bg-[#00ffa9]/30 selection:text-[#00ffa9] font-sans&quot;&gt;
+    &lt;!-- 顶部导航栏 --&gt;
+    &lt;header class=&quot;w-full border-b border-white/[0.08] bg-[#14110E]/80 backdrop-blur-xl sticky top-0 z-50&quot;&gt;
+      &lt;div class=&quot;max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between&quot;&gt;
+        &lt;div class=&quot;flex items-center gap-3&quot;&gt;
+          &lt;div class=&quot;w-8 h-8 rounded-xl bg-gradient-to-tr from-[#bc05ff] to-[#00ffa9] flex items-center justify-center shadow-[0_0_16px_rgba(0,255,169,0.4)]&quot;&gt;
+            &lt;Zap :size=&quot;18&quot; class=&quot;text-slate-950 fill-slate-950 stroke-[2.5]&quot; /&gt;
+          &lt;/div&gt;
+          &lt;span class=&quot;text-lg font-black tracking-tight text-white&quot;&gt;紫电 AI&lt;/span&gt;
+          &lt;span class=&quot;text-[10px] font-mono font-bold bg-[#00ffa9]/15 text-[#00ffa9] px-2 py-0.5 rounded-full border border-[#00ffa9]/30&quot;&gt;
+            SOTA 2026 离线版
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;flex items-center gap-4&quot;&gt;
+          &lt;a href=&quot;#showcase&quot; class=&quot;text-xs font-bold text-[#8b999b] hover:text-white transition-colors hidden sm:inline-block&quot;&gt;
+            功能展台
+          &lt;/a&gt;
+          &lt;a href=&quot;#tokenomics&quot; class=&quot;text-xs font-bold text-[#8b999b] hover:text-white transition-colors hidden sm:inline-block&quot;&gt;
+            算力体系
+          &lt;/a&gt;
+          &lt;a
+            :href=&quot;clientDownloadUrl&quot;
+            class=&quot;h-9 px-4 rounded-xl bg-gradient-to-r from-[#00ffa9] to-[#00d2ff] hover:opacity-95 text-slate-950 font-black text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-[0_0_20px_rgba(0,255,169,0.3)]&quot;
+          &gt;
+            &lt;Download :size=&quot;14&quot; class=&quot;stroke-[2.5]&quot; /&gt;
+            &lt;span&gt;下载客户端 (35MB)&lt;/span&gt;
+          &lt;/a&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/header&gt;
+    &lt;!-- 核心主体 --&gt;
+    &lt;main class=&quot;flex-1&quot;&gt;
+      &lt;!-- 英雄区：波浪 + 粒子 + 6 颗性能战报卡片 --&gt;
+      &lt;section class=&quot;relative w-full overflow-hidden bg-[#14110E] pt-14 pb-20 sm:pt-16 sm:pb-24&quot;&gt;
+        &lt;!-- 背景 WebGL 波浪与点阵 --&gt;
+        &lt;div class=&quot;absolute inset-0 pointer-events-none z-0 overflow-hidden&quot;&gt;
+          &lt;HeroBand
+            color=&quot;#00ffa9&quot;
+            :speed=&quot;0.2&quot;
+            :frequency=&quot;1&quot;
+            :noise=&quot;0.05&quot;
+            :band-width=&quot;0.14&quot;
+            :rotation=&quot;90&quot;
+            :fade-top=&quot;0.75&quot;
+            :iterations=&quot;1&quot;
+            :intensity=&quot;1.25&quot;
+            class=&quot;absolute inset-0 opacity-90&quot;
+          /&gt;
+          &lt;DotField
+            :dot-radius=&quot;1.5&quot;
+            :dot-spacing=&quot;14&quot;
+            :bulge-strength=&quot;67&quot;
+            :glow-radius=&quot;200&quot;
+            gradient-from=&quot;rgba(0, 255, 169, 0.45)&quot;
+            gradient-to=&quot;rgba(0, 210, 255, 0.35)&quot;
+            glow-color=&quot;#00ffa9&quot;
+            class=&quot;absolute inset-0 opacity-80&quot;
+          /&gt;
+        &lt;/div&gt;
+        &lt;!-- 底部平滑渐变 --&gt;
+        &lt;svg class=&quot;absolute bottom-0 left-0 right-0 h-44 w-full pointer-events-none z-10&quot; preserveAspectRatio=&quot;none&quot; viewBox=&quot;0 0 1 1&quot;&gt;
+          &lt;defs&gt;
+            &lt;linearGradient id=&quot;hero-bottom-fade&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;1&quot;&gt;
+              &lt;stop offset=&quot;0%&quot; stop-color=&quot;#14110E&quot; stop-opacity=&quot;0&quot; /&gt;
+              &lt;stop offset=&quot;30%&quot; stop-color=&quot;#14110E&quot; stop-opacity=&quot;0.05&quot; /&gt;
+              &lt;stop offset=&quot;55%&quot; stop-color=&quot;#14110E&quot; stop-opacity=&quot;0.25&quot; /&gt;
+              &lt;stop offset=&quot;75%&quot; stop-color=&quot;#14110E&quot; stop-opacity=&quot;0.65&quot; /&gt;
+              &lt;stop offset=&quot;90%&quot; stop-color=&quot;#14110E&quot; stop-opacity=&quot;0.9&quot; /&gt;
+              &lt;stop offset=&quot;100%&quot; stop-color=&quot;#14110E&quot; stop-opacity=&quot;1&quot; /&gt;
+            &lt;/linearGradient&gt;
+          &lt;/defs&gt;
+          &lt;rect width=&quot;1&quot; height=&quot;1&quot; fill=&quot;url(#hero-bottom-fade)&quot; /&gt;
+        &lt;/svg&gt;
+        &lt;div class=&quot;max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-20&quot;&gt;
+          &lt;div class=&quot;grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center min-h-[520px]&quot;&gt;
+            &lt;!-- 左翼：大字标 + 理念 + 下载 CTA --&gt;
+            &lt;div class=&quot;lg:col-span-6 space-y-6&quot;&gt;
+              &lt;div class=&quot;inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-white/10 text-xs font-mono text-slate-300 shadow-lg backdrop-blur-md w-fit&quot;&gt;
+                &lt;span class=&quot;px-2 py-0.5 rounded-full bg-[#00ffa9] text-slate-950 font-extrabold text-[11px] tracking-wide&quot;&gt;
+                  SOTA 2026
+                &lt;/span&gt;
+                &lt;span class=&quot;flex items-center gap-1.5 font-medium text-slate-200&quot;&gt;
+                  RTX 3060 12G 算力直连 · 纯血 Rust Native
+                &lt;/span&gt;
+              &lt;/div&gt;
+              &lt;div&gt;
+                &lt;GradientText
+                  text=&quot;紫电AI&quot;
+                  :colors=&quot;[&apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;, &apos;#A5F3FC&apos;, &apos;#D8B4F8&apos;]&quot;
+                  :animation-speed=&quot;6&quot;
+                  class=&quot;text-6xl sm:text-8xl font-black tracking-tight&quot;
+                /&gt;
+              &lt;/div&gt;
+              &lt;p class=&quot;text-slate-300 text-sm sm:text-base leading-relaxed max-w-xl font-sans space-y-1&quot;&gt;
+                &lt;span class=&quot;block&quot;&gt;不执着于单点技术的极致拔尖，而是通过全系统协同优化&lt;/span&gt;
+                &lt;span class=&quot;block text-slate-100&quot;&gt;让 &lt;span class=&quot;text-[#ffb74d] font-bold&quot;&gt;廉价 AI + 极致框架&lt;/span&gt; 创造最大化生产力&lt;/span&gt;
+              &lt;/p&gt;
+              &lt;!-- 一键下载 Windows 客户端大胶囊 --&gt;
+              &lt;div class=&quot;pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4&quot;&gt;
+                &lt;a
+                  :href=&quot;clientDownloadUrl&quot;
+                  class=&quot;h-13 px-8 rounded-2xl bg-gradient-to-r from-[#00ffa9] to-[#00d2ff] hover:opacity-95 text-slate-950 font-black text-sm tracking-wide shadow-[0_12px_36px_rgba(0,255,169,0.35)] transition-all active:scale-95 flex items-center justify-center gap-2.5 group&quot;
+                &gt;
+                  &lt;Download :size=&quot;18&quot; class=&quot;stroke-[2.5] group-hover:-translate-y-0.5 transition-transform&quot; /&gt;
+                  &lt;span&gt;立即下载 Windows 客户端 (.exe)&lt;/span&gt;
+                &lt;/a&gt;
+                &lt;a
+                  href=&quot;#tokenomics&quot;
+                  class=&quot;h-13 px-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 font-bold text-xs transition-all flex items-center justify-center gap-2 backdrop-blur-md&quot;
+                &gt;
+                  &lt;Flame :size=&quot;15&quot; class=&quot;text-[#ffb74d] fill-[#ffb74d]&quot; /&gt;
+                  &lt;span&gt;内测每日送 600 点&lt;/span&gt;
+                &lt;/a&gt;
+              &lt;/div&gt;
+              &lt;p class=&quot;text-[11px] font-mono text-[#5b696b]&quot;&gt;
+                适用于 Windows 10 / 11 (x64) · 约 35 MB 极轻安装 · 100% 离线隐私推演
+              &lt;/p&gt;
+            &lt;/div&gt;
+            &lt;!-- 右翼：6 颗实时性能战报卡片 --&gt;
+            &lt;div class=&quot;lg:col-span-6 flex items-center justify-center w-full&quot;&gt;
+              &lt;HeroCodeWindow /&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/section&gt;
+      &lt;!-- 下半区：One tool. Endless content. 交互展示台 --&gt;
+      &lt;section id=&quot;showcase&quot; class=&quot;relative z-20&quot;&gt;
+        &lt;LiveDemo /&gt;
+      &lt;/section&gt;
+      &lt;!-- 算力定价与 Tokenomics 说明 --&gt;
+      &lt;section id=&quot;tokenomics&quot; class=&quot;py-20 border-t border-white/[0.06] bg-black/40 relative z-20&quot;&gt;
+        &lt;div class=&quot;max-w-5xl mx-auto px-6 space-y-10&quot;&gt;
+          &lt;div class=&quot;text-center space-y-2&quot;&gt;
+            &lt;div class=&quot;inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00ffa9]/10 text-[#00ffa9] font-mono text-xs font-bold border border-[#00ffa9]/20&quot;&gt;
+              &lt;Flame :size=&quot;13&quot; class=&quot;fill-[#00ffa9]&quot; /&gt;
+              &lt;span&gt;Tokenomics 算力代币模型&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;h2 class=&quot;text-2xl sm:text-3xl font-black text-white&quot;&gt;透明亲民的算力计费矩阵&lt;/h2&gt;
+            &lt;p class=&quot;text-xs sm:text-sm text-[#8b999b]&quot;&gt;1 Token = ¥0.01 · 每日 00:00 UTC 自动刷新免费配额&lt;/p&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4&quot;&gt;
+            &lt;div class=&quot;p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center&quot;&gt;
+              &lt;div class=&quot;text-xs text-[#8b999b]&quot;&gt;📄 PDF 智能解析&lt;/div&gt;
+              &lt;div class=&quot;text-xl font-black font-mono text-[#00ffa9]&quot;&gt;1 点 / 页&lt;/div&gt;
+              &lt;div class=&quot;text-[11px] text-[#5b696b]&quot;&gt;折合 ¥0.01 / 页&lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center&quot;&gt;
+              &lt;div class=&quot;text-xs text-[#8b999b]&quot;&gt;🔍 4K/8K 图像超分&lt;/div&gt;
+              &lt;div class=&quot;text-xl font-black font-mono text-[#00ffa9]&quot;&gt;2 点 / 张&lt;/div&gt;
+              &lt;div class=&quot;text-[11px] text-[#5b696b]&quot;&gt;秒级 4K 重构&lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center&quot;&gt;
+              &lt;div class=&quot;text-xs text-[#8b999b]&quot;&gt;🎬 视频双语字幕&lt;/div&gt;
+              &lt;div class=&quot;text-xl font-black font-mono text-[#00ffa9]&quot;&gt;10 点 / 小时&lt;/div&gt;
+              &lt;div class=&quot;text-[11px] text-[#5b696b]&quot;&gt;2小时电影仅 20 点&lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center&quot;&gt;
+              &lt;div class=&quot;text-xs text-[#8b999b]&quot;&gt;⚡ 全能格式转换&lt;/div&gt;
+              &lt;div class=&quot;text-xl font-black font-mono text-emerald-400&quot;&gt;永久免费&lt;/div&gt;
+              &lt;div class=&quot;text-[11px] text-[#5b696b]&quot;&gt;零算力流式直出&lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/section&gt;
+      &lt;!-- 快速上手与底部 CTA --&gt;
+      &lt;QuickStart /&gt;
+      &lt;CTA /&gt;
+    &lt;/main&gt;
+    &lt;!-- 底部版权 --&gt;
+    &lt;footer class=&quot;border-t border-white/[0.08] bg-[#0c1012] py-8 text-center text-xs text-[#5b696b] relative z-20&quot;&gt;
+      &lt;div class=&quot;max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4&quot;&gt;
+        &lt;div class=&quot;flex items-center gap-2&quot;&gt;
+          &lt;span class=&quot;font-bold text-white&quot;&gt;紫电 AI (Zidian AI)&lt;/span&gt;
+          &lt;span&gt;© 2026 工业级 SOTA 端侧离线推演架构&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;flex items-center gap-4 text-[#8b999b]&quot;&gt;
+          &lt;a href=&quot;https://geantendormi.top/&quot; class=&quot;hover:text-white transition-colors&quot;&gt;官方主页&lt;/a&gt;
+          &lt;a :href=&quot;clientDownloadUrl&quot; class=&quot;hover:text-[#00ffa9] transition-colors&quot;&gt;客户端直链&lt;/a&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/footer&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&lt;script setup lang=&quot;ts&quot;&gt;
+import { Download, Zap, Flame, ArrowRight } from &apos;lucide-vue-next&apos;;
+import GradientText from &apos;./components/GradientText.vue&apos;;
+import HeroBand from &apos;./components/HeroBand.vue&apos;;
+import DotField from &apos;./components/DotField.vue&apos;;
+import HeroCodeWindow from &apos;./components/HeroCodeWindow.vue&apos;;
+import LiveDemo from &apos;./components/LiveDemo.vue&apos;;
+import QuickStart from &apos;./components/QuickStart.vue&apos;;
+import CTA from &apos;./components/CTA.vue&apos;;
+// 官方安装包直链 (指向 R2 资产存储桶)
+const clientDownloadUrl = &quot;https://assets.geantendormi.top/downloads/zidian-ai-setup.exe&quot;;
+&lt;/script&gt;</file><file path="deploy/website/src/main.ts">import { createApp } from &apos;vue&apos;;
+import App from &apos;./App.vue&apos;;
+import &apos;./style.css&apos;;
+createApp(App).mount(&apos;#app&apos;);</file><file path="deploy/website/src/style.css">@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html {
+    scroll-behavior: smooth;
+    background-color: #101618;
+    color: #f5f5f3;
+    font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif;
+  }
+}
+/* 霓虹微发光光效 */
+.glow-neon {
+  box-shadow: 0 0 50px -10px rgba(2, 195, 180, 0.25);
+}</file><file path="deploy/website/src/vite-env.d.ts">/// &lt;reference types=&quot;vite/client&quot; /&gt;
+declare module &quot;*.vue&quot; {
+  import type { DefineComponent } from &quot;vue&quot;;
+  const component: DefineComponent&lt;{}, {}, any&gt;;
+  export default component;
+}</file><file path="deploy/website/index.html">&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+  &lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot; /&gt;
+    &lt;link rel=&quot;icon&quot; type=&quot;image/svg+xml&quot; href=&quot;/favicon.svg&quot; /&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
+    &lt;title&gt;紫电 AI (Zidian AI) - 端侧本地隐私 AI 工坊官方网站&lt;/title&gt;
+    &lt;meta name=&quot;description&quot; content=&quot;纯血 Rust Native · 本地 RTX GPU 显卡直推 · 100% 离线隐私安全。涵盖 4K/8K 图像超分、视频双语字幕、PDF 智能排版解析与全能格式转换。&quot; /&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;div id=&quot;app&quot;&gt;&lt;/div&gt;
+    &lt;script type=&quot;module&quot; src=&quot;/src/main.ts&quot;&gt;&lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</file><file path="deploy/website/package.json">{
+  &quot;name&quot;: &quot;zidian-website&quot;,
+  &quot;private&quot;: true,
+  &quot;version&quot;: &quot;1.0.0&quot;,
+  &quot;type&quot;: &quot;module&quot;,
+  &quot;scripts&quot;: {
+    &quot;dev&quot;: &quot;vite&quot;,
+    &quot;build&quot;: &quot;vue-tsc --noEmit &amp;&amp; vite build&quot;,
+    &quot;deploy&quot;: &quot;pnpm build &amp;&amp; npx wrangler pages deploy dist --project-name=ai-toolkit --commit-dirty=true&quot;,
+    &quot;preview&quot;: &quot;vite preview&quot;
+  },
+  &quot;dependencies&quot;: {
+    &quot;clsx&quot;: &quot;^2.1.1&quot;,
+    &quot;lucide-vue-next&quot;: &quot;^0.447.0&quot;,
+    &quot;tailwind-merge&quot;: &quot;^2.6.1&quot;,
+    &quot;three&quot;: &quot;^0.185.1&quot;,
+    &quot;vue&quot;: &quot;^3.5.41&quot;
+  },
+  &quot;devDependencies&quot;: {
+    &quot;@types/three&quot;: &quot;^0.185.4&quot;,
+    &quot;@vitejs/plugin-vue&quot;: &quot;^5.1.4&quot;,
+    &quot;autoprefixer&quot;: &quot;^10.5.4&quot;,
+    &quot;postcss&quot;: &quot;^8.5.26&quot;,
+    &quot;tailwindcss&quot;: &quot;^3.4.19&quot;,
+    &quot;typescript&quot;: &quot;^5.6.3&quot;,
+    &quot;vite&quot;: &quot;^5.4.9&quot;,
+    &quot;vue-tsc&quot;: &quot;^2.1.6&quot;
+  }
+}</file><file path="deploy/website/postcss.config.js">export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}</file><file path="deploy/website/tailwind.config.js">/** @type {import(&apos;tailwindcss&apos;).Config} */
+export default {
+  content: [
+    &quot;./index.html&quot;,
+    &quot;./src/**/*.{vue,js,ts,jsx,tsx}&quot;,
+  ],
+  theme: {
+    extend: {
+      colors: {
+        &apos;zidian-green&apos;: &apos;#02c3b4&apos;,
+        &apos;zidian-gold&apos;: &apos;#ffb74d&apos;,
+      },
+    },
+  },
+  plugins: [],
+}</file><file path="deploy/website/vite.config.ts">import { defineConfig } from &quot;vite&quot;;
+import vue from &quot;@vitejs/plugin-vue&quot;;
+export default defineConfig({
+  plugins: [vue()],
+  build: {
+    outDir: &quot;dist&quot;,
+    emptyOutDir: true,
+  },
+});</file><file path="deploy/cloudflare/auth_worker.js">// 🛡️ 紫电 AI - Cloudflare Worker Serverless 商业鉴权、隐私遥测与明细账单中台 (v3.1.0)
+const CORS_HEADERS = {
+  &quot;Access-Control-Allow-Origin&quot;: &quot;*&quot;,
+  &quot;Access-Control-Allow-Methods&quot;: &quot;GET, POST, OPTIONS&quot;,
+  &quot;Access-Control-Allow-Headers&quot;: &quot;Content-Type, X-Timestamp, X-Signature&quot;,
+  &quot;Content-Type&quot;: &quot;application/json&quot;
+};
+const STAGE = &quot;beta&quot;;
+const DAILY_FREE_POINTS = STAGE === &quot;beta&quot; ? 600 : 300;
+export default {
+  async fetch(request, env) {
+    if (request.method === &quot;OPTIONS&quot;) {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+    const url = new URL(request.url);
+    if (url.pathname === &quot;/health&quot;) {
+      return new Response(JSON.stringify({ status: &quot;ok&quot;, stage: STAGE, service: &quot;zidian-auth-worker&quot; }), {
+        status: 200,
+        headers: CORS_HEADERS
+      });
+    }
+    // 2. 查询设备额度、状态与最近 5 笔消费明细
+    if (url.pathname === &quot;/api/v1/quota/status&quot; &amp;&amp; request.method === &quot;POST&quot;) {
+      return await handleQueryStatus(request, env);
+    }
+    if (url.pathname === &quot;/api/v1/quota/deduct&quot; &amp;&amp; request.method === &quot;POST&quot;) {
+      return await handleDeductQuota(request, env);
+    }
+    if (url.pathname === &quot;/api/v1/telemetry/report&quot; &amp;&amp; request.method === &quot;POST&quot;) {
+      return await handleTelemetryReport(request, env);
+    }
+    return new Response(JSON.stringify({ error: &quot;Not Found&quot; }), { status: 404, headers: CORS_HEADERS });
+  }
+};
+async function handleQueryStatus(request, env) {
+  try {
+    const payload = await request.json();
+    const { device_fingerprint } = payload;
+    if (!device_fingerprint) {
+      return new Response(JSON.stringify({ success: false, error: &quot;Missing device_fingerprint&quot; }), { status: 400, headers: CORS_HEADERS });
+    }
+    const todayUtc = new Date().toISOString().split(&quot;T&quot;)[0];
+    let device = await env.DB.prepare(&quot;SELECT * FROM devices WHERE device_fingerprint = ?&quot;).bind(device_fingerprint).first();
+    if (!device) {
+      await env.DB.prepare(
+        &quot;INSERT INTO devices (device_fingerprint, daily_limit, used_points_today, last_reset_utc_date) VALUES (?, ?, 0, ?)&quot;
+      ).bind(device_fingerprint, DAILY_FREE_POINTS, todayUtc).run();
+      device = {
+        device_fingerprint,
+        daily_limit: DAILY_FREE_POINTS,
+        used_points_today: 0,
+        bonus_points: 0,
+        last_reset_utc_date: todayUtc,
+        status: &quot;active&quot;
+      };
+    }
+    let currentUsed = device.used_points_today;
+    if (device.last_reset_utc_date !== todayUtc) {
+      currentUsed = 0;
+      await env.DB.prepare(
+        &quot;UPDATE devices SET used_points_today = 0, last_reset_utc_date = ?, updated_at = CURRENT_TIMESTAMP WHERE device_fingerprint = ?&quot;
+      ).bind(todayUtc, device_fingerprint).run();
+    }
+    const remaining = Math.max(0, (device.daily_limit - currentUsed) + (device.bonus_points || 0));
+    // 🌟 查询该设备最近 5 笔扣费记录
+    const recentLogsQuery = await env.DB.prepare(
+      &quot;SELECT id, tool_name, points_deducted, created_at FROM quota_logs WHERE device_fingerprint = ? ORDER BY id DESC LIMIT 5&quot;
+    ).bind(device_fingerprint).all();
+    return new Response(JSON.stringify({
+      success: true,
+      device_fingerprint,
+      stage: STAGE,
+      daily_limit: device.daily_limit,
+      used_today: currentUsed,
+      bonus_points: device.bonus_points || 0,
+      remaining_points: remaining,
+      status: device.status,
+      recent_logs: recentLogsQuery.results || []
+    }), { status: 200, headers: CORS_HEADERS });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS_HEADERS });
+  }
+}
+async function handleDeductQuota(request, env) {
+  try {
+    const bodyBytes = new Uint8Array(await request.arrayBuffer());
+    const bodyText = new TextDecoder().decode(bodyBytes);
+    let payload = {};
+    try {
+      payload = JSON.parse(bodyText);
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: &quot;Invalid JSON&quot; }), { status: 400, headers: CORS_HEADERS });
+    }
+    const { device_fingerprint, points_needed = 1, tool_name = &quot;unknown&quot; } = payload;
+    if (!device_fingerprint) {
+      return new Response(JSON.stringify({ success: false, error: &quot;Missing device_fingerprint&quot; }), { status: 400, headers: CORS_HEADERS });
+    }
+    const timestampStr = request.headers.get(&quot;X-Timestamp&quot;);
+    const signatureHex = request.headers.get(&quot;X-Signature&quot;);
+    const secret = env.RELAY_SECRET || &quot;ai-forge-commercial-secret-2026&quot;;
+    if (!timestampStr || !signatureHex) {
+      return new Response(JSON.stringify({ success: false, error: &quot;Missing HMAC headers&quot; }), { status: 401, headers: CORS_HEADERS });
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    const reqSec = parseInt(timestampStr, 10);
+    if (isNaN(reqSec) || Math.abs(nowSec - reqSec) &gt; 300) {
+      return new Response(JSON.stringify({ success: false, error: &quot;Timestamp expired&quot; }), { status: 403, headers: CORS_HEADERS });
+    }
+    const isValid = await verifyHmac(secret, timestampStr, bodyBytes, signatureHex);
+    if (!isValid) {
+      return new Response(JSON.stringify({ success: false, error: &quot;Invalid signature&quot; }), { status: 401, headers: CORS_HEADERS });
+    }
+    const todayUtc = new Date().toISOString().split(&quot;T&quot;)[0];
+    let device = await env.DB.prepare(&quot;SELECT * FROM devices WHERE device_fingerprint = ?&quot;).bind(device_fingerprint).first();
+    if (!device) {
+      await env.DB.prepare(
+        &quot;INSERT INTO devices (device_fingerprint, daily_limit, used_points_today, last_reset_utc_date) VALUES (?, ?, 0, ?)&quot;
+      ).bind(device_fingerprint, DAILY_FREE_POINTS, todayUtc).run();
+      device = {
+        device_fingerprint,
+        daily_limit: DAILY_FREE_POINTS,
+        used_points_today: 0,
+        bonus_points: 0,
+        last_reset_utc_date: todayUtc,
+        status: &quot;active&quot;
+      };
+    }
+    if (device.status === &quot;banned&quot;) {
+      return new Response(JSON.stringify({ success: false, error: &quot;Device is banned&quot; }), { status: 403, headers: CORS_HEADERS });
+    }
+    let currentUsed = device.used_points_today;
+    if (device.last_reset_utc_date !== todayUtc) {
+      currentUsed = 0;
+      await env.DB.prepare(
+        &quot;UPDATE devices SET used_points_today = 0, last_reset_utc_date = ?, updated_at = CURRENT_TIMESTAMP WHERE device_fingerprint = ?&quot;
+      ).bind(todayUtc, device_fingerprint).run();
+    }
+    const totalAvailable = (device.daily_limit - currentUsed) + (device.bonus_points || 0);
+    if (totalAvailable &lt; points_needed) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: &quot;今日免费算力额度已用完，明日 00:00 自动重置&quot;,
+        remaining_points: Math.max(0, totalAvailable)
+      }), { status: 402, headers: CORS_HEADERS });
+    }
+    const newUsed = currentUsed + points_needed;
+    await env.DB.prepare(
+      &quot;UPDATE devices SET used_points_today = ?, updated_at = CURRENT_TIMESTAMP WHERE device_fingerprint = ?&quot;
+    ).bind(newUsed, device_fingerprint).run();
+    const clientIp = request.headers.get(&quot;CF-Connecting-IP&quot;) || &quot;unknown&quot;;
+    await env.DB.prepare(
+      &quot;INSERT INTO quota_logs (device_fingerprint, tool_name, points_deducted, client_ip) VALUES (?, ?, ?, ?)&quot;
+    ).bind(device_fingerprint, tool_name, points_needed, clientIp).run();
+    return new Response(JSON.stringify({
+      success: true,
+      device_fingerprint,
+      points_deducted: points_needed,
+      remaining_points: totalAvailable - points_needed
+    }), { status: 200, headers: CORS_HEADERS });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS_HEADERS });
+  }
+}
+async function handleTelemetryReport(request, env) {
+  try {
+    const payload = await request.json();
+    const { device_fingerprint, tool_name, elapsed_ms = 0, success = true, error_message = null, client_version = &quot;1.0.0&quot; } = payload;
+    const clientIp = request.headers.get(&quot;CF-Connecting-IP&quot;) || &quot;unknown&quot;;
+    await env.DB.prepare(
+      &quot;INSERT INTO telemetry_events (device_fingerprint, tool_name, elapsed_ms, success, error_message, client_version, client_ip) VALUES (?, ?, ?, ?, ?, ?, ?)&quot;
+    ).bind(device_fingerprint || &quot;anonymous&quot;, tool_name || &quot;unknown&quot;, elapsed_ms, success ? 1 : 0, error_message, client_version, clientIp).run();
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS_HEADERS });
+  } catch (e) {
+    return new Response(JSON.stringify({ success: false, error: e.message }), { status: 200, headers: CORS_HEADERS });
+  }
+}
+async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
+  try {
+    const encoder = new TextEncoder();
+    const secretBytes = encoder.encode(secret);
+    const timestampNum = BigInt(timestampStr);
+    const timestampBytes = new Uint8Array(8);
+    let tempVal = timestampNum;
+    for (let i = 7; i &gt;= 0; i--) {
+      timestampBytes[i] = Number(tempVal &amp; 0xffn);
+      tempVal &gt;&gt;= 8n;
+    }
+    const payload = new Uint8Array(timestampBytes.length + bodyBytes.length);
+    payload.set(timestampBytes, 0);
+    payload.set(bodyBytes, timestampBytes.length);
+    const key = await crypto.subtle.importKey(
+      &quot;raw&quot;,
+      secretBytes,
+      { name: &quot;HMAC&quot;, hash: &quot;SHA-256&quot; },
+      false,
+      [&quot;sign&quot;]
+    );
+    const signature = new Uint8Array(await crypto.subtle.sign(&quot;HMAC&quot;, key, payload));
+    const computedHex = [...signature].map(b =&gt; b.toString(16).padStart(2, &quot;0&quot;)).join(&quot;&quot;);
+    return computedHex.toLowerCase() === expectedHex.toLowerCase();
+  } catch {
+    return false;
+  }
+}</file><file path="src-tauri/crates/core-security/src/gatekeeper.rs">use crate::{crypto, license::LicenseVerifier, DeviceFingerprint};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+const OFFICIAL_ED25519_PUBLIC_KEY: &amp;str =
+    &quot;a1385cf90acee43d496d5155315ef7ee34c4857c6e2bb502a2c7ee6115147820a1385cf90ace&quot;;
+const AUTH_BASE_URL: &amp;str = &quot;https://ai.geantendormi.top&quot;;
+const COMMERCIAL_SECRET: &amp;str = &quot;ai-forge-commercial-secret-2026&quot;;
+#[derive(Debug, Serialize)]
+struct QuotaDeductRequest&lt;&apos;a&gt; {
+    device_fingerprint: &amp;&apos;a str,
+    points_needed: u32,
+    tool_name: &amp;&apos;a str,
+}
+#[derive(Debug, Deserialize)]
+struct QuotaDeductResponse {
+    #[serde(default)]
+    success: bool,
+    #[serde(default)]
+    remaining_points: Option&lt;i64&gt;,
+    #[serde(default)]
+    error: Option&lt;String&gt;,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct QuotaLogRecord {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub tool_name: String,
+    #[serde(default)]
+    pub points_deducted: i64,
+    #[serde(default)]
+    pub created_at: String,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct QuotaStatus {
+    #[serde(default)]
+    pub success: bool,
+    #[serde(default)]
+    pub device_fingerprint: String,
+    #[serde(default)]
+    pub stage: String,
+    #[serde(default)]
+    pub daily_limit: i64,
+    #[serde(default)]
+    pub used_today: i64,
+    #[serde(default)]
+    pub bonus_points: i64,
+    #[serde(default)]
+    pub remaining_points: i64,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub is_offline_pro: bool,
+    #[serde(default)]
+    pub recent_logs: Vec&lt;QuotaLogRecord&gt;,
+}
+#[derive(Debug, Serialize)]
+struct TelemetryPayload&lt;&apos;a&gt; {
+    device_fingerprint: &amp;&apos;a str,
+    tool_name: &amp;&apos;a str,
+    elapsed_ms: u64,
+    success: bool,
+    error_message: Option&lt;&amp;&apos;a str&gt;,
+    client_version: &amp;&apos;a str,
+}
+pub struct Gatekeeper;
+impl Gatekeeper {
+    pub fn get_device_fingerprint() -&gt; Result&lt;String, String&gt; {
+        DeviceFingerprint::new()
+            .add_cpu_info()
+            .add_mac_address()
+            .add_system_info()
+            .generate(COMMERCIAL_SECRET)
+            .map_err(|e| format!(&quot;指纹生成失败: {e}&quot;))
+    }
+    /// 查询设备当前 Tokens 状态与最近账单流水
+    pub async fn get_quota_status() -&gt; Result&lt;QuotaStatus, String&gt; {
+        let fingerprint = Self::get_device_fingerprint()?;
+        let lic_path = Path::new(&quot;license.lic&quot;);
+        let is_offline_pro = if lic_path.exists() {
+            if let Ok(verifier) = LicenseVerifier::from_hex_public_key(OFFICIAL_ED25519_PUBLIC_KEY) {
+                verifier.try_verify_file(lic_path, &amp;fingerprint).is_ok()
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if is_offline_pro {
+            return Ok(QuotaStatus {
+                success: true,
+                device_fingerprint: fingerprint,
+                stage: &quot;offline_pro&quot;.to_string(),
+                daily_limit: 999999,
+                used_today: 0,
+                bonus_points: 999999,
+                remaining_points: 999999,
+                status: &quot;active&quot;.to_string(),
+                is_offline_pro: true,
+                recent_logs: vec![],
+            });
+        }
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| e.to_string())?;
+        let body = serde_json::json!({
+            &quot;device_fingerprint&quot;: fingerprint
+        });
+        let res = client
+            .post(format!(&quot;{AUTH_BASE_URL}/api/v1/quota/status&quot;))
+            .json(&amp;body)
+            .send()
+            .await;
+        match res {
+            Ok(response) =&gt; {
+                let status_code = response.status();
+                let text = response.text().await.unwrap_or_default();
+                if status_code.is_success() {
+                    if let Ok(mut status) = serde_json::from_str::&lt;QuotaStatus&gt;(&amp;text) {
+                        status.is_offline_pro = false;
+                        return Ok(status);
+                    }
+                }
+            }
+            _ =&gt; {}
+        }
+        Ok(QuotaStatus {
+            success: true,
+            device_fingerprint: fingerprint,
+            stage: &quot;offline_fallback&quot;.to_string(),
+            daily_limit: 600,
+            used_today: 0,
+            bonus_points: 0,
+            remaining_points: 600,
+            status: &quot;active&quot;.to_string(),
+            is_offline_pro: false,
+            recent_logs: vec![],
+        })
+    }
+    pub async fn check_permission_tokens(tool_name: &amp;str, tokens_needed: u32) -&gt; Result&lt;(), String&gt; {
+        if tokens_needed == 0 || tool_name == &quot;format-converter&quot; || tool_name == &quot;tool-format-convert&quot; {
+            return Ok(());
+        }
+        let fingerprint = Self::get_device_fingerprint()?;
+        let lic_path = Path::new(&quot;license.lic&quot;);
+        if lic_path.exists() {
+            if let Ok(verifier) = LicenseVerifier::from_hex_public_key(OFFICIAL_ED25519_PUBLIC_KEY) {
+                if verifier.try_verify_file(lic_path, &amp;fingerprint).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+        let req_payload = QuotaDeductRequest {
+            device_fingerprint: &amp;fingerprint,
+            points_needed: tokens_needed,
+            tool_name,
+        };
+        let body_bytes = serde_json::to_vec(&amp;req_payload)
+            .map_err(|e| format!(&quot;序列化请求体失败: {e}&quot;))?;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let signature = crypto::compute_signature(COMMERCIAL_SECRET, timestamp, &amp;body_bytes);
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!(&quot;HTTP 初始化失败: {e}&quot;))?;
+        let res = client
+            .post(format!(&quot;{AUTH_BASE_URL}/api/v1/quota/deduct&quot;))
+            .header(&quot;Content-Type&quot;, &quot;application/json&quot;)
+            .header(&quot;X-Timestamp&quot;, timestamp.to_string())
+            .header(&quot;X-Signature&quot;, signature)
+            .body(body_bytes)
+            .send()
+            .await;
+        match res {
+            Ok(response) =&gt; {
+                let status = response.status();
+                let res_text = response.text().await.unwrap_or_default();
+                if status.is_success() {
+                    if let Ok(res_json) = serde_json::from_str::&lt;QuotaDeductResponse&gt;(&amp;res_text) {
+                        if res_json.success {
+                            let rem = res_json.remaining_points.unwrap_or(0);
+                            tracing::info!(&quot;✅ [Gatekeeper] 扣减 {tokens_needed} Tokens 通过！今日剩余: {rem} Tokens&quot;);
+                            return Ok(());
+                        } else {
+                            let err_msg = res_json.error.unwrap_or_else(|| &quot;Tokens 额度不足&quot;.into());
+                            return Err(format!(&quot;🚨 算力拦截: {err_msg}&quot;));
+                        }
+                    }
+                }
+                if status.as_u16() == 402 || status.as_u16() == 403 || status.as_u16() == 401 {
+                    return Err(format!(&quot;🚨 算力拦截 [HTTP {}]: {}&quot;, status.as_u16(), res_text));
+                }
+                Ok(())
+            }
+            Err(_) =&gt; Ok(()),
+        }
+    }
+    pub async fn check_permission(tool_name: &amp;str) -&gt; Result&lt;(), String&gt; {
+        Self::check_permission_tokens(tool_name, 1).await
+    }
+    pub async fn report_telemetry(
+        tool_name: &amp;str,
+        elapsed_ms: u64,
+        success: bool,
+        error_message: Option&lt;&amp;str&gt;,
+    ) {
+        let fingerprint = Self::get_device_fingerprint().unwrap_or_else(|_| &quot;anonymous&quot;.into());
+        let payload = TelemetryPayload {
+            device_fingerprint: &amp;fingerprint,
+            tool_name,
+            elapsed_ms,
+            success,
+            error_message,
+            client_version: &quot;1.0.0&quot;,
+        };
+        if let Ok(c) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(3)).build() {
+            let _ = c.post(format!(&quot;{AUTH_BASE_URL}/api/v1/telemetry/report&quot;))
+                .json(&amp;payload)
+                .send()
+                .await;
+        }
+    }
+}</file><file path="src/bindings/index.ts">// 🛡️ 紫电 AI 桌面工坊 - 端到端强类型契约门面中枢 (bindings/index.ts)
+import { invoke } from &quot;@tauri-apps/api/core&quot;;
+import { runFormatConvert } from &quot;./tools/format-converter&quot;;
+import { parsePdf } from &quot;./tools/pdf-parse&quot;;
+import { runVideoSubtitle, probeVideo } from &quot;./tools/video-subtitle&quot;;
+import { runUpscale48k } from &quot;./tools/upscale-48k&quot;;
+import {
+  checkToolDependencies,
+  downloadToolDependencies,
+  cancelDependencyDownloads,
+} from &quot;./dependencies&quot;;
+export * from &quot;./tools/format-converter&quot;;
+export * from &quot;./tools/pdf-parse&quot;;
+export * from &quot;./tools/video-subtitle&quot;;
+export * from &quot;./tools/upscale-48k&quot;;
+export * from &quot;./dependencies&quot;;
+export interface QuotaLogRecord {
+  id: number;
+  tool_name: string;
+  points_deducted: number;
+  created_at: string;
+}
+export interface QuotaStatus {
+  success: boolean;
+  device_fingerprint: string;
+  stage: string;
+  daily_limit: number;
+  used_today: number;
+  bonus_points: number;
+  remaining_points: number;
+  status: string;
+  is_offline_pro: boolean;
+  recent_logs?: QuotaLogRecord[];
+}
+export async function getQuotaStatus(): Promise&lt;QuotaStatus&gt; {
+  return await invoke&lt;QuotaStatus&gt;(&quot;get_quota_status&quot;);
+}
+export async function getHardwareFingerprint(): Promise&lt;string&gt; {
+  return await invoke&lt;string&gt;(&quot;get_hardware_fingerprint&quot;);
+}
+export async function cancelCurrentTask(): Promise&lt;boolean&gt; {
+  return await invoke&lt;boolean&gt;(&quot;cancel_current_task&quot;);
+}
+export const commands = {
+  getQuotaStatus,
+  runFormatConvert,
+  parsePdf,
+  probeVideo,
+  runVideoSubtitle,
+  runUpscale48k,
+  cancelCurrentTask,
+  getHardwareFingerprint,
+  checkToolDependencies,
+  downloadToolDependencies,
+  cancelDependencyDownloads,
+};</file></files></repomix>

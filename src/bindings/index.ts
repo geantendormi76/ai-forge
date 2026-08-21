@@ -1,15 +1,20 @@
 // 🛡️ 紫电 AI 桌面工坊 - 端到端强类型契约门面中枢 (bindings/index.ts)
-
 import { invoke } from "@tauri-apps/api/core";
 import { runFormatConvert } from "./tools/format-converter";
 import { parsePdf } from "./tools/pdf-parse";
 import { runVideoSubtitle, probeVideo } from "./tools/video-subtitle";
 import { runUpscale48k } from "./tools/upscale-48k";
+import {
+  checkToolDependencies,
+  downloadToolDependencies,
+  cancelDependencyDownloads,
+} from "./dependencies";
 
 export * from "./tools/format-converter";
 export * from "./tools/pdf-parse";
 export * from "./tools/video-subtitle";
 export * from "./tools/upscale-48k";
+export * from "./dependencies";
 
 export interface QuotaLogRecord {
   id: number;
@@ -52,4 +57,7 @@ export const commands = {
   runUpscale48k,
   cancelCurrentTask,
   getHardwareFingerprint,
+  checkToolDependencies,
+  downloadToolDependencies,
+  cancelDependencyDownloads,
 };

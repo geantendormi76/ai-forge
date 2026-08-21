@@ -77,44 +77,7 @@ C:\dev\ai-forge\
 
 ---
 
-## 🛑 4. 当前精确卡点与物理根因分析 (Current Bottlenecks & Root Causes)
-
-### 现场真相：
-在桌面端前端转换原始数字 PDF `1346.pdf`（或 `444.pdf`）时，耗时较慢（约 53 秒），且产物中的公式变成了 `$$$$` 空框，正文中部分数学符号显示为黄色问号 `⍰`。
-
-### 深度白盒根因逆向：
-1. **探针分流过度简化（契约断层 1）**：
-   * `probe.rs` 中的分流逻辑仅判断了 `valid_char_count < 50` 和 `readable_ratio < 0.60`，**漏掉了 `math_symbol_count > 0`**；
-   * 导致包含复杂数学符号的 9 页数字论文被草率分流给了 CPU 矢量轨（`FastTrackCpu`）；
-   * 而 arXiv 论文采用了非标 TeX 嵌入字库（缺失 `ToUnicode` 映射），CPU 矢量流直接读出来的特殊符号变成未定义字符（`\u{fffd}`），在 VS Code 中显示为 `⍰` 问号框！
-2. **全局 `split("$$")` 引发的“相位反转大塌陷”（契约断层 2）**：
-   * 在 `clean_katex_markdown` 中，代码使用全局 `res.split("$$")` 并按奇偶索引假设公式与正文；
-   * 在多页长文档中，一旦某个正文区域包含单 `$` 或公式为空，文档的奇偶索引瞬间发生**全局相位反转**，导致正文被当成公式清洗，公式被当成正文剔除，最终全部坍塌为 **`$$$$`** 空白框！
-3. **CUDA DLL 自动并网已就绪，需在编译期默认激活**：
-   * `core-onnx-infer/Cargo.toml` 中已将默认特性修改为 `default = ["cuda"]`，并在 `config.rs` 中增加了 `ensure_cuda_dll_registered()` 自动注入 `bin/cuda12` 到进程 `PATH`。
-
----
-
-## 🚀 5. 新会话下一步单步实施清单 (Action Plan for New Session)
-
-新会话接管后，请严格按照以下步骤单步推进：
-
-### 第一步：修复 `probe.rs` 分流决策与公式智能路由
-* 在 `probe.rs` 中，恢复对 `math_symbol_count` 和非标 TeX 字符的敏感检测：
-  * 若页面包含公式（`math_symbol_count >= 1`）或检测到大量 `\u{fffd}` 乱码，强制分流给 **`DeepTrackGpu`**（由神经视觉模型直接看图推导）；
-* 编译单测：`cargo test --manifest-path C:\dev\ai-forge\src-tauri\Cargo.toml -p pdf-parse`
-
-### 第二步：废除全局 `res.split("$$")`，回归 AST 节点局部闭合
-* 在 `pipeline.rs` 的 `clean_katex_markdown` 中，彻底移除全局 `res.split("$$")` 切割逻辑，将 `balance_latex_braces` 严格限定在每个公式节点自身内部（`BlockContent::Formula`）执行，彻底消灭“相位反转”导致的 `$$$$` 灾难。
-
-### 第三步：全量真机重启与 9 页极速压测
-* 执行 `pnpm tauri dev`；
-* 拖入 `C:\Users\52484\Pictures\444.pdf` 进行全量真机解析；
-* 验证 9 页学术论文在 GPU 满血加速下于 **8~12 秒内完成**，且公式 (1)、(2)、(3)、(4) 与正文符号 100% 完整无乱码！
-
----
-
-## ⚠️ 6. 避坑终结手册与禁忌铁律 (Anti-Patterns / Lessons Learned)
+## ⚠️ 4. 避坑终结手册与禁忌铁律 (Anti-Patterns / Lessons Learned)
 
 1. **绝对不要在全局 Markdown 字符串上执行 `split("$$")`**：
    长文档中的正文 `$100` 或单 `$` 会导致奇偶索引颠倒，摧毁整篇文档的所有公式！公式规整必须在 AST 节点内部完成。

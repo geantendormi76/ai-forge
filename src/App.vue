@@ -3,6 +3,8 @@ import { onMounted } from 'vue';
 import { useUIStore } from './store/uiStore';
 import { useTauriWindow } from './composables/useTauriWindow';
 import Sidebar from './components/layout/Sidebar.vue';
+import DependencyGateModal from './components/modals/DependencyGateModal.vue';
+import AppUpdateModal from './components/modals/AppUpdateModal.vue';
 import HomeView from './views/HomeView.vue';
 import Upscale48kView from './views/Upscale48kView.vue';
 import FormatConverterView from './views/FormatConverterView.vue';
@@ -30,7 +32,6 @@ onMounted(() => {
 
 <template>
   <div class="h-screen w-full overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
-    
     <!-- 1. 全景主工作区 -->
     <main class="absolute inset-0 w-full h-full overflow-hidden z-0">
       <HomeView v-if="ui.currentView === 'home'" />
@@ -40,10 +41,9 @@ onMounted(() => {
       <VideoSubtitleView v-else-if="ui.currentView === 'asr'" />
     </main>
 
-    <!-- 2. 🌟 SOTA 原生拖拽顶栏 (层级下沉至 z-20，绝不遮挡任何交互按钮) -->
+    <!-- 2. 🌟 SOTA 原生拖拽顶栏 -->
     <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-20 pointer-events-none">
       <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto select-none" style="-webkit-app-region: drag;"></div>
-      
       <!-- 右上角物理窗口控制器 (最高层级 z-50) -->
       <div class="flex items-center h-full pointer-events-auto pr-3 gap-1 z-50" style="-webkit-app-region: no-drag;">
         <button
@@ -77,7 +77,13 @@ onMounted(() => {
     <!-- 3. 🌟 智能双态胶囊侧边栏 (最高交互层级 z-50) -->
     <Sidebar />
 
-    <!-- 4. 全局暗黑微光 Toast 提示气泡 -->
+    <!-- 4. 🌟 模型依赖感知下载模态框 -->
+    <DependencyGateModal />
+
+    <!-- 5. 🌟 2026 SOTA 全生命周期版本热更新模态框 -->
+    <AppUpdateModal />
+
+    <!-- 6. 全局暗黑微光 Toast 提示气泡 -->
     <div v-if="ui.toast显示" class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
       <Transition
         appear
@@ -107,6 +113,5 @@ onMounted(() => {
         </div>
       </Transition>
     </div>
-
   </div>
 </template>

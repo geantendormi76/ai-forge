@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "notes": "✨ 紫电 AI v0.1.0 工业级 SOTA 版本发布：\n• 全系统协同性能与显存守卫深度优化\n• 4K/8K 图像超分、视频双语字幕与 PDF 解析稳定性增强\n• 零回归体验提升与已知问题修复",
+  "pub_date": "2026-08-21T07:55:16Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "",
+      "url": "https://assets.geantendormi.top/updates/zidian-ai_x64.nsis.zip"
+    }
+  }
+}
