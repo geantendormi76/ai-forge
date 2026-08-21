@@ -1,0 +1,82 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 10000000
+  },
+  "output": {
+    "filePath": "repomix-output-DEPLOY.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "compress": false,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 10,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 50
+    },
+    "patterns": [
+      { "pattern": "HANDOFF_DEPLOY.md", "compress": false },
+      { "pattern": "deploy/cloudflare/**", "compress": false },
+      { "pattern": "deploy/website/src/**", "compress": false },
+      { "pattern": "deploy/website/*.json", "compress": false },
+      { "pattern": "deploy/website/*.ts", "compress": false },
+      { "pattern": "src-tauri/crates/core-security/src/gatekeeper.rs", "compress": false }
+    ]
+  },
+  "include": [
+    // =========================================================
+    // 🌐 1. [官方网站展示站] (https://geantendormi.top / Pages)
+    // =========================================================
+    "HANDOFF_DEPLOY.md",
+    "deploy/website/package.json",
+    "deploy/website/vite.config.ts",
+    "deploy/website/tailwind.config.js",
+    "deploy/website/postcss.config.js",
+    "deploy/website/index.html",
+    "deploy/website/src/**",
+
+    // =========================================================
+    // 🛡️ 2. [Cloudflare Serverless 鉴权中台] (https://ai.geantendormi.top)
+    // =========================================================
+    "deploy/cloudflare/auth_worker.js",
+    "deploy/cloudflare/wrangler.toml",
+
+    // =========================================================
+    // 🦀 3. [客户端契约对齐参考] (用于云端 API 与本地接口保持 100% 互通)
+    // =========================================================
+    "src-tauri/crates/core-security/src/gatekeeper.rs",
+    "src/bindings/index.ts"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "src-tauri/target/**",
+      "**/.venv/**",
+      "**/__pycache__/**",
+      "**/*.onnx",
+      "**/*.gguf",
+      "**/*.bin",
+      "**/*.pdf",
+      "**/*.dll",
+      "**/*.exe",
+      "test/**",
+      "data/**",
+      "**/*.sqlite3*",
+      "dist/**",
+      "deploy/website/dist/**",
+      "src_backup_before_migration/**"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}

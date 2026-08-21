@@ -31,7 +31,7 @@ onMounted(() => {
 <template>
   <div class="h-screen w-full overflow-hidden font-sans select-none bg-[#20292b] text-[#f5f5f3] relative">
     
-    <!-- 1. 全景沉浸主工作区 (自适应双态导轨间距) -->
+    <!-- 1. 全景主工作区 -->
     <main class="absolute inset-0 w-full h-full overflow-hidden z-0">
       <HomeView v-if="ui.currentView === 'home'" />
       <Upscale48kView v-else-if="ui.currentView === 'upscale'" />
@@ -40,10 +40,12 @@ onMounted(() => {
       <VideoSubtitleView v-else-if="ui.currentView === 'asr'" />
     </main>
 
-    <!-- 2. 无边框原生拖拽顶栏与物理窗口控制器 -->
-    <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-50 pointer-events-none">
-      <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto" style="-webkit-app-region: drag;"></div>
-      <div class="flex items-center h-full pointer-events-auto pr-3 gap-1" style="-webkit-app-region: no-drag;">
+    <!-- 2. 🌟 SOTA 原生拖拽顶栏 (层级下沉至 z-20，绝不遮挡任何交互按钮) -->
+    <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-20 pointer-events-none">
+      <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto select-none" style="-webkit-app-region: drag;"></div>
+      
+      <!-- 右上角物理窗口控制器 (最高层级 z-50) -->
+      <div class="flex items-center h-full pointer-events-auto pr-3 gap-1 z-50" style="-webkit-app-region: no-drag;">
         <button
           type="button"
           @click="触发最小化"
@@ -72,10 +74,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 3. 智能双态胶囊侧边栏 (展开宽栏 <-> 迷你纯图标导轨) -->
+    <!-- 3. 🌟 智能双态胶囊侧边栏 (最高交互层级 z-50) -->
     <Sidebar />
 
-    <!-- 4. 全局暗黑海青微光 Toast 提示气泡 -->
+    <!-- 4. 全局暗黑微光 Toast 提示气泡 -->
     <div v-if="ui.toast显示" class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
       <Transition
         appear

@@ -1,34 +1,65 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 10000000
+  },
   "output": {
     "filePath": "repomix-output-UI.xml",
     "style": "xml",
+    "parsableStyle": true,
     "compress": false,
-    "removeComments": false,
-    "showLineNumbers": false,
     "fileSummary": true,
     "directoryStructure": true,
     "files": true,
-    "includeFullDirectoryStructure": false
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 10,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 50
+    },
+    // 🌟 SOTA 细粒度分级：前端源码 100% 全量，后端契约智能签名压缩
+    "patterns": [
+      { "pattern": "HANDOFF_UI.md", "compress": false },
+      { "pattern": "src/views/**", "compress": false },
+      { "pattern": "src/components/**", "compress": false },
+      { "pattern": "src/store/**", "compress": false },
+      { "pattern": "src/composables/**", "compress": false },
+      { "pattern": "src/bindings/**", "compress": false },
+      { "pattern": "src-tauri/src/lib.rs", "compress": false },
+      { "pattern": "src-tauri/crates/shared-contracts/**", "compress": true }
+    ]
   },
   "include": [
+    // =========================================================
+    // 🎨 1. [前端全景 UI 资产] 页面、组件、状态树、动效与样式
+    // =========================================================
     "HANDOFF_UI.md",
-    ".cargo/**",
-    "src-tauri/.cargo/**",
-    "src-tauri/Cargo.toml",
-    "src-tauri/tauri.conf.json",
-    "src-tauri/capabilities/**",
-    "src-tauri/src/**",
-    "deploy/cloudflare/auth_worker.js",
-
     "package.json",
     "vite.config.ts",
     "postcss.config.js",
     "tailwind.config.js",
     "index.html",
+    "src/App.vue",
+    "src/main.ts",
+    "src/style.css",
+    "src/vite-env.d.ts",
+    "src/views/**",
+    "src/components/**",
+    "src/composables/**",
+    "src/store/**",
+    "src/locales/**",
+    "src/assets/**",
 
-    "src/**"
-
+    // =========================================================
+    // 🛡️ 2. [端到端契约中枢] 前后端强类型绑定与 Tauri IPC Commands
+    // =========================================================
+    "src/bindings.ts",
+    "src/bindings/**",
+    "src-tauri/src/lib.rs",
+    "src-tauri/tauri.conf.json",
+    "src-tauri/capabilities/**",
+    "src-tauri/crates/shared-contracts/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -43,32 +74,21 @@
       "**/*.bin",
       "**/*.pdiparams",
       "**/*.pdmodel",
-      "test/fixtures/**",
-      "test/outs/**",
+      "**/*.pdf",
+      "**/*.dll",
+      "**/*.exe",
+      "test/**",
       "data/**",
       "**/*.sqlite3*",
       "dist/**",
-
-      "src-tauri/crates/tools/tool-pdf-parse/**",
-      "src-tauri/crates/tools/pdf-parse/**",
-      "src-tauri/crates/tools/format-converter/**",
-      "src-tauri/crates/tools/video-subtitle/**",
-      
-          
-      "src-tauri/crates/core-models-download/**",
-      "src-tauri/crates/core-security/**",
-      "src-tauri/crates/shared-contracts/**",
-      "src-tauri/crates/core-onnx-infer/**",
-      
-      "src-tauri/crates/services/service-ocr/**",
-      "src-tauri/crates/services/service-asr/**",
-      "src-tauri/crates/services/service-translation/**",
-      "src-tauri/crates/services/service-pdfium/**",
-      "src-tauri/crates/services/service-doc-parse/**",
-      "src-tauri/crates/services/service-formula/**",
-      "src-tauri/crates/services/service-layout/**",
-      "src-tauri/crates/services/service-table/**",
-      "src-tauri/crates/services/service-converter/**"
+      "deploy/website/**",
+      "src_backup_before_migration/**"
     ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
   }
 }

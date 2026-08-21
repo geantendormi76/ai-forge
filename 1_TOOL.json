@@ -1,18 +1,37 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 10000000
+  },
   "output": {
     "filePath": "repomix-output-TOOL.xml",
     "style": "xml",
+    "parsableStyle": true,
     "compress": false,
-    "removeComments": false,
-    "showLineNumbers": false,
     "fileSummary": true,
     "directoryStructure": true,
     "files": true,
-    "includeFullDirectoryStructure": false
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 10,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 50
+    },
+    "patterns": [
+      { "pattern": "HANDOFF_TOOL.md", "compress": false },
+      { "pattern": "src-tauri/tauri.conf.json", "compress": false },
+      { "pattern": "src-tauri/Cargo.toml", "compress": false },
+      { "pattern": "src-tauri/src/**", "compress": false },
+      { "pattern": "src/views/**", "compress": false },
+      { "pattern": "src-tauri/crates/core-*/**", "compress": true }
+    ]
   },
   "include": [
-    "HANDOFF-TOOL.md",
+    // =========================================================
+    // 🏛️ 1. [公共常驻基座] 核心配置、UI 框架、通用底座与契约
+    // =========================================================
+    "HANDOFF_TOOL.md",
     ".cargo/**",
     "src-tauri/.cargo/**",
     "src-tauri/Cargo.toml",
@@ -23,38 +42,54 @@
     "src/bindings.ts",
     "src/bindings/**",
     "src/assets/**",
-
     "package.json",
     "vite.config.ts",
-    "postcss.config.js",
-    "tailwind.config.js",
     "index.html",
-
     "src/App.vue",
     "src/main.ts",
     "src/style.css",
-    "src/vite-env.d.ts",
     "src/composables/**",
     "src/store/**",
-    "src/locales/**",
-    "src/components/**",
+    "src/components/layout/**",
     "src/views/HomeView.vue",
-
-    
-    "src-tauri/crates/services/service-ocr/**",
-    "src/views/PdfParseView.vue",
-    "src-tauri/crates/services/service-pdfium/**",
-    "src-tauri/crates/services/service-doc-parse/**",
-    "src-tauri/crates/services/service-formula/**",
-    "src-tauri/crates/services/service-layout/**",
-    "src-tauri/crates/services/service-table/**",
-    "src-tauri/crates/tools/pdf-parse/**",    
-
     "src-tauri/crates/core-models-download/**",
     "src-tauri/crates/core-security/**",
     "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/core-onnx-infer/**"
+    "src-tauri/crates/core-onnx-infer/**",
 
+    // =========================================================
+    // 📄 2. [PDF 智能解析全套：前端 + 工具层 + 6大底层 Services]
+    // =========================================================
+    "src/views/PdfParseView.vue",
+    "src-tauri/crates/tools/pdf-parse/**",
+    "src-tauri/crates/services/service-pdfium/**",
+    "src-tauri/crates/services/service-doc-parse/**",
+    "src-tauri/crates/services/service-layout/**",
+    "src-tauri/crates/services/service-ocr/**",
+    "src-tauri/crates/services/service-formula/**",
+    "src-tauri/crates/services/service-table/**"
+
+    // =========================================================
+    // 🔍 3. [4K/8K 图像超分全套：前端 + 工具层 + 底层 Service]
+    // =========================================================
+    // "src/views/Upscale48kView.vue",
+    // "src-tauri/crates/tools/upscale-48k/**",
+    // "src-tauri/crates/services/service-upscale/**"
+
+    // =========================================================
+    // 🎬 4. [视频字幕生成全套：前端 + 工具层 + 2大底层 Services]
+    // =========================================================
+    // "src/views/VideoSubtitleView.vue",
+    // "src-tauri/crates/tools/video-subtitle/**",
+    // "src-tauri/crates/services/service-asr/**",
+    // "src-tauri/crates/services/service-translation/**"
+
+    // =========================================================
+    // ⚡ 5. [全能格式转换全套：前端 + 工具层 + 底层 Service]
+    // =========================================================
+    // "src/views/FormatConverterView.vue",
+    // "src-tauri/crates/tools/format-converter/**",
+    // "src-tauri/crates/services/service-converter/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -70,32 +105,20 @@
       "**/*.pdiparams",
       "**/*.pdmodel",
       "**/*.pdf",
-      "test/fixtures/**",
-      "test/outs/**",
+      "**/*.dll",
+      "**/*.exe",
+      "test/**",
       "data/**",
       "**/*.sqlite3*",
       "dist/**",
-
-
-      "src-tauri/crates/tools/format-converter/**",
-      "src-tauri/crates/services/service-converter/**",
-      "src/views/FormatConverterView.vue",
-
-
-
-      "test/parse/ground_truth/**",
-      "test/parse/*.py",
-      
-
-      "src/views/Upscale48kView.vue",
-      "src-tauri/crates/services/service-upscale/**",
-      "src-tauri/crates/tools/upscale-48k/**",
-        
-
-      "src/views/VideoSubtitleView.vue",
-      "src-tauri/crates/services/service-asr/**",
-      "src-tauri/crates/services/service-translation/**",
-      "src-tauri/crates/tools/video-subtitle/**"
+      "deploy/website/**",
+      "src_backup_before_migration/**"
     ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
   }
 }

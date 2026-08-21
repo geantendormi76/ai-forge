@@ -53,7 +53,6 @@ const openQuotaModal = () => {
   ui.showQuotaModal = true;
 };
 
-// 🌟 全局标准化工具名称映射 (兼容所有历史别名)
 const formatToolName = (name: string) => {
   const map: Record<string, string> = {
     'upscale-48k': '🔍 4K/8K 图像超分',
@@ -77,16 +76,17 @@ onMounted(() => {
 
 <template>
   <aside
-    class="fixed left-3 top-3 bottom-3 bg-[#182022]/95 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.6)] flex flex-col pt-4 pb-3 z-40 transition-all duration-300 ease-in-out select-none border border-white/[0.08] overflow-hidden"
+    class="fixed left-3 top-3 bottom-3 bg-[#182022]/95 backdrop-blur-2xl rounded-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.6)] flex flex-col pt-2.5 pb-3 z-50 transition-all duration-300 ease-in-out select-none border border-white/[0.08] overflow-hidden"
     :class="ui.侧边栏收起 ? 'w-[64px]' : 'w-[236px]'"
-    style="-webkit-app-region: drag;"
   >
-    <!-- 顶部品牌 -->
-    <div class="px-3.5 mb-3 flex items-center justify-between pointer-events-auto shrink-0" style="-webkit-app-region: no-drag;">
+    <!-- ==================== 顶部品牌与切换开关 (对齐右上角 44px 高度基线) ==================== -->
+    <div class="px-2.5 h-10 mb-2 flex items-center justify-between pointer-events-auto shrink-0 relative z-50" style="-webkit-app-region: no-drag !important;">
+      
+      <!-- 展开态头部 -->
       <div v-if="!ui.侧边栏收起" class="flex items-center justify-between w-full">
         <div
           @click="ui.currentView = 'home'"
-          class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2"
+          class="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center gap-2 pl-1"
           title="返回紫电主页"
         >
           <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#bc05ff] to-[#DCA54C] flex items-center justify-center shadow-[0_0_12px_rgba(188,5,255,0.4)]">
@@ -104,23 +104,25 @@ onMounted(() => {
 
         <button
           type="button"
-          @click="ui.切换侧边栏"
-          class="w-7 h-7 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer shrink-0"
+          @click.stop="ui.切换侧边栏"
+          class="w-8 h-8 rounded-lg text-[#8b999b] hover:text-white hover:bg-white/[0.08] active:scale-90 flex items-center justify-center transition-all cursor-pointer shrink-0"
           title="收起侧边栏"
         >
-          <PanelLeftClose :size="15" class="stroke-[2]" />
+          <PanelLeftClose :size="16" class="stroke-[2.2]" />
         </button>
       </div>
 
-      <div v-else class="flex flex-col items-center justify-center w-full space-y-2">
+      <!-- 收起态头部 (居中大热区按钮) -->
+      <div v-else class="flex items-center justify-center w-full">
         <button
           type="button"
-          @click="ui.切换侧边栏"
-          class="w-9 h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 hover:border-[#02c3b4]/50 text-[#8b999b] hover:text-[#02c3b4] flex items-center justify-center transition-all cursor-pointer group relative"
+          @click.stop="ui.切换侧边栏"
+          class="w-9 h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] active:scale-90 border border-white/10 hover:border-[#02c3b4]/50 text-[#8b999b] hover:text-[#02c3b4] flex items-center justify-center transition-all cursor-pointer group relative"
+          title="展开侧边栏"
         >
-          <PanelLeftOpen :size="16" class="stroke-[2]" />
+          <PanelLeftOpen :size="16" class="stroke-[2.2]" />
           <div class="absolute left-12 bg-black/90 text-white font-bold text-[11px] px-2.5 py-1 rounded-lg border border-white/15 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 shadow-xl z-50">
-            打开边栏
+            展开侧边栏
           </div>
         </button>
       </div>
@@ -247,7 +249,7 @@ onMounted(() => {
     </div>
   </aside>
 
-  <!-- 🌟 全景极简毛玻璃 Tokens 算力弹窗 -->
+  <!-- 全景极简毛玻璃 Tokens 算力弹窗 -->
   <div
     v-if="ui.showQuotaModal"
     class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 select-none pointer-events-auto"
@@ -294,7 +296,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 实时扣费明细流水 (已全量支持历史别名规范化) -->
+      <!-- 实时扣费明细流水 -->
       <div class="space-y-2.5">
         <div class="text-xs font-bold text-[#8b999b] px-1 flex items-center gap-1.5">
           <Clock :size="13" />
