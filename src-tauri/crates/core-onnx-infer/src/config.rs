@@ -11,13 +11,13 @@ pub fn ensure_cuda_dll_registered() {
     if CUDA_DLL_REGISTERED.load(Ordering::Relaxed) {
         return;
     }
-
     #[cfg(target_os = "windows")]
     {
         let mut candidates: Vec<PathBuf> = Vec::new();
 
-        // 1. 🌟 第一优先级：生产环境隔离区 %LOCALAPPDATA%\ZiDianAI\bin\cuda12
+        // 1. 🌟 第一优先级：方案 A 现代统一规范区 %LOCALAPPDATA%\紫电AI\Data\bin\cuda12 (及兼容 ZiDianAI)
         if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            candidates.push(PathBuf::from(&local_appdata).join("紫电AI").join("Data").join("bin").join("cuda12"));
             candidates.push(PathBuf::from(&local_appdata).join("ZiDianAI").join("bin").join("cuda12"));
         }
 
@@ -26,6 +26,7 @@ pub fn ensure_cuda_dll_registered() {
             if let Some(exe_dir) = exe_p.parent() {
                 candidates.push(exe_dir.join("bin").join("cuda12"));
                 candidates.push(exe_dir.join("cuda12"));
+                candidates.push(exe_dir.join("Data").join("bin").join("cuda12"));
                 candidates.push(exe_dir.join("resources").join("bin").join("cuda12"));
             }
         }
@@ -74,7 +75,6 @@ pub fn ensure_cuda_dll_registered() {
                             .encode_wide()
                             .chain(std::iter::once(0))
                             .collect();
-
                         extern "system" {
                             fn SetDllDirectoryW(lpPathName: *const u16) -> i32;
                         }
@@ -110,7 +110,6 @@ pub struct OrtSessionConfig {
 impl Default for OrtSessionConfig {
     fn default() -> Self {
         Self {
-            // 🛡️ 强制纯血 CUDA 直推（严禁静默回退到 CPU，确保 100% 吃到 GPU）
             execution_providers: vec![
                 OrtExecutionProvider::CUDA { device_id: 0 },
             ],
@@ -131,7 +130,6 @@ pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferErr
             ..Default::default()
         });
     }
-
     if dev.starts_with("cuda") {
         let id = dev
             .strip_prefix("cuda:")
@@ -144,7 +142,6 @@ pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferErr
             ..Default::default()
         });
     }
-
     if dev.starts_with("directml") || dev.starts_with("dml") {
         let id = dev
             .strip_prefix("directml:")
@@ -159,7 +156,6 @@ pub fn parse_device_config(device: &str) -> Result<OrtSessionConfig, OrtInferErr
             ..Default::default()
         });
     }
-
     Ok(OrtSessionConfig::default())
 }
 
@@ -177,7 +173,6 @@ impl OrtSessionConfig {
 
     pub fn build_session_builder(&self) -> Result<SessionBuilder, OrtInferError> {
         ensure_cuda_dll_registered();
-
         let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
             path: "ONNX SessionBuilder".into(),
             context: format!("Failed to create builder: {e}"),

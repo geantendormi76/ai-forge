@@ -1,5 +1,16 @@
 [build]
-rustflags = ["-C", "target-feature=-crt-static"]
+rustflags = [
+    "-C", "target-feature=-crt-static",
+    "-C", "link-arg=/DELAYLOAD:cublas64_13.dll",
+    "-C", "link-arg=/DELAYLOAD:cublas64_12.dll",
+    "-C", "link-arg=/DELAYLOAD:cublasLt64_12.dll",
+    "-C", "link-arg=/DELAYLOAD:cudart64_13.dll",
+    "-C", "link-arg=/DELAYLOAD:cudart64_12.dll",
+    "-C", "link-arg=/DELAYLOAD:cudnn64_9.dll",
+    "-C", "link-arg=/DELAYLOAD:cudnn_engines_precompiled64_9.dll",
+    "-C", "link-arg=/DELAYLOAD:onnxruntime_providers_cuda.dll",
+    "-C", "link-arg=delayimp.lib"
+]
 
 [env]
 CMAKE_GENERATOR = { value = "Ninja", force = true }
