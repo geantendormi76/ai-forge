@@ -36,6 +36,10 @@ export interface QuotaStatus {
   recent_logs?: QuotaLogRecord[];
 }
 
+export async function isPortable(): Promise<boolean> {
+  return await invoke<boolean>("is_portable");
+}
+
 export async function getQuotaStatus(): Promise<QuotaStatus> {
   return await invoke<QuotaStatus>("get_quota_status");
 }
@@ -49,6 +53,7 @@ export async function cancelCurrentTask(): Promise<boolean> {
 }
 
 export const commands = {
+  isPortable,
   getQuotaStatus,
   runFormatConvert,
   parsePdf,

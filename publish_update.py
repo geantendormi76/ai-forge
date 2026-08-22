@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+import base64
+import shutil
 import subprocess
 import urllib.request
 from datetime import datetime, timezone
@@ -8,108 +10,153 @@ from pathlib import Path
 
 print("=== 🚀 紫电 AI 2026 SOTA 一键自动化版本发布与数字签名中台 ===\n")
 
+print("🧹 [步骤 0/6] 检查并释放后台进程锁...")
+subprocess.run(["taskkill", "/F", "/IM", "ai-forge.exe"], capture_output=True, shell=True)
+
 root_dir = Path(r"C:\dev\ai-forge")
 tauri_conf_path = root_dir / "src-tauri" / "tauri.conf.json"
+package_json_path = root_dir / "package.json"
+dist_dir = root_dir / "dist"
+nsis_dir = root_dir / "src-tauri" / "target" / "release" / "bundle" / "nsis"
 user_home = Path(os.environ.get("USERPROFILE", r"C:\Users\52484"))
 key_path = user_home / ".tauri" / "zidian-ai.key"
+pub_path = user_home / ".tauri" / "zidian-ai.key.pub"
 
 if not key_path.exists():
     print(f"🚨 未找到签名私钥文件: {key_path}")
     sys.exit(1)
 
-# 1. 读取当前 tauri.conf.json 版本号
-try:
-    conf_data = json.loads(tauri_conf_path.read_text(encoding="utf-8"))
-    current_version = conf_data.get("version", "0.1.0")
-except Exception as e:
-    print(f"🚨 读取 tauri.conf.json 失败: {e}")
+private_key_text = key_path.read_text(encoding="utf-8").strip()
+
+def to_wsl_path(win_path: Path) -> str:
+    p_str = str(win_path.resolve())
+    drive = p_str[0].lower()
+    rest = p_str[2:].replace("\\", "/")
+    return f"/mnt/{drive}{rest}"
+
+print("🔑 [步骤 1/6] 正在校验公钥格式并执行 SemVer 语义化版本自增...")
+conf_data = json.loads(tauri_conf_path.read_text(encoding="utf-8"))
+
+# 1. 权威公钥校验与单层 Base64 自愈
+if pub_path.exists():
+    raw_pub = pub_path.read_text(encoding="utf-8").strip()
+    if raw_pub.startswith("ZFc1"):
+        raw_pub = base64.b64decode(raw_pub).decode("utf-8")
+    if not raw_pub.startswith("dW50"):
+        raw_pub = base64.b64encode(raw_pub.encode("utf-8")).decode("utf-8")
+    conf_data.setdefault("plugins", {}).setdefault("updater", {})["pubkey"] = raw_pub
+    print(f"  ✅ 权威公钥校验通过: {raw_pub[:28]}... ({len(raw_pub)} 字符)")
+
+# 2. 严谨的 SemVer 三段式版本号自动递增
+old_version = conf_data.get("version", "0.1.14")
+parts = [int(p) for p in old_version.split(".")]
+if len(parts) == 3:
+    parts[2] += 1
+    new_version = f"{parts[0]}.{parts[1]}.{parts[2]}"
+else:
+    new_version = "0.1.15"
+
+conf_data["version"] = new_version
+version_tag = f"v{new_version}"
+tauri_conf_path.write_text(json.dumps(conf_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+# 同步写入 package.json
+if package_json_path.exists():
+    pkg_data = json.loads(package_json_path.read_text(encoding="utf-8"))
+    pkg_data["version"] = new_version
+    package_json_path.write_text(json.dumps(pkg_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+print(f"  ✅ 版本号自增成功: v{old_version} ➔ {version_tag}")
+
+print("\n🎨 [步骤 2/6] 清理旧构建缓存并编译前端...")
+if dist_dir.exists():
+    shutil.rmtree(dist_dir, ignore_errors=True)
+    print("  🧹 已物理清理 dist 目录")
+if nsis_dir.exists():
+    shutil.rmtree(nsis_dir, ignore_errors=True)
+    print("  🧹 已物理清理旧安装包目录 (nsis/)")
+
+build_res = subprocess.run(["pnpm", "build"], cwd=str(root_dir), shell=True)
+if build_res.returncode != 0:
+    print("🚨 前端构建 (pnpm build) 失败，已中止发布流程！")
     sys.exit(1)
+print("  ✅ 前端最新产物已 100% 编译落盘至 dist/")
 
-version_tag = f"v{current_version}"
-print(f"📦 正在准备发布版本: {version_tag}")
-
-# 2. 设置签名私钥环境变量并执行生产构建
+print(f"\n🔨 [步骤 3/6] 执行 pnpm tauri build 自动化生产打包与数字签名 ({version_tag})...")
 env = os.environ.copy()
+env["TAURI_SIGNING_PRIVATE_KEY"] = private_key_text
 env["TAURI_SIGNING_PRIVATE_KEY_PATH"] = str(key_path)
 env["TAURI_SIGNING_PRIVATE_KEY_PASSWORD"] = ""
-
-print("🔨 正在执行 pnpm tauri build 自动化签名编译...")
 res = subprocess.run(["pnpm", "tauri", "build"], cwd=str(root_dir), env=env, shell=True)
 if res.returncode != 0:
-    print("🚨 构建失败，已中止发布流程！")
+    print("🚨 Tauri 构建失败，已中止发布流程！")
     sys.exit(1)
 
-# 3. 寻找生成的安装包、更新包与签名文件
-nsis_dir = root_dir / "src-tauri" / "target" / "release" / "bundle" / "nsis"
-exe_files = list(nsis_dir.glob("*.exe"))
-zip_files = list(nsis_dir.glob("*.nsis.zip"))
-sig_files = list(nsis_dir.glob("*.nsis.zip.sig")) + list(nsis_dir.glob("*.sig"))
-
+print("\n🔏 [步骤 4/6] 提取最新安装包与 Ed25519 数字签名...")
+exe_files = sorted(nsis_dir.glob("*.exe"), key=lambda f: f.stat().st_mtime, reverse=True)
 if not exe_files:
-    print("🚨 未找到生成的 setup.exe 安装包")
+    print(f"🚨 未在 {nsis_dir} 找到生成的 setup.exe 安装包")
     sys.exit(1)
-
 exe_file = exe_files[0]
-zip_file = zip_files[0] if zip_files else None
-sig_file = sig_files[0] if sig_files else None
 
-print(f"  ✅ 发现完整安装包: {exe_file.name} ({exe_file.stat().st_size / (1024*1024):.2f} MB)")
-if zip_file:
-    print(f"  ✅ 发现热更新差分包: {zip_file.name} ({zip_file.stat().st_size / (1024*1024):.2f} MB)")
+sig_files = sorted(nsis_dir.glob("*.sig"), key=lambda f: f.stat().st_mtime, reverse=True)
+if not sig_files:
+    print("🚨 缺失 .sig 签名文件！")
+    sys.exit(1)
+sig_file = sig_files[0]
 
-signature_content = ""
-if sig_file and sig_file.exists():
-    signature_content = sig_file.read_text(encoding="utf-8").strip()
-    print(f"  🔏 已提取 Ed25519 数字签名 ({len(signature_content)} 字符)")
+signature_content = sig_file.read_text(encoding="utf-8").strip()
+file_size_mb = exe_file.stat().st_size / (1024 * 1024)
+print(f"  ✅ 锁定最新安装包: {exe_file.name} ({file_size_mb:.2f} MB)")
+print(f"  🔏 已提取 Ed25519 签名: {sig_file.name} ({len(signature_content)} 字符)")
 
-# 4. 生成规范的 latest.json 清单
 now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-release_notes = f"✨ 紫电 AI {version_tag} 工业级 SOTA 版本发布：\n• 全系统协同性能与显存守卫深度优化\n• 4K/8K 图像超分、视频双语字幕与 PDF 解析稳定性增强\n• 零回归体验提升与已知问题修复"
+release_notes = f"✨ 紫电 AI {version_tag} 工业级 SOTA 版本发布：\n• 全面并网 4 大 AI 工具白盒细粒度进度看板 (毫秒级阶段提示与子进度)\n• 极简轻量架构与便携数据安全隔离 (./Data)\n• 4 大 AI 生产力工具算子与 1.78GB CUDA 运行时按需自愈\n• 纯血 Rust 端侧静默热更新与切块进度事件总线闭环"
 
 latest_json_data = {
-    "version": current_version,
+    "version": new_version,
     "notes": release_notes,
     "pub_date": now_utc,
     "platforms": {
         "windows-x86_64": {
             "signature": signature_content,
-            "url": "https://assets.geantendormi.top/updates/zidian-ai_x64.nsis.zip"
+            "url": "https://assets.geantendormi.top/downloads/zidian-ai-setup.exe"
         }
     }
 }
 
 latest_json_path = root_dir / "latest.json"
 latest_json_path.write_text(json.dumps(latest_json_data, ensure_ascii=False, indent=2), encoding="utf-8")
-print(f"  📄 已生成本地清单文件: {latest_json_path}")
+print(f"  📄 已生成本地最新清单: {latest_json_path}")
 
-# 5. 通过 WSL rclone 推送至 Cloudflare R2
-print("\n🌐 正在同步安装包与更新清单至 Cloudflare R2...")
+print("\n🌐 [步骤 5/6] 同步安装包与更新清单至 Cloudflare R2...")
+wsl_exe_path = to_wsl_path(exe_file)
+print(f"  ➔ [1/2] 上传安装包: {exe_file.name} -> r2:ai-toolkit-assets/downloads/zidian-ai-setup.exe")
+subprocess.run(["wsl", "rclone", "copyto", wsl_exe_path, "r2:ai-toolkit-assets/downloads/zidian-ai-setup.exe", "-P"], check=True)
 
-exe_rel_posix = str(exe_file.relative_to(Path("C:/"))).replace("\\", "/")
-wsl_exe_path = f"/mnt/c/{exe_rel_posix}"
-print(f"  ➔ 上传客户端安装包: {exe_file.name} -> r2:ai-toolkit-assets/downloads/zidian-ai-setup.exe")
-subprocess.run(["wsl", "rclone", "copyto", wsl_exe_path, "r2:ai-toolkit-assets/downloads/zidian-ai-setup.exe", "-P"])
+wsl_json_path = to_wsl_path(latest_json_path)
+print(f"  ➔ [2/2] 上传清单: latest.json -> r2:ai-toolkit-assets/updates/latest.json")
+subprocess.run(["wsl", "rclone", "copyto", wsl_json_path, "r2:ai-toolkit-assets/updates/latest.json", "-P"], check=True)
 
-if zip_file:
-    zip_rel_posix = str(zip_file.relative_to(Path("C:/"))).replace("\\", "/")
-    wsl_zip_path = f"/mnt/c/{zip_rel_posix}"
-    print(f"  ➔ 上传热更新差分包: {zip_file.name} -> r2:ai-toolkit-assets/updates/zidian-ai_x64.nsis.zip")
-    subprocess.run(["wsl", "rclone", "copyto", wsl_zip_path, "r2:ai-toolkit-assets/updates/zidian-ai_x64.nsis.zip", "-P"])
+print("\n🔍 [步骤 6/6] 正在执行 Cloudflare R2 全球 CDN 探针打靶...")
 
-json_rel_posix = str(latest_json_path.relative_to(Path("C:/"))).replace("\\", "/")
-wsl_json_path = f"/mnt/c/{json_rel_posix}"
-print(f"  ➔ 上传最新清单: latest.json -> r2:ai-toolkit-assets/updates/latest.json")
-subprocess.run(["wsl", "rclone", "copyto", wsl_json_path, "r2:ai-toolkit-assets/updates/latest.json", "-P"])
+def probe_url(url: str, label: str):
+    req = urllib.request.Request(url, headers={"User-Agent": "ZiDianAI-Updater/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            status = resp.status
+            size = resp.headers.get("Content-Length", "未知")
+            print(f"  ✅ [{label}] 探针 200 OK | 大小: {size} 字节 | URL: {url}")
+            return True
+    except Exception as e:
+        print(f"  🚨 [{label}] 探针失败: {e} | URL: {url}")
+        return False
 
-# 6. 连通性探测
-print("\n🔍 正在验证云端最新版本探针...")
-check_url = "https://assets.geantendormi.top/updates/latest.json"
-try:
-    req = urllib.request.Request(check_url, headers={"User-Agent": "ZiDianAI-Updater/1.0"})
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-        print(f"\n🎉 云端已成功激活最新版本: v{data.get('version')} (发布时间: {data.get('pub_date')})")
-        print(f"🌐 清单地址: {check_url}")
-        print(f"🚀 全球桌面客户端现已全面具备实时热更新与版本提醒能力！")
-except Exception as e:
-    print(f"⚠️ 云端验证提示: {e} (可能存在 1-2 分钟 CDN 缓存刷新延迟)")
+p1 = probe_url("https://assets.geantendormi.top/updates/latest.json", "更新清单 latest.json")
+p2 = probe_url("https://assets.geantendormi.top/downloads/zidian-ai-setup.exe", "最新完整安装包 zidian-ai-setup.exe")
+
+if p1 and p2:
+    print(f"\n🎉 恭喜！紫电 AI {version_tag} 全部资产已在全球 Cloudflare CDN 成功点火上线！")
+    print("🚀 用户端热更新与便携下载已完全恢复正常，0 个 404 错误！")
+else:
+    print("\n⚠️ 部分云端资源探针异常，请检查 R2 桶绑定或 CDN 缓存！")

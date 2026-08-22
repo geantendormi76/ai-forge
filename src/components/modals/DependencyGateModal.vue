@@ -15,36 +15,23 @@ const isDownloading = ref(false);
 const progressMap = ref<Record<string, DependencyProgressPayload>>({});
 let unlistenProgress: UnlistenFn | null = null;
 
-// 动态计算弹窗标题与说明文案
-const modalTitle = computed(() => {
-  switch (ui.dependencyTargetTool) {
-    case 'asr':
-    case 'video-subtitle':
-      return '需要安装识别依赖';
-    case 'upscale':
-    case 'upscale-48k':
-      return '需要安装超分模型依赖';
-    case 'pdf':
-    case 'pdf-parse':
-      return '需要安装 PDF 智能解析依赖';
-    default:
-      return '需要补齐本地依赖';
-  }
-});
+// 1. 统一极简标题
+const modalTitle = computed(() => '需要模型依赖');
 
+// 2. 统一各工具极简说明文案（100% 统一工具命名）
 const modalDesc = computed(() => {
   switch (ui.dependencyTargetTool) {
     case 'asr':
     case 'video-subtitle':
-      return '音视频提取文字需要离线识别与翻译模型。将默认安装推荐的 MOSS ASR 与 Hy-MT2，完成后自动进入功能。';
+      return '首次使用「视频字幕生成」需下载本地离线模型，完成后自动进入。';
     case 'upscale':
     case 'upscale-48k':
-      return '视觉超分需要 RealESRGAN 神经网络模型。下载完成后将自动进入 4K/8K 超分工坊。';
+      return '首次使用「4K/8K 图像超分」需下载本地离线模型，完成后自动进入。';
     case 'pdf':
     case 'pdf-parse':
-      return '高精 PDF 解析需要版面重构、OCR 与公式表格还原模型矩阵，完成后自动进入功能。';
+      return '首次使用「PDF 智能解析」需下载本地离线模型，完成后自动进入。';
     default:
-      return '当前功能需要下载本地模型依赖。完成后将自动进入功能，模型仅需下载一次。';
+      return '当前功能需要下载本地离线模型，下载完成后自动进入。';
   }
 });
 
@@ -162,7 +149,7 @@ onUnmounted(() => {
         <Download :size="24" class="stroke-[2.5]" />
       </div>
 
-      <!-- 标题与说明 -->
+      <!-- 极简标题与说明 -->
       <div class="space-y-1.5 w-full">
         <h3 class="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
           {{ modalTitle }}
@@ -191,7 +178,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 流式下载总体进度条 -->
+      <!-- 下载总体进度条 -->
       <div v-if="isDownloading" class="w-full space-y-1.5 pt-0.5">
         <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
           <div
@@ -200,7 +187,7 @@ onUnmounted(() => {
           ></div>
         </div>
         <div class="flex justify-between text-[10px] font-mono text-slate-400 font-bold">
-          <span>正在下载全部依赖...</span>
+          <span>正在下载...</span>
           <span>{{ overallPercent }}%</span>
         </div>
       </div>
@@ -221,7 +208,7 @@ onUnmounted(() => {
           class="py-3 px-4 rounded-2xl bg-[#18181b] hover:bg-[#27272a] disabled:bg-slate-700 text-white font-bold text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
         >
           <Loader2 v-if="isDownloading" :size="14" class="animate-spin" />
-          <span>{{ isDownloading ? `正在下载 (${overallPercent}%)...` : '开始下载全部依赖' }}</span>
+          <span>{{ isDownloading ? `正在下载 (${overallPercent}%)...` : '立即下载' }}</span>
         </button>
       </div>
     </div>

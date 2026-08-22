@@ -4,7 +4,7 @@
     "maxFileSize": 10000000
   },
   "output": {
-    "filePath": "repomix-output-DEPLOY.xml",
+    "filePath": "c/repomix-output-DEPLOY.xml",
     "style": "xml",
     "parsableStyle": true,
     "compress": false,
@@ -19,7 +19,7 @@
       "sortByChangesMaxCommits": 50
     },
     "patterns": [
-      { "pattern": "HANDOFF_DEPLOY.md", "compress": false },
+      { "pattern": "c/HANDOFF_DEPLOY.md", "compress": false },
       { "pattern": "deploy/cloudflare/**", "compress": false },
       { "pattern": "deploy/website/src/**", "compress": false },
       { "pattern": "deploy/website/*.json", "compress": false },
@@ -31,7 +31,7 @@
     // =========================================================
     // 🌐 1. [官方网站展示站] (https://geantendormi.top / Pages)
     // =========================================================
-    "HANDOFF_DEPLOY.md",
+    "c/HANDOFF_DEPLOY.md",
     "deploy/website/package.json",
     "deploy/website/vite.config.ts",
     "deploy/website/tailwind.config.js",

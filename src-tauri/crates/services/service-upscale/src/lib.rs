@@ -1,5 +1,5 @@
 // 🛡️ 8K 视觉超分 - 工业级服务门面 (lib.rs)
-// 100% 对齐原版 UpscaleEngine / UpscaleTask 契约
+// 100% 对齐原版 UpscaleEngine / UpscaleTask 契约，统一绑定 core-models-download 寻址底座
 
 pub mod pipeline;
 pub mod processor;
@@ -9,6 +9,7 @@ pub use pipeline::{RealESRGANModel, UpscalePipeline};
 pub use processor::{RealESRGANPostprocessor, RealESRGANPreprocessConfig, RealESRGANPreprocessor};
 pub use tiling::{compute_grid, TileInfo};
 
+use core_models_download::ModelManager;
 use serde::{Deserialize, Serialize};
 use shared_contracts::{TaskWeight, VramTokenGuard};
 use std::path::{Path, PathBuf};
@@ -84,21 +85,21 @@ pub struct UpscaleResult {
 pub struct UpscaleService;
 
 impl UpscaleService {
+    /// 统一从 core-models-download 的三级自愈底座寻址 RealESRGAN 模型
     pub fn resolve_default_model_path() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\models\service-upscale\RealESRGAN_x4plus.onnx"),
-            PathBuf::from(r"models\service-upscale\RealESRGAN_x4plus.onnx"),
-            PathBuf::from(r"..\models\service-upscale\RealESRGAN_x4plus.onnx"),
-            PathBuf::from(r"..\..\models\service-upscale\RealESRGAN_x4plus.onnx"),
-        ];
-
-        for candidate in &candidates {
-            if candidate.exists() {
-                return candidate.clone();
-            }
+        let base_dir = ModelManager::resolve_models_base_dir();
+        let target = base_dir.join("service-upscale").join("RealESRGAN_x4plus.onnx");
+        if target.exists() {
+            return target;
         }
 
-        PathBuf::from(r"C:\dev\ai-forge\models\service-upscale\RealESRGAN_x4plus.onnx")
+        // 备用兜底检查开发工作区
+        let fallback = PathBuf::from(r"C:\dev\ai-forge\models\service-upscale\RealESRGAN_x4plus.onnx");
+        if fallback.exists() {
+            return fallback;
+        }
+
+        target
     }
 
     pub async fn run_upscale<F>(
@@ -125,8 +126,10 @@ impl UpscaleService {
             .map(PathBuf::from)
             .unwrap_or_else(Self::resolve_default_model_path);
 
+        tracing::info!("🎯 [service-upscale] 正在加载 ONNX 超分模型: {:?}", model_path);
+
         if !model_path.exists() {
-            return Err(format!("ONNX 模型文件未就绪: {:?}", model_path));
+            return Err(format!("ONNX 模型文件未就绪，目标物理路径不存在: {:?}", model_path));
         }
 
         let config = UpscaleConfig {

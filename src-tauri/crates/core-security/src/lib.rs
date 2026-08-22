@@ -1,6 +1,9 @@
 pub mod crypto;
 pub mod gatekeeper;
 pub mod license;
+pub mod portable;
+
+pub use portable::PortableEngine;
 
 use hmac::{Hmac, Mac};
 use mac_address::get_mac_address;

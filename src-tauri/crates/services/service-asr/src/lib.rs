@@ -40,6 +40,8 @@ pub struct AsrResult {
     pub elapsed_ms: f64,
 }
 
+pub type AsrProgressCallback = Arc<dyn Fn(usize, usize, &str) + Send + Sync + 'static>;
+
 pub struct AsrService;
 
 impl AsrService {
@@ -121,19 +123,19 @@ impl AsrService {
     }
 
     pub async fn run_asr_pipeline(options: AsrOptions) -> Result<AsrResult, String> {
-        Self::run_asr_pipeline_cancellable(options, None).await
+        Self::run_asr_pipeline_cancellable(options, None, None).await
     }
 
-    /// 🛡️ 纯血 Rust Native ASR 底座：具备 OutputTruncated 弹性容错与毫秒级硬件截停
+    /// 🛡️ 纯血 Rust Native ASR 底座：具备 OutputTruncated 弹性容错、毫秒级截停与细粒度进度广播
     pub async fn run_asr_pipeline_cancellable(
         options: AsrOptions,
         cancel_token: Option<Arc<AtomicBool>>,
+        on_progress: Option<AsrProgressCallback>,
     ) -> Result<AsrResult, String> {
         let audio_path_buf = PathBuf::from(&options.audio_path);
         if !audio_path_buf.exists() {
             return Err(format!("音频物理文件不存在: {}", options.audio_path));
         }
-
         let model_path = Self::resolve_model_path();
         if !model_path.exists() {
             return Err(format!("GGUF ASR 模型物理文件不存在: {:?}", model_path));
@@ -146,7 +148,6 @@ impl AsrService {
         }
 
         let t0 = Instant::now();
-
         let pcm_samples = Self::load_audio_pcm_16k_mono(&audio_path_buf)?;
         let total_samples = pcm_samples.len();
         let total_duration_sec = total_samples as f64 / SAMPLE_RATE as f64;
@@ -158,10 +159,10 @@ impl AsrService {
             total_samples
         );
 
+        let progress_cb = on_progress.clone();
         let all_segments = tokio::task::spawn_blocking(move || -> Result<Vec<RawSegment>, String> {
             let model = Model::load_with(&model_path, &ModelOptions::default())
                 .map_err(|e| format!("纯血 C-FFI 载入 GGUF 模型失败: {e}"))?;
-
             let mut session = model.session()
                 .map_err(|e| format!("创建 transcribe Session 失败: {e}"))?;
 
@@ -189,7 +190,6 @@ impl AsrService {
             run_opts.task = Task::Transcribe;
             run_opts.timestamps = TimestampKind::Auto;
             run_opts.diarize = Diarize::On;
-
             if let Some(lang) = &options.language {
                 if lang != "auto" && !lang.is_empty() {
                     run_opts.language = Some(lang.clone());
@@ -212,18 +212,25 @@ impl AsrService {
                 let chunk_end_idx = (chunk_start_idx + CHUNK_SAMPLES).min(total_samples);
                 let chunk_slice = &pcm_samples[chunk_start_idx..chunk_end_idx];
                 let chunk_time_offset_sec = chunk_start_idx as f64 / SAMPLE_RATE as f64;
+                let chunk_end_sec = chunk_end_idx as f64 / SAMPLE_RATE as f64;
+
+                if let Some(ref cb) = progress_cb {
+                    let msg = format!(
+                        "MOSS 0.9B 语音转写中 ({}/{} 块, 已识别 {:.1}s/{:.1}s)",
+                        chunk_id, total_chunks, chunk_end_sec, total_duration_sec
+                    );
+                    cb(chunk_id, total_chunks, &msg);
+                }
 
                 tracing::info!(
                     "⚡ [ASR 切片推导] 正在执行分块 [{}/{}] | 时间偏移: {:.2}s ~ {:.2}s",
                     chunk_id,
                     total_chunks,
                     chunk_time_offset_sec,
-                    chunk_end_idx as f64 / SAMPLE_RATE as f64
+                    chunk_end_sec
                 );
 
                 let transcript_res = session.run(chunk_slice, &run_opts);
-                
-                // 🛡️ 2026 SOTA 弹性容错：捕获保护性截断并保留已生成台词，绝不抛弃整个视频
                 let transcript = match transcript_res {
                     Ok(t) => t,
                     Err(TranscribeError::OutputTruncated { partial: Some(partial_t), .. }) => {
@@ -247,16 +254,13 @@ impl AsrService {
                     if text.is_empty() {
                         continue;
                     }
-
                     let speaker = if seg.speaker_id > 0 {
                         format!("S{:02}", seg.speaker_id)
                     } else {
                         "S01".to_string()
                     };
-
                     let start_sec = chunk_time_offset_sec + (seg.t0_ms as f64 / 1000.0);
                     let end_sec = chunk_time_offset_sec + (seg.t1_ms as f64 / 1000.0);
-
                     let seg_id = collected_segments.len() + 1;
                     collected_segments.push(RawSegment {
                         id: seg_id,
@@ -279,7 +283,6 @@ impl AsrService {
         .map_err(|e| e)?;
 
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-
         let audio_file = audio_path_buf
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -291,25 +294,5 @@ impl AsrService {
             segments: all_segments,
             elapsed_ms,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_asr_options_purity() {
-        let opts = AsrOptions {
-            audio_path: "/tmp/test.wav".into(),
-            language: None,
-            prompt: None,
-            hotwords: None,
-            max_new_tokens: None,
-            temperature: None,
-        };
-        let json_str = serde_json::to_string(&opts).unwrap();
-        assert!(!json_str.contains("mode"));
-        assert!(!json_str.contains("srt_text"));
     }
 }

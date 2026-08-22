@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+core-models-download = { path = "../../core-models-download" }
 core-onnx-infer = { path = "../../core-onnx-infer", features = ["cuda"] }
 shared-contracts = { path = "../../shared-contracts" }
 ort = { version = "2.0.0-rc.9", features = ["cuda"] }

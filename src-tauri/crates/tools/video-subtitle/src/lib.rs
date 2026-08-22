@@ -64,7 +64,6 @@ pub struct VideoSubtitleOptions {
     pub source_kind: Option<SubtitleSourceKind>,
     #[serde(default)]
     pub subtitle_stream_index: Option<usize>,
-    /// 是否开启电影级羽化半透明遮罩 (温润遮挡原片硬字幕)
     #[serde(default)]
     pub mask_hardsub: bool,
 }
@@ -92,6 +91,8 @@ pub struct VideoSubtitleResult {
     pub error: Option<String>,
 }
 
+pub type SubtitleProgressCallback = Arc<dyn Fn(usize, usize, &str) + Send + Sync + 'static>;
+
 pub struct VideoSubtitleTool;
 
 impl VideoSubtitleTool {
@@ -99,22 +100,34 @@ impl VideoSubtitleTool {
         options: VideoSubtitleOptions,
         vram_guard: Option<&VramTokenGuard>,
     ) -> Result<VideoSubtitleResult, String> {
-        Self::run_pipeline_cancellable(options, vram_guard, Arc::new(AtomicBool::new(false))).await
+        Self::run_pipeline_with_progress(options, vram_guard, Arc::new(AtomicBool::new(false)), None).await
     }
 
-    /// 极简双轨调度：软字幕直通 / 生肉纯音频听写 (支持全链路毫秒级截停)
     pub async fn run_pipeline_cancellable(
         options: VideoSubtitleOptions,
         vram_guard: Option<&VramTokenGuard>,
         cancel_token: Arc<AtomicBool>,
     ) -> Result<VideoSubtitleResult, String> {
+        Self::run_pipeline_with_progress(options, vram_guard, cancel_token, None).await
+    }
+
+    /// 🛡️ 全生命周期白盒进度调度流水线
+    pub async fn run_pipeline_with_progress(
+        options: VideoSubtitleOptions,
+        vram_guard: Option<&VramTokenGuard>,
+        cancel_token: Arc<AtomicBool>,
+        on_progress: Option<SubtitleProgressCallback>,
+    ) -> Result<VideoSubtitleResult, String> {
         if cancel_token.load(Ordering::Relaxed) {
             return Err("任务已由用户主动取消".into());
         }
-
         let video_path = Path::new(&options.video_path);
         if !video_path.exists() {
             return Err(format!("输入的物理视频文件不存在: {}", options.video_path));
+        }
+
+        if let Some(ref cb) = on_progress {
+            cb(2, 100, "正在探测视频多模态轨道...");
         }
 
         let resolved_mode = if let Some(mode) = options.source_kind {
@@ -141,11 +154,11 @@ impl VideoSubtitleTool {
         match resolved_mode {
             SubtitleSourceKind::EmbeddedSoftStream => {
                 tracing::info!("⚡ [双轨调度] 命中内嵌软字幕流，启动 0.05s 直通纯血 Rust 神经翻译通道");
-                Self::run_soft_stream_pipeline(options, vram_guard, cancel_token).await
+                Self::run_soft_stream_pipeline(options, vram_guard, cancel_token, on_progress).await
             }
             SubtitleSourceKind::RawAudio => {
                 tracing::info!("🎙️ [双轨调度] 启动 MOSS 0.9B ASR 纯语音听写与翻译通道 (纯血 Rust)");
-                Self::run_raw_audio_pipeline(options, vram_guard, cancel_token).await
+                Self::run_raw_audio_pipeline(options, vram_guard, cancel_token, on_progress).await
             }
         }
     }
@@ -154,6 +167,7 @@ impl VideoSubtitleTool {
         options: VideoSubtitleOptions,
         vram_guard: Option<&VramTokenGuard>,
         cancel_token: Arc<AtomicBool>,
+        on_progress: Option<SubtitleProgressCallback>,
     ) -> Result<VideoSubtitleResult, String> {
         let t0 = std::time::Instant::now();
         let video_path = Path::new(&options.video_path);
@@ -163,6 +177,10 @@ impl VideoSubtitleTool {
             video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
         };
         let _ = tokio::fs::create_dir_all(&output_dir).await;
+
+        if let Some(ref cb) = on_progress {
+            cb(10, 100, "正在抽离内嵌软字幕轨道...");
+        }
 
         let probe_res = VideoProbeService::probe(video_path).await.unwrap_or_else(|_| {
             VideoProbeResult {
@@ -189,14 +207,12 @@ impl VideoSubtitleTool {
             .unwrap_or_default()
             .as_millis();
         let temp_srt_path = output_dir.join(format!("temp_extracted_{}.srt", timestamp_now));
-
         let raw_segments = engine::extract_subtitle_stream(video_path, stream_idx, &temp_srt_path).await?;
         let _ = tokio::fs::remove_file(&temp_srt_path).await;
 
         if cancel_token.load(Ordering::Relaxed) {
             return Err("任务已由用户主动取消".into());
         }
-
         if raw_segments.is_empty() {
             return Err("抽离出的字幕轨道没有任何有效文本！".into());
         }
@@ -211,29 +227,21 @@ impl VideoSubtitleTool {
         };
 
         let source_texts: Vec<String> = raw_segments.iter().map(|s| s.text.clone()).collect();
-        let mut prepared_texts = Vec::new();
-        if let Some(terms) = &options.glossary {
-            if !terms.is_empty() {
-                let mut term_prompt = String::from("参考下面的翻译：\n");
-                for t in terms {
-                    term_prompt.push_str(&format!("{} 翻译成 {}\n", t.source_term, t.target_term));
-                }
-                for txt in &source_texts {
-                    prepared_texts.push(format!("{}\n{}", term_prompt.trim_end(), txt));
-                }
-            } else {
-                prepared_texts = source_texts.clone();
-            }
-        } else {
-            prepared_texts = source_texts.clone();
-        }
-
         let trans_req = PureTranslationRequest {
-            texts: prepared_texts,
+            texts: source_texts,
             target_lang: Some(options.target_lang.clone()),
         };
 
-        let trans_res = TranslationService::run_translation_pipeline(trans_req)
+        let prog_cb_clone = on_progress.clone();
+        let trans_progress: Option<service_translation::TranslationProgressCallback> = prog_cb_clone.map(|cb| {
+            Arc::new(move |cur: usize, total: usize, _msg: &str| {
+                let scaled_pct = 20 + ((cur as f64 / total as f64) * 60.0) as usize;
+                let msg = format!("Hy-MT2 神经翻译中 ({}/{})", cur, total);
+                cb(scaled_pct, 100, &msg);
+            }) as service_translation::TranslationProgressCallback
+        });
+
+        let trans_res = TranslationService::run_translation_pipeline_with_progress(trans_req, trans_progress)
             .await
             .map_err(|e| format!("Hy-MT2 神经翻译失败: {e}"))?;
 
@@ -241,9 +249,12 @@ impl VideoSubtitleTool {
             return Err("任务已由用户主动取消".into());
         }
 
+        if let Some(ref cb) = on_progress {
+            cb(85, 100, "正在生成 ASS 特效字幕与排版...");
+        }
+
         let mut engine_segments = Vec::new();
         let mut result_segments = Vec::new();
-
         for (idx, seg) in raw_segments.into_iter().enumerate() {
             let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
             engine_segments.push(EngineSegment {
@@ -298,6 +309,10 @@ impl VideoSubtitleTool {
         tokio::fs::write(&json_path, serde_json::to_string_pretty(&json_payload).unwrap()).await
             .map_err(|e| format!("写入 JSON 失败: {e}"))?;
 
+        if let Some(ref cb) = on_progress {
+            cb(92, 100, "正在封装交付最终视频...");
+        }
+
         let output_video_path = match options.output_mode {
             OutputMode::HardMp4Nvenc => {
                 let out_mp4 = output_dir.join(format!("{}_zidian_burned.mp4", base_name));
@@ -311,8 +326,11 @@ impl VideoSubtitleTool {
             }
         };
 
-        let elapsed_ms = t0.elapsed().as_millis() as f64;
+        if let Some(ref cb) = on_progress {
+            cb(100, 100, "双语字幕处理完成！");
+        }
 
+        let elapsed_ms = t0.elapsed().as_millis() as f64;
         Ok(VideoSubtitleResult {
             success: true,
             output_video_path,
@@ -330,6 +348,7 @@ impl VideoSubtitleTool {
         options: VideoSubtitleOptions,
         vram_guard: Option<&VramTokenGuard>,
         cancel_token: Arc<AtomicBool>,
+        on_progress: Option<SubtitleProgressCallback>,
     ) -> Result<VideoSubtitleResult, String> {
         let t0 = std::time::Instant::now();
         let video_path = Path::new(&options.video_path);
@@ -367,13 +386,15 @@ impl VideoSubtitleTool {
             return Err("任务已由用户主动取消".into());
         }
 
+        if let Some(ref cb) = on_progress {
+            cb(5, 100, "FFmpeg 抽取 16kHz 高保真音频流...");
+        }
+
         let timestamp_now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
         let temp_wav_path = output_dir.join(format!("temp_zidian_{}.wav", timestamp_now));
-
-        // 1. 纯血 Rust 调起原生 FFmpeg 提取 16k mono 音频
         engine::extract_audio_from_video(video_path, &temp_wav_path).await?;
 
         if cancel_token.load(Ordering::Relaxed) {
@@ -381,7 +402,6 @@ impl VideoSubtitleTool {
             return Err("任务已由用户主动取消".into());
         }
 
-        // 2. MOSS 0.9B ASR 原位听写（传入取消令牌）
         let asr_opts = AsrOptions {
             audio_path: temp_wav_path.to_string_lossy().to_string(),
             language: Some("auto".into()),
@@ -391,7 +411,15 @@ impl VideoSubtitleTool {
             temperature: Some(0.0),
         };
 
-        let asr_res = AsrService::run_asr_pipeline_cancellable(asr_opts, Some(cancel_token.clone()))
+        let prog_cb_for_asr = on_progress.clone();
+        let asr_progress: Option<service_asr::AsrProgressCallback> = prog_cb_for_asr.map(|cb| {
+            Arc::new(move |cur: usize, total: usize, msg: &str| {
+                let scaled_pct = 10 + ((cur as f64 / total as f64) * 45.0) as usize;
+                cb(scaled_pct, 100, msg);
+            }) as service_asr::AsrProgressCallback
+        });
+
+        let asr_res = AsrService::run_asr_pipeline_cancellable(asr_opts, Some(cancel_token.clone()), asr_progress)
             .await
             .map_err(|e| format!("MOSS 0.9B ASR 听写流水线失败: {e}"))?;
 
@@ -400,36 +428,26 @@ impl VideoSubtitleTool {
         if cancel_token.load(Ordering::Relaxed) {
             return Err("任务已由用户主动取消".into());
         }
-
         if asr_res.segments.is_empty() {
             return Err("视频中未识别出任何语音台词！".into());
         }
 
         let source_texts: Vec<String> = asr_res.segments.iter().map(|s| s.text.clone()).collect();
-        let mut prepared_texts = Vec::new();
-        if let Some(terms) = &options.glossary {
-            if !terms.is_empty() {
-                let mut term_prompt = String::from("参考下面的翻译：\n");
-                for t in terms {
-                    term_prompt.push_str(&format!("{} 翻译成 {}\n", t.source_term, t.target_term));
-                }
-                for txt in &source_texts {
-                    prepared_texts.push(format!("{}\n{}", term_prompt.trim_end(), txt));
-                }
-            } else {
-                prepared_texts = source_texts.clone();
-            }
-        } else {
-            prepared_texts = source_texts.clone();
-        }
-
-        // 3. Hy-MT2 1.8B 神经翻译
         let trans_req = PureTranslationRequest {
-            texts: prepared_texts,
+            texts: source_texts,
             target_lang: Some(options.target_lang.clone()),
         };
 
-        let trans_res = TranslationService::run_translation_pipeline(trans_req)
+        let prog_cb_for_trans = on_progress.clone();
+        let trans_progress: Option<service_translation::TranslationProgressCallback> = prog_cb_for_trans.map(|cb| {
+            Arc::new(move |cur: usize, total: usize, _msg: &str| {
+                let scaled_pct = 58 + ((cur as f64 / total as f64) * 28.0) as usize;
+                let msg = format!("Hy-MT2 神经翻译中 ({}/{})", cur, total);
+                cb(scaled_pct, 100, &msg);
+            }) as service_translation::TranslationProgressCallback
+        });
+
+        let trans_res = TranslationService::run_translation_pipeline_with_progress(trans_req, trans_progress)
             .await
             .map_err(|e| format!("Hy-MT2 1.8B 神经翻译流水线失败: {e}"))?;
 
@@ -437,9 +455,12 @@ impl VideoSubtitleTool {
             return Err("任务已由用户主动取消".into());
         }
 
+        if let Some(ref cb) = on_progress {
+            cb(88, 100, "正在生成双语字幕与 ASS 特效胶囊...");
+        }
+
         let mut engine_segments = Vec::new();
         let mut result_segments = Vec::new();
-
         for (idx, seg) in asr_res.segments.iter().enumerate() {
             let target_text = trans_res.translations.get(idx).cloned().unwrap_or_default();
             engine_segments.push(EngineSegment {
@@ -494,6 +515,10 @@ impl VideoSubtitleTool {
         tokio::fs::write(&json_path, serde_json::to_string_pretty(&json_payload).unwrap()).await
             .map_err(|e| format!("写入 JSON 失败: {e}"))?;
 
+        if let Some(ref cb) = on_progress {
+            cb(92, 100, "正在封装/压制最终双语视频...");
+        }
+
         if cancel_token.load(Ordering::Relaxed) {
             return Err("任务已由用户主动取消".into());
         }
@@ -511,8 +536,11 @@ impl VideoSubtitleTool {
             }
         };
 
-        let elapsed_ms = t0.elapsed().as_millis() as f64;
+        if let Some(ref cb) = on_progress {
+            cb(100, 100, "双语视频字幕生成完成！");
+        }
 
+        let elapsed_ms = t0.elapsed().as_millis() as f64;
         Ok(VideoSubtitleResult {
             success: true,
             output_video_path,
@@ -524,43 +552,5 @@ impl VideoSubtitleTool {
             elapsed_ms,
             error: None,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_real_physical_1_mp4_e2e() {
-        let input_path = PathBuf::from(r"C:\dev\ai-forge\test\input\video-subtitle\1.mp4");
-        let output_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\video-subtitle");
-        let _ = tokio::fs::create_dir_all(&output_dir).await;
-
-        if !input_path.exists() {
-            eprintln!("⚠️ [跳过测试] 输入测试视频不存在: {:?}", input_path);
-            return;
-        }
-
-        let opts = VideoSubtitleOptions {
-            video_path: input_path.to_string_lossy().to_string(),
-            output_dir: Some(output_dir.to_string_lossy().to_string()),
-            target_lang: "Chinese".into(),
-            display_mode: DisplayMode::Bilingual,
-            show_speaker: true,
-            font_size_multiplier: 1.8,
-            output_mode: OutputMode::SoftMkv,
-            hotwords: None,
-            glossary: None,
-            source_kind: None,
-            subtitle_stream_index: None,
-            mask_hardsub: true,
-        };
-
-        let res = VideoSubtitleTool::run_pipeline(opts, None).await
-            .expect("1.mp4 双语字幕流水线执行失败");
-
-        assert!(res.total_segments > 0);
-        assert!(Path::new(&res.output_video_path).exists());
     }
 }

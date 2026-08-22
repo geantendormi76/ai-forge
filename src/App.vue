@@ -5,6 +5,7 @@ import { useTauriWindow } from './composables/useTauriWindow';
 import Sidebar from './components/layout/Sidebar.vue';
 import DependencyGateModal from './components/modals/DependencyGateModal.vue';
 import AppUpdateModal from './components/modals/AppUpdateModal.vue';
+import QuotaModal from './components/modals/QuotaModal.vue';
 import HomeView from './views/HomeView.vue';
 import Upscale48kView from './views/Upscale48kView.vue';
 import FormatConverterView from './views/FormatConverterView.vue';
@@ -83,7 +84,10 @@ onMounted(() => {
     <!-- 5. 🌟 2026 SOTA 全生命周期版本热更新模态框 -->
     <AppUpdateModal />
 
-    <!-- 6. 全局暗黑微光 Toast 提示气泡 -->
+    <!-- 6. 🌟 端侧算力配额与账单明细模态框 -->
+    <QuotaModal />
+
+    <!-- 7. 全局暗黑微光 Toast 提示气泡 -->
     <div v-if="ui.toast显示" class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
       <Transition
         appear

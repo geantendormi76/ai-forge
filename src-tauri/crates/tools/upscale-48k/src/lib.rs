@@ -1,8 +1,7 @@
 // 🛡️ 4K/8K 视觉超分 - 独立工具适配与 IPC 网关门面 (lib.rs)
-// 遵循单一职责原则：编排 service-upscale、VramTokenGuard 显存锁与 Gatekeeper 算力鉴权
+// 遵循单一职责原则：编排 service-upscale 与 VramTokenGuard 显存锁
 
 pub use service_upscale::{UpscaleConfig, UpscaleResult, UpscaleTask};
-use core_security::gatekeeper::Gatekeeper;
 use service_upscale::UpscaleService;
 use shared_contracts::VramTokenGuard;
 use std::sync::Arc;
@@ -18,8 +17,7 @@ impl Upscale48kTool {
     where
         F: Fn(usize, usize, &str) + Send + Sync + 'static,
     {
-        tracing::info!("🛡️ [upscale-48k] 触发算力门控与显存守卫: {:?}", task.input_path);
-        Gatekeeper::check_permission("tool-upscale-48k").await?;
+        tracing::info!("🛡️ [upscale-48k] 启动硬件超分流水线: {:?}", task.input_path);
         UpscaleService::run_upscale(&task, Some(&vram_guard), progress_cb).await
     }
 }

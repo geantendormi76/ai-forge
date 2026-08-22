@@ -1,11 +1,11 @@
 {
-  "version": "0.1.0",
-  "notes": "✨ 紫电 AI v0.1.0 工业级 SOTA 版本发布：\n• 全系统协同性能与显存守卫深度优化\n• 4K/8K 图像超分、视频双语字幕与 PDF 解析稳定性增强\n• 零回归体验提升与已知问题修复",
-  "pub_date": "2026-08-21T07:55:16Z",
+  "version": "0.1.15",
+  "notes": "✨ 紫电 AI v0.1.15 工业级 SOTA 版本发布：\n• 全面并网 4 大 AI 工具白盒细粒度进度看板 (毫秒级阶段提示与子进度)\n• 极简轻量架构与便携数据安全隔离 (./Data)\n• 4 大 AI 生产力工具算子与 1.78GB CUDA 运行时按需自愈\n• 纯血 Rust 端侧静默热更新与切块进度事件总线闭环",
+  "pub_date": "2026-08-22T05:07:39Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "",
-      "url": "https://assets.geantendormi.top/updates/zidian-ai_x64.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSSzV4Q3E5bDE4S3NxbDFRZnBGbmp3dDhMNERXWXN6WnJZT2w5VWVFY3RWNG1SUzlwSEw2NVZsT20rdWtWVGFsZDk0SmpVc2dyTndhNmM5U045Sk9YOWl0eGNqTTlvQnc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3Mzc1MjU4CWZpbGU657Sr55S1QUlfMC4xLjE1X3g2NC1zZXR1cC5leGUKK2ZLVUJaUWVKZnhqTy9KbkN4dWRYNlZaTlBncXZObFRlUEd3NUUxOGd0ZGViWWR6Q251dGsvMERjRE9ycGJMVmZhU203MVZwVFBnRjRMakpMTXVMQVE9PQo=",
+      "url": "https://assets.geantendormi.top/downloads/zidian-ai-setup.exe"
     }
   }
 }

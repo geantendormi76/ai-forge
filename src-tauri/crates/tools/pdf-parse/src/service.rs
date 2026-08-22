@@ -23,7 +23,7 @@ impl PdfParseService {
         file_path_str: &str,
         output_dir: &Path,
         vram_guard: Option<&VramTokenGuard>,
-        _on_progress: Option<F>,
+        on_progress: Option<F>,
     ) -> Result<PdfParseResult, String>
     where
         F: Fn(usize, usize, &str) + Send + Sync + 'static,
@@ -35,7 +35,10 @@ impl PdfParseService {
             return Err(format!("物理文件不存在: {:?}", pdf_path));
         }
 
-        // 🛡️ 端侧显存防爆评估与并发锁保护
+        if let Some(ref cb) = on_progress {
+            cb(10, 100, "正在分析 PDF 拓扑与分流路由...");
+        }
+
         let _permit = if let Some(guard) = vram_guard {
             match guard.try_acquire(TaskWeight::Medium) {
                 Some(permit) => {
@@ -64,8 +67,16 @@ impl PdfParseService {
         let task_out_dir = output_dir.join(&job_id);
         let _ = tokio::fs::create_dir_all(&task_out_dir).await;
 
+        if let Some(ref cb) = on_progress {
+            cb(30, 100, "PP-DocLayout 版面分析与多模态重构中...");
+        }
+
         match HybridEngine::run_pdf(pdf_path, &task_out_dir).await {
             Ok(res) => {
+                if let Some(ref cb) = on_progress {
+                    cb(90, 100, "正在生成高保真 GFM Markdown 拓扑...");
+                }
+
                 let out_md_path_str = res
                     .output_md_path
                     .as_ref()
@@ -78,6 +89,10 @@ impl PdfParseService {
                     "🧠 智能分流: 矢量轨 ({}页) + 扫描轨 ({}页)",
                     res.fast_pages_count, res.deep_pages_count
                 );
+
+                if let Some(ref cb) = on_progress {
+                    cb(100, 100, "PDF 智能多模态解析完成！");
+                }
 
                 Ok(PdfParseResult {
                     success: true,

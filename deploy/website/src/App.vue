@@ -1,6 +1,5 @@
 <template>
   <div class="min-h-screen bg-[#14110E] text-[#f5f5f3] flex flex-col justify-between selection:bg-[#00ffa9]/30 selection:text-[#00ffa9] font-sans">
-    
     <!-- 顶部导航栏 -->
     <header class="w-full border-b border-white/[0.08] bg-[#14110E]/80 backdrop-blur-xl sticky top-0 z-50">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -9,24 +8,20 @@
             <Zap :size="18" class="text-slate-950 fill-slate-950 stroke-[2.5]" />
           </div>
           <span class="text-lg font-black tracking-tight text-white">紫电 AI</span>
-          <span class="text-[10px] font-mono font-bold bg-[#00ffa9]/15 text-[#00ffa9] px-2 py-0.5 rounded-full border border-[#00ffa9]/30">
-            SOTA 2026 离线版
-          </span>
         </div>
-
         <div class="flex items-center gap-4">
           <a href="#showcase" class="text-xs font-bold text-[#8b999b] hover:text-white transition-colors hidden sm:inline-block">
             功能展台
           </a>
-          <a href="#tokenomics" class="text-xs font-bold text-[#8b999b] hover:text-white transition-colors hidden sm:inline-block">
-            算力体系
+          <a href="#ecosystem" class="text-xs font-bold text-[#8b999b] hover:text-white transition-colors hidden sm:inline-block">
+            前瞻规划
           </a>
           <a
             :href="clientDownloadUrl"
-            class="h-9 px-4 rounded-xl bg-gradient-to-r from-[#00ffa9] to-[#00d2ff] hover:opacity-95 text-slate-950 font-black text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-[0_0_20px_rgba(0,255,169,0.3)]"
+            class="h-9 px-5 rounded-full bg-gradient-to-r from-[#A5F3FC] via-[#D8B4F8] to-[#f0abfc] hover:opacity-95 text-slate-950 font-black text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-[0_0_20px_rgba(216,180,248,0.3)]"
           >
             <Download :size="14" class="stroke-[2.5]" />
-            <span>下载客户端 (35MB)</span>
+            <span>下载客户端</span>
           </a>
         </div>
       </div>
@@ -34,10 +29,8 @@
 
     <!-- 核心主体 -->
     <main class="flex-1">
-      
-      <!-- 英雄区：波浪 + 粒子 + 6 颗性能战报卡片 -->
-      <section class="relative w-full overflow-hidden bg-[#14110E] pt-14 pb-20 sm:pt-16 sm:pb-24">
-        
+      <!-- 英雄区：纯粹大画幅 WebGL 波浪 + 粒子 + 居中极简大标 -->
+      <section class="relative w-full overflow-hidden bg-[#14110E] pt-20 pb-24 sm:pt-28 sm:pb-32">
         <!-- 背景 WebGL 波浪与点阵 -->
         <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           <HeroBand
@@ -79,63 +72,38 @@
           <rect width="1" height="1" fill="url(#hero-bottom-fade)" />
         </svg>
 
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-20">
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center min-h-[520px]">
-
-            <!-- 左翼：大字标 + 理念 + 下载 CTA -->
-            <div class="lg:col-span-6 space-y-6">
-              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-white/10 text-xs font-mono text-slate-300 shadow-lg backdrop-blur-md w-fit">
-                <span class="px-2 py-0.5 rounded-full bg-[#00ffa9] text-slate-950 font-extrabold text-[11px] tracking-wide">
-                  SOTA 2026
-                </span>
-                <span class="flex items-center gap-1.5 font-medium text-slate-200">
-                  RTX 3060 12G 算力直连 · 纯血 Rust Native
-                </span>
-              </div>
-
-              <div>
-                <GradientText
-                  text="紫电AI"
-                  :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
-                  :animation-speed="6"
-                  class="text-6xl sm:text-8xl font-black tracking-tight"
-                />
-              </div>
-
-              <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-xl font-sans space-y-1">
-                <span class="block">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
-                <span class="block text-slate-100">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
-              </p>
-
-              <!-- 一键下载 Windows 客户端大胶囊 -->
-              <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                <a
-                  :href="clientDownloadUrl"
-                  class="h-13 px-8 rounded-2xl bg-gradient-to-r from-[#00ffa9] to-[#00d2ff] hover:opacity-95 text-slate-950 font-black text-sm tracking-wide shadow-[0_12px_36px_rgba(0,255,169,0.35)] transition-all active:scale-95 flex items-center justify-center gap-2.5 group"
-                >
-                  <Download :size="18" class="stroke-[2.5] group-hover:-translate-y-0.5 transition-transform" />
-                  <span>立即下载 Windows 客户端 (.exe)</span>
-                </a>
-
-                <a
-                  href="#tokenomics"
-                  class="h-13 px-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 font-bold text-xs transition-all flex items-center justify-center gap-2 backdrop-blur-md"
-                >
-                  <Flame :size="15" class="text-[#ffb74d] fill-[#ffb74d]" />
-                  <span>内测每日送 600 点</span>
-                </a>
-              </div>
-
-              <p class="text-[11px] font-mono text-[#5b696b]">
-                适用于 Windows 10 / 11 (x64) · 约 35 MB 极轻安装 · 100% 离线隐私推演
-              </p>
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-20 text-center">
+          <div class="flex flex-col items-center space-y-7 max-w-3xl mx-auto">
+            <div>
+              <GradientText
+                text="紫电AI"
+                :colors="['#A5F3FC', '#D8B4F8', '#A5F3FC', '#D8B4F8']"
+                :animation-speed="6"
+                class="text-6xl sm:text-8xl lg:text-9xl font-black tracking-tight"
+              />
             </div>
 
-            <!-- 右翼：6 颗实时性能战报卡片 -->
-            <div class="lg:col-span-6 flex items-center justify-center w-full">
-              <HeroCodeWindow />
-            </div>
+            <p class="text-slate-300 text-sm sm:text-base md:text-lg leading-relaxed max-w-2xl font-sans space-y-1">
+              <span class="block">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
+              <span class="block text-slate-100 font-medium">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
+            </p>
 
+            <!-- 双圆角胶囊按钮组 -->
+            <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4 w-full select-none">
+              <a
+                :href="clientDownloadUrl"
+                class="h-12 px-8 rounded-full bg-gradient-to-r from-[#A5F3FC] via-[#D8B4F8] to-[#f0abfc] hover:opacity-95 hover:scale-105 text-slate-950 font-black text-sm tracking-wide shadow-[0_12px_36px_rgba(216,180,248,0.35)] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <span>下载 Windows 客户端</span>
+              </a>
+
+              <a
+                href="#showcase"
+                class="h-12 px-8 rounded-full bg-white/[0.08] hover:bg-white/[0.14] hover:scale-105 border border-white/15 hover:border-white/30 text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 backdrop-blur-md cursor-pointer shadow-lg"
+              >
+                <span>查看更新日志</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -145,47 +113,85 @@
         <LiveDemo />
       </section>
 
-      <!-- 算力定价与 Tokenomics 说明 -->
-      <section id="tokenomics" class="py-20 border-t border-white/[0.06] bg-black/40 relative z-20">
+      <!-- 前瞻规划与生态展台 -->
+      <section id="ecosystem" class="py-20 border-t border-white/[0.06] bg-black/40 relative z-20 select-none">
         <div class="max-w-5xl mx-auto px-6 space-y-10">
           <div class="text-center space-y-2">
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00ffa9]/10 text-[#00ffa9] font-mono text-xs font-bold border border-[#00ffa9]/20">
-              <Flame :size="13" class="fill-[#00ffa9]" />
-              <span>Tokenomics 算力代币模型</span>
+            <div class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#00ffa9]/10 text-[#00ffa9] font-mono text-xs font-bold border border-[#00ffa9]/25 shadow-[0_0_12px_rgba(0,255,169,0.15)]">
+              <Sparkles :size="13" class="text-[#00ffa9]" />
+              <span>公测免费开放 · 前瞻生态</span>
             </div>
-            <h2 class="text-2xl sm:text-3xl font-black text-white">透明亲民的算力计费矩阵</h2>
-            <p class="text-xs sm:text-sm text-[#8b999b]">1 Token = ¥0.01 · 每日 00:00 UTC 自动刷新免费配额</p>
+            <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight">更多端侧 AI 算力正在构建中</h2>
+            <p class="text-xs sm:text-sm text-[#8b999b] max-w-lg mx-auto">内测期间全功能完全免费开放，专注打磨工业级离线隐私与极致性能</p>
           </div>
 
+          <!-- 4 大前瞻规划卡片 -->
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center">
-              <div class="text-xs text-[#8b999b]">📄 PDF 智能解析</div>
-              <div class="text-xl font-black font-mono text-[#00ffa9]">1 点 / 页</div>
-              <div class="text-[11px] text-[#5b696b]">折合 ¥0.01 / 页</div>
+            <div class="p-6 rounded-3xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 hover:border-[#00ffa9]/40 transition-all duration-300 space-y-3 text-center group shadow-lg">
+              <div class="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center mx-auto text-[#8b999b] group-hover:text-[#00ffa9] transition-colors">
+                <Workflow :size="20" class="stroke-[2]" />
+              </div>
+              <div class="space-y-1">
+                <div class="text-sm font-bold text-white">RPA 自动化</div>
+                <div class="text-[10px] font-mono text-[#00ffa9] font-bold bg-[#00ffa9]/10 px-2 py-0.5 rounded-full inline-block">
+                  正在构建中
+                </div>
+              </div>
+              <p class="text-[11px] text-[#5b696b] leading-relaxed">
+                桌面级跨软件工作流无感自动编排
+              </p>
             </div>
-            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center">
-              <div class="text-xs text-[#8b999b]">🔍 4K/8K 图像超分</div>
-              <div class="text-xl font-black font-mono text-[#00ffa9]">2 点 / 张</div>
-              <div class="text-[11px] text-[#5b696b]">秒级 4K 重构</div>
+
+            <div class="p-6 rounded-3xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 hover:border-[#00ffa9]/40 transition-all duration-300 space-y-3 text-center group shadow-lg">
+              <div class="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center mx-auto text-[#8b999b] group-hover:text-[#00ffa9] transition-colors">
+                <Database :size="20" class="stroke-[2]" />
+              </div>
+              <div class="space-y-1">
+                <div class="text-sm font-bold text-white">RAG 知识库</div>
+                <div class="text-[10px] font-mono text-[#00ffa9] font-bold bg-[#00ffa9]/10 px-2 py-0.5 rounded-full inline-block">
+                  正在构建中
+                </div>
+              </div>
+              <p class="text-[11px] text-[#5b696b] leading-relaxed">
+                本地私有化向量数据库与多维问答
+              </p>
             </div>
-            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center">
-              <div class="text-xs text-[#8b999b]">🎬 视频双语字幕</div>
-              <div class="text-xl font-black font-mono text-[#00ffa9]">10 点 / 小时</div>
-              <div class="text-[11px] text-[#5b696b]">2小时电影仅 20 点</div>
+
+            <div class="p-6 rounded-3xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 hover:border-[#00ffa9]/40 transition-all duration-300 space-y-3 text-center group shadow-lg">
+              <div class="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center mx-auto text-[#8b999b] group-hover:text-[#00ffa9] transition-colors">
+                <Languages :size="20" class="stroke-[2]" />
+              </div>
+              <div class="space-y-1">
+                <div class="text-sm font-bold text-white">离线高精翻译</div>
+                <div class="text-[10px] font-mono text-[#00ffa9] font-bold bg-[#00ffa9]/10 px-2 py-0.5 rounded-full inline-block">
+                  正在构建中
+                </div>
+              </div>
+              <p class="text-[11px] text-[#5b696b] leading-relaxed">
+                百万字长文档多语言神经翻译直出
+              </p>
             </div>
-            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 text-center">
-              <div class="text-xs text-[#8b999b]">⚡ 全能格式转换</div>
-              <div class="text-xl font-black font-mono text-emerald-400">永久免费</div>
-              <div class="text-[11px] text-[#5b696b]">零算力流式直出</div>
+
+            <div class="p-6 rounded-3xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 hover:border-[#00ffa9]/40 transition-all duration-300 space-y-3 text-center group shadow-lg">
+              <div class="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center mx-auto text-[#8b999b] group-hover:text-[#00ffa9] transition-colors">
+                <Wand2 :size="20" class="stroke-[2]" />
+              </div>
+              <div class="space-y-1">
+                <div class="text-sm font-bold text-white">AI 无痕修改</div>
+                <div class="text-[10px] font-mono text-[#00ffa9] font-bold bg-[#00ffa9]/10 px-2 py-0.5 rounded-full inline-block">
+                  正在构建中
+                </div>
+              </div>
+              <p class="text-[11px] text-[#5b696b] leading-relaxed">
+                图像无痕智能抹除、瑕疵修复与重绘
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 快速上手与底部 CTA -->
-      <QuickStart />
+      <!-- 底部 CTA -->
       <CTA />
-
     </main>
 
     <!-- 底部版权 -->
@@ -201,18 +207,15 @@
         </div>
       </div>
     </footer>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { Download, Zap, Flame, ArrowRight } from 'lucide-vue-next';
+import { Download, Zap, Sparkles, Workflow, Database, Languages, Wand2 } from 'lucide-vue-next';
 import GradientText from './components/GradientText.vue';
 import HeroBand from './components/HeroBand.vue';
 import DotField from './components/DotField.vue';
-import HeroCodeWindow from './components/HeroCodeWindow.vue';
 import LiveDemo from './components/LiveDemo.vue';
-import QuickStart from './components/QuickStart.vue';
 import CTA from './components/CTA.vue';
 
 // 官方安装包直链 (指向 R2 资产存储桶)

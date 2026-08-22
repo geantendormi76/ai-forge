@@ -1,0 +1,100 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 10000000
+  },
+  "output": {
+    "filePath": "c/repomix-output-DB.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "compress": false,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 20,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 50
+    },
+    "patterns": [
+      { "pattern": "c/HANDOFF_DB.md", "compress": false },
+      { "pattern": "src-tauri/tauri.conf.json", "compress": false },
+      { "pattern": "src-tauri/build.rs", "compress": false },
+      { "pattern": "src-tauri/Cargo.toml", "compress": false },
+      { "pattern": "src-tauri/src/lib.rs", "compress": false },
+      { "pattern": "src-tauri/src/main.rs", "compress": false },
+      { "pattern": "package.json", "compress": false },
+      { "pattern": "publish_update.py", "compress": false },
+      { "pattern": "generate_brand_icons.py", "compress": false },
+      { "pattern": "deploy/cloudflare/auth_worker.js", "compress": false },
+      { "pattern": "deploy/cloudflare/wrangler.toml", "compress": false }
+    ]
+  },
+  "include": [
+    "c/HANDOFF_DB.md",
+    "publish_update.py",
+    "generate_brand_icons.py",
+    "parse_pe_imports.py",
+    ".cargo/**",
+    "src-tauri/.cargo/**",
+    "src-tauri/Cargo.toml",
+    "src-tauri/tauri.conf.json",
+    "src-tauri/build.rs",
+    "src-tauri/capabilities/**",
+    "src-tauri/src/**",
+    "src-tauri/crates/**/Cargo.toml",
+    "src-tauri/crates/**/src/lib.rs",
+    "src-tauri/crates/core-security/**",
+    "src-tauri/crates/core-models-download/**",
+    "src-tauri/crates/core-onnx-infer/**",
+    "src-tauri/crates/shared-contracts/**",
+    "src-tauri/crates/services/service-upscale/**",
+    "src-tauri/crates/tools/upscale-48k/**",
+    "package.json",
+    "vite.config.ts",
+    "index.html",
+    "src/App.vue",
+    "src/main.ts",
+    "src/style.css",
+    "src/bindings.ts",
+    "src/bindings/**",
+    "src/store/**",
+    "src/composables/**",
+    "src/components/modals/**",
+    "deploy/cloudflare/**"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "src-tauri/target/**",
+      "**/.venv/**",
+      "**/__pycache__/**",
+      "**/*.onnx",
+      "**/*.gguf",
+      "**/*.bin",
+      "**/*.pdiparams",
+      "**/*.pdmodel",
+      "**/*.pdf",
+      "**/*.dll",
+      "**/*.exe",
+      "test/**",
+      "data/**",
+      "**/*.sqlite3*",
+      "dist/**",
+      "deploy/website/**",
+      "src/views/**",
+      "src/assets/**",
+      "src/components/effects/**"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}

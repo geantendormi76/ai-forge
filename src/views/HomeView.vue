@@ -141,7 +141,7 @@ const triggerFeedbackModal = () => {
 
 <template>
   <div class="relative w-full h-full overflow-hidden bg-[#20292b] text-[#f5f5f3] select-none font-sans flex flex-col">
-    <!-- 极光背景 -->
+    <!-- 1. 极光背景 -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <Aurora
         :speed="0.8"
@@ -151,21 +151,21 @@ const triggerFeedbackModal = () => {
       />
     </div>
 
-    <!-- 点阵流光 -->
+    <!-- 2. 🌟 点阵流光大网格 (1:1 镜面对齐官网 deploy/website 黄金真值) -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <DotField
-        :dot-radius="1.2"
-        :dot-spacing="16"
-        :bulge-strength="55"
-        :glow-radius="180"
-        gradient-from="rgba(2, 195, 180, 0.35)"
-        gradient-to="rgba(0, 210, 255, 0.12)"
-        glow-color="#02c3b4"
-        class="absolute inset-0 opacity-60"
+        :dot-radius="1.5"
+        :dot-spacing="14"
+        :bulge-strength="67"
+        :glow-radius="200"
+        gradient-from="rgba(0, 255, 169, 0.45)"
+        gradient-to="rgba(0, 210, 255, 0.35)"
+        glow-color="#00ffa9"
+        class="absolute inset-0 opacity-80"
       />
     </div>
 
-    <!-- 视窗容器 -->
+    <!-- 3. 视窗容器 -->
     <div
       class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar pt-10 pb-8 transition-all duration-300 ease-in-out pointer-events-auto"
       :class="ui.侧边栏收起 ? 'pl-[112px] pr-8 sm:pr-12' : 'pl-[280px] pr-8 sm:pr-12'"
@@ -187,7 +187,6 @@ const triggerFeedbackModal = () => {
               <span class="block text-slate-300">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
               <span class="block text-slate-100 mt-1">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
             </p>
-
             <div class="flex items-center gap-3.5 pt-2 flex-wrap">
               <button
                 type="button"
@@ -239,6 +238,7 @@ const triggerFeedbackModal = () => {
                   <span>{{ cat.label }}</span>
                 </button>
               </div>
+
               <div class="relative w-full sm:w-[240px]">
                 <Search :size="13" class="absolute left-3 top-1/2 -translate-y-1/2 text-[#8b999b]" />
                 <input
@@ -267,6 +267,7 @@ const triggerFeedbackModal = () => {
                   class="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500 block select-none pointer-events-none"
                 />
               </div>
+
               <div class="relative z-10 px-2 pt-2.5 pb-1 space-y-1 flex-1 flex flex-col justify-between">
                 <div class="flex items-center justify-between">
                   <h3 class="text-sm sm:text-base font-black text-white tracking-tight group-hover:text-[#02c3b4] transition-colors truncate">

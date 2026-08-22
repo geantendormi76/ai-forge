@@ -1,7 +1,7 @@
 use core_models_download::{DependencyItem, DependencyProgressPayload, ModelManager};
 use core_security::{
     gatekeeper::{Gatekeeper, QuotaStatus},
-    DeviceFingerprint,
+    DeviceFingerprint, PortableEngine,
 };
 use format_converter::{service::FormatConvertService, FormatConvertResult, FormatConvertTask};
 use pdf_parse::service::{PdfParseResult, PdfParseService};
@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State};
+use tauri_plugin_updater::UpdaterExt;
 use upscale_48k::{Upscale48kTool, UpscaleResult, UpscaleTask};
 use video_subtitle::{
     VideoProbeResult, VideoProbeService, VideoSubtitleOptions, VideoSubtitleResult,
@@ -22,7 +23,49 @@ pub struct AppState {
     pub cancel_token: Arc<AtomicBool>,
 }
 
-/// 🔍 检查指定算子所需依赖在本地的就绪状态 (通过三级自愈寻址器)
+#[tauri::command]
+fn is_portable() -> bool {
+    PortableEngine::is_portable()
+}
+
+#[tauri::command]
+async fn install_app_update(app: tauri::AppHandle) -> Result<bool, String> {
+    let updater = app.updater().map_err(|e| format!("初始化更新器失败: {e}"))?;
+    if let Some(update) = updater.check().await.map_err(|e| format!("版本探针探测异常: {e}"))? {
+        let app_handle = app.clone();
+        tracing::info!("🚀 发现可用更新: v{}, 正在由 Rust 核心流式拉取并验签...", update.version);
+        let mut downloaded_bytes: u64 = 0;
+        update
+            .download_and_install(
+                move |chunk_length, content_length| {
+                    downloaded_bytes += chunk_length as u64;
+                    let total = content_length.unwrap_or(0);
+                    let percent = if total > 0 {
+                        ((downloaded_bytes as f64 / total as f64) * 100.0) as u32
+                    } else {
+                        0
+                    };
+                    let _ = app_handle.emit(
+                        "app-update-progress",
+                        serde_json::json!({
+                            "downloaded": downloaded_bytes,
+                            "total": total,
+                            "percent": percent
+                        }),
+                    );
+                },
+                || {
+                    tracing::info!("🎉 [Rust Updater] 升级包写入完成，准备重启进程");
+                },
+            )
+            .await
+            .map_err(|e| format!("下载与安装更新包失败: {e}"))?;
+        app.restart();
+    } else {
+        Ok(false)
+    }
+}
+
 #[tauri::command]
 async fn check_tool_dependencies(tool_id: String) -> Result<Vec<DependencyItem>, String> {
     let base_dir = ModelManager::resolve_models_base_dir();
@@ -30,7 +73,6 @@ async fn check_tool_dependencies(tool_id: String) -> Result<Vec<DependencyItem>,
     Ok(ModelManager::get_tool_dependencies(&base_dir, &tool_id).await)
 }
 
-/// 🌐 触发工具依赖批量流式下载 (支持断点续传与毫秒级进度推送)
 #[tauri::command]
 async fn download_tool_dependencies(
     tool_id: String,
@@ -41,18 +83,15 @@ async fn download_tool_dependencies(
     tracing::info!("🌐 [依赖下载] 目标落盘基准目录: {:?}", base_dir);
     let deps = ModelManager::get_tool_dependencies(&base_dir, &tool_id).await;
     state.cancel_token.store(false, Ordering::SeqCst);
-
     for item in deps {
         if item.is_ready {
             continue;
         }
-
         let target_path = base_dir.join(&item.relative_path);
         let window_clone = window.clone();
         let tool_id_clone = tool_id.clone();
         let item_id = item.id.clone();
         let item_name = item.name.clone();
-
         let progress_cb = move |downloaded: u64, total: u64, phase: &str| {
             let percent = if total > 0 {
                 ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32
@@ -70,7 +109,6 @@ async fn download_tool_dependencies(
             };
             let _ = window_clone.emit("dependency-download-progress", payload);
         };
-
         ModelManager::download_dependency_file(
             &target_path,
             &item,
@@ -80,11 +118,9 @@ async fn download_tool_dependencies(
         .await
         .map_err(|e| format!("下载依赖 [{}] 失败: {}", item.name, e))?;
     }
-
     Ok(true)
 }
 
-/// 🛑 取消当前正在执行的模型或依赖下载
 #[tauri::command]
 fn cancel_dependency_downloads(state: State<'_, AppState>) -> Result<bool, String> {
     tracing::warn!("🛑 [依赖下载] 收到前端紧急取消下载指令");
@@ -185,6 +221,7 @@ async fn probe_video(video_path: String) -> Result<VideoProbeResult, String> {
 #[tauri::command]
 async fn run_video_subtitle(
     options: VideoSubtitleOptions,
+    window: tauri::Window,
     state: State<'_, AppState>,
 ) -> Result<VideoSubtitleResult, String> {
     tracing::info!("🚀 收到前端 视频双语字幕工坊请求: {}", options.video_path);
@@ -196,11 +233,25 @@ async fn run_video_subtitle(
     tracing::info!("⏱️ 视频时长: {:.1} 秒 ➔ 动态消耗 {} Tokens", duration_sec, tokens_needed);
     Gatekeeper::check_permission_tokens("video-subtitle", tokens_needed).await?;
     state.cancel_token.store(false, Ordering::SeqCst);
+
+    let window_clone = window.clone();
+    let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
+        let _ = window_clone.emit(
+            "video-subtitle-progress",
+            serde_json::json!({
+                "current": current,
+                "total": total,
+                "message": msg
+            }),
+        );
+    });
+
     let start_t = std::time::Instant::now();
-    let res = VideoSubtitleTool::run_pipeline_cancellable(
+    let res = VideoSubtitleTool::run_pipeline_with_progress(
         options,
         Some(&state.vram_guard),
         state.cancel_token.clone(),
+        Some(progress_cb),
     ).await;
     let elapsed = start_t.elapsed().as_millis() as u64;
     Gatekeeper::report_telemetry(
@@ -243,7 +294,9 @@ async fn run_format_convert(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let output_dir = std::env::temp_dir().join("ai_forge_outputs");
+    PortableEngine::init();
+    let output_dir = PortableEngine::resolve_data_path("outputs")
+        .unwrap_or_else(|| std::env::temp_dir().join("ai_forge_outputs"));
     let _ = std::fs::create_dir_all(&output_dir);
     let app_state = AppState {
         vram_guard: Arc::new(VramTokenGuard::default_rtx3060()),
@@ -257,6 +310,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
+            is_portable,
             get_quota_status,
             parse_pdf,
             probe_video,
@@ -267,7 +321,8 @@ pub fn run() {
             run_upscale_48k,
             check_tool_dependencies,
             download_tool_dependencies,
-            cancel_dependency_downloads
+            cancel_dependency_downloads,
+            install_app_update
         ])
         .run(tauri::generate_context!())
         .expect("🚨 启动 紫电 AI 桌面端失败");

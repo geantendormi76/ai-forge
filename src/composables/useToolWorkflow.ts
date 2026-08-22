@@ -1,10 +1,10 @@
 // 🛡️ 紫电 AI 桌面工坊 - 工业级批量多任务工作流状态机母线 (useToolWorkflow.ts)
-
 import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue';
 import { useUIStore } from '../store/uiStore';
 import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { cancelCurrentTask } from '../bindings/index';
 
 export type WorkflowState =
@@ -43,6 +43,12 @@ export interface ToolWorkflowConfig {
   unsupportedPrompt?: (rejectedNames: string[]) => string;
 }
 
+export interface ProgressEventPayload {
+  current: number;
+  total: number;
+  message: string;
+}
+
 export function formatBytes(bytes: number, decimals = 1): string {
   if (bytes <= 0) return '0 B';
   const k = 1024;
@@ -65,7 +71,6 @@ export function formatDuration(seconds: number): string {
 
 export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
   const ui = useUIStore();
-
   const state = ref<WorkflowState>('idle');
   const queue = ref<ToolFileMetadata[]>([]);
   const isDragging = ref(false);
@@ -75,15 +80,16 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
   const elapsedMs = ref(0);
   const errorMessage = ref('');
   const isCancelled = ref(false);
-
   const isProcessingModalOpen = ref(false);
   const isSuccessModalOpen = ref(false);
   const successInfo = ref<BatchSuccessPayload | null>(null);
-
   const latestResults = shallowRef<TResult[]>([]);
   const fileInputRef = ref<HTMLInputElement | null>(null);
 
   let unlistenDragDrop: (() => void) | null = null;
+  let unlistenUpscaleProgress: UnlistenFn | null = null;
+  let unlistenPdfProgress: UnlistenFn | null = null;
+  let unlistenSubtitleProgress: UnlistenFn | null = null;
 
   const allowedSet = computed(() => {
     if (!config?.allowedExtensions || config.allowedExtensions.length === 0 || config.allowedExtensions.includes('*')) {
@@ -121,7 +127,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
         sizeBytes: 0,
         sizeFormatted: '物理文件',
       };
-
       newItems.push(item);
     }
 
@@ -148,7 +153,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
           },
         ],
       });
-
       if (selected) {
         const pathList = Array.isArray(selected) ? selected : [selected];
         addPaths(pathList);
@@ -257,6 +261,20 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     }
   };
 
+  // 🛡️ 细粒度子进度状态处理器 (超分 / 视频字幕 / PDF 解析全通用)
+  const handleSubProgress = (payload: ProgressEventPayload) => {
+    if (state.value !== 'running' || queue.value.length === 0) return;
+    const totalFiles = queue.value.length;
+    const currentIdx = activeIndex.value;
+    const currentFileName = queue.value[currentIdx]?.name || '';
+    const subFraction = payload.total > 0 ? payload.current / payload.total : 0;
+    const overallFraction = (currentIdx + subFraction) / totalFiles;
+    progress.value = Math.min(99, Math.max(1, Math.round(overallFraction * 100)));
+    if (payload.message) {
+      statusText.value = `(${currentIdx + 1}/${totalFiles}) ${currentFileName} - ${payload.message}`;
+    }
+  };
+
   onMounted(async () => {
     try {
       const appWindow = getCurrentWebviewWindow();
@@ -272,8 +290,19 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
           }
         }
       });
+
+      // 🌟 注册 3 大 AI 算子细粒度硬件级切块进度监听器
+      unlistenUpscaleProgress = await listen<ProgressEventPayload>('upscale-progress', (e) => {
+        handleSubProgress(e.payload);
+      });
+      unlistenPdfProgress = await listen<ProgressEventPayload>('pdf-parse-progress', (e) => {
+        handleSubProgress(e.payload);
+      });
+      unlistenSubtitleProgress = await listen<ProgressEventPayload>('video-subtitle-progress', (e) => {
+        handleSubProgress(e.payload);
+      });
     } catch (e) {
-      console.warn('⚠️ 物理窗口原生拖拽监听未激活:', e);
+      console.warn('⚠️ 物理窗口原生事件监听注册提示:', e);
     }
   });
 
@@ -281,6 +310,18 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
     if (unlistenDragDrop) {
       unlistenDragDrop();
       unlistenDragDrop = null;
+    }
+    if (unlistenUpscaleProgress) {
+      unlistenUpscaleProgress();
+      unlistenUpscaleProgress = null;
+    }
+    if (unlistenPdfProgress) {
+      unlistenPdfProgress();
+      unlistenPdfProgress = null;
+    }
+    if (unlistenSubtitleProgress) {
+      unlistenSubtitleProgress();
+      unlistenSubtitleProgress = null;
     }
   });
 
@@ -308,14 +349,12 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       ui.弹出提示('请先添加待处理文件到队列', 'info');
       return;
     }
-
     isCancelled.value = false;
     state.value = 'running';
     isProcessingModalOpen.value = true;
     isSuccessModalOpen.value = false;
     errorMessage.value = '';
     latestResults.value = [];
-
     const beforeUsed = ui.quota.used_today;
     const total = queue.value.length;
     const t0 = performance.now();
@@ -326,7 +365,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
 
     for (let i = 0; i < total; i++) {
       if (isCancelled.value) break;
-
       activeIndex.value = i;
       progress.value = Math.round((i / total) * 100);
       const currentFile = queue.value[i];
@@ -336,7 +374,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
         const res = await runner(currentFile, i, total);
         latestResults.value.push(res);
         successCount++;
-
         if (res && typeof res === 'object') {
           if ('output_md_path' in res) lastOutput = (res as any).output_md_path;
           else if ('output_video_path' in res) lastOutput = (res as any).output_video_path;
@@ -352,9 +389,7 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       }
     }
 
-    // 🌟 立即刷新云端状态
     await ui.refreshQuota();
-
     if (isCancelled.value) return;
 
     const totalElapsed = Math.round(performance.now() - t0);
@@ -383,7 +418,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
 
     const elapsedFormatted =
       totalElapsed < 1000 ? `${totalElapsed} ms` : `${(totalElapsed / 1000).toFixed(2)} 秒`;
-
     const deltaTokens = Math.max(0, ui.quota.used_today - beforeUsed);
 
     successInfo.value = {
@@ -397,7 +431,6 @@ export function useToolWorkflow<TResult = any>(config?: ToolWorkflowConfig) {
       elapsedFormatted,
       tokensConsumed: deltaTokens > 0 ? deltaTokens : (options.tokensPerItem ? options.tokensPerItem * successCount : 2),
     };
-
     isSuccessModalOpen.value = true;
   };
 

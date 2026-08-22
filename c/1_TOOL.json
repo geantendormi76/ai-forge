@@ -4,7 +4,7 @@
     "maxFileSize": 10000000
   },
   "output": {
-    "filePath": "repomix-output-TOOL.xml",
+    "filePath": "c/repomix-output-TOOL.xml",
     "style": "xml",
     "parsableStyle": true,
     "compress": false,
@@ -19,7 +19,7 @@
       "sortByChangesMaxCommits": 50
     },
     "patterns": [
-      { "pattern": "HANDOFF_TOOL.md", "compress": false },
+      { "pattern": "c/HANDOFF_TOOL.md", "compress": false },
       { "pattern": "src-tauri/tauri.conf.json", "compress": false },
       { "pattern": "src-tauri/Cargo.toml", "compress": false },
       { "pattern": "src-tauri/src/**", "compress": false },
@@ -31,7 +31,7 @@
     // =========================================================
     // 🏛️ 1. [公共常驻基座] 核心配置、UI 框架、通用底座与契约
     // =========================================================
-    "HANDOFF_TOOL.md",
+    "c/HANDOFF_TOOL.md",
     ".cargo/**",
     "src-tauri/.cargo/**",
     "src-tauri/Cargo.toml",

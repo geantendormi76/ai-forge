@@ -4,7 +4,7 @@
     "maxFileSize": 10000000
   },
   "output": {
-    "filePath": "repomix-output-UI.xml",
+    "filePath": "c/repomix-output-UI.xml",
     "style": "xml",
     "parsableStyle": true,
     "compress": false,
@@ -20,7 +20,7 @@
     },
     // 🌟 SOTA 细粒度分级：前端源码 100% 全量，后端契约智能签名压缩
     "patterns": [
-      { "pattern": "HANDOFF_UI.md", "compress": false },
+      { "pattern": "c/HANDOFF_UI.md", "compress": false },
       { "pattern": "src/views/**", "compress": false },
       { "pattern": "src/components/**", "compress": false },
       { "pattern": "src/store/**", "compress": false },
@@ -34,7 +34,7 @@
     // =========================================================
     // 🎨 1. [前端全景 UI 资产] 页面、组件、状态树、动效与样式
     // =========================================================
-    "HANDOFF_UI.md",
+    "c/HANDOFF_UI.md",
     "package.json",
     "vite.config.ts",
     "postcss.config.js",
