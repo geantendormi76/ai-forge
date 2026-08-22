@@ -1,5 +1,4 @@
-// 🛡️ 紫电 AI - Cloudflare Worker Serverless 商业鉴权、隐私遥测与明细账单中台 (v3.1.0)
-
+// 🛡️ 紫电 AI - Cloudflare Worker Serverless 商业鉴权、隐私遥测与明细账单中台 (v3.2.0)
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -8,16 +7,14 @@ const CORS_HEADERS = {
 };
 
 const STAGE = "beta";
-const DAILY_FREE_POINTS = STAGE === "beta" ? 600 : 300;
+const DAILY_FREE_POINTS = 888; // 🌟 升级为每日 888 基础 Tokens
 
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
-
     const url = new URL(request.url);
-
     if (url.pathname === "/health") {
       return new Response(JSON.stringify({ status: "ok", stage: STAGE, service: "zidian-auth-worker" }), {
         status: 200,
@@ -25,15 +22,12 @@ export default {
       });
     }
 
-    // 2. 查询设备额度、状态与最近 5 笔消费明细
     if (url.pathname === "/api/v1/quota/status" && request.method === "POST") {
       return await handleQueryStatus(request, env);
     }
-
     if (url.pathname === "/api/v1/quota/deduct" && request.method === "POST") {
       return await handleDeductQuota(request, env);
     }
-
     if (url.pathname === "/api/v1/telemetry/report" && request.method === "POST") {
       return await handleTelemetryReport(request, env);
     }
@@ -57,7 +51,6 @@ async function handleQueryStatus(request, env) {
       await env.DB.prepare(
         "INSERT INTO devices (device_fingerprint, daily_limit, used_points_today, last_reset_utc_date) VALUES (?, ?, 0, ?)"
       ).bind(device_fingerprint, DAILY_FREE_POINTS, todayUtc).run();
-
       device = {
         device_fingerprint,
         daily_limit: DAILY_FREE_POINTS,
@@ -78,7 +71,6 @@ async function handleQueryStatus(request, env) {
 
     const remaining = Math.max(0, (device.daily_limit - currentUsed) + (device.bonus_points || 0));
 
-    // 🌟 查询该设备最近 5 笔扣费记录
     const recentLogsQuery = await env.DB.prepare(
       "SELECT id, tool_name, points_deducted, created_at FROM quota_logs WHERE device_fingerprint = ? ORDER BY id DESC LIMIT 5"
     ).bind(device_fingerprint).all();
@@ -94,7 +86,6 @@ async function handleQueryStatus(request, env) {
       status: device.status,
       recent_logs: recentLogsQuery.results || []
     }), { status: 200, headers: CORS_HEADERS });
-
   } catch (err) {
     return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS_HEADERS });
   }
@@ -142,7 +133,6 @@ async function handleDeductQuota(request, env) {
       await env.DB.prepare(
         "INSERT INTO devices (device_fingerprint, daily_limit, used_points_today, last_reset_utc_date) VALUES (?, ?, 0, ?)"
       ).bind(device_fingerprint, DAILY_FREE_POINTS, todayUtc).run();
-
       device = {
         device_fingerprint,
         daily_limit: DAILY_FREE_POINTS,
@@ -166,6 +156,7 @@ async function handleDeductQuota(request, env) {
     }
 
     const totalAvailable = (device.daily_limit - currentUsed) + (device.bonus_points || 0);
+
     if (totalAvailable < points_needed) {
       return new Response(JSON.stringify({
         success: false,
@@ -190,7 +181,6 @@ async function handleDeductQuota(request, env) {
       points_deducted: points_needed,
       remaining_points: totalAvailable - points_needed
     }), { status: 200, headers: CORS_HEADERS });
-
   } catch (err) {
     return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS_HEADERS });
   }
@@ -200,12 +190,10 @@ async function handleTelemetryReport(request, env) {
   try {
     const payload = await request.json();
     const { device_fingerprint, tool_name, elapsed_ms = 0, success = true, error_message = null, client_version = "1.0.0" } = payload;
-
     const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
     await env.DB.prepare(
       "INSERT INTO telemetry_events (device_fingerprint, tool_name, elapsed_ms, success, error_message, client_version, client_ip) VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).bind(device_fingerprint || "anonymous", tool_name || "unknown", elapsed_ms, success ? 1 : 0, error_message, client_version, clientIp).run();
-
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS_HEADERS });
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: e.message }), { status: 200, headers: CORS_HEADERS });
@@ -216,7 +204,6 @@ async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
   try {
     const encoder = new TextEncoder();
     const secretBytes = encoder.encode(secret);
-
     const timestampNum = BigInt(timestampStr);
     const timestampBytes = new Uint8Array(8);
     let tempVal = timestampNum;
@@ -224,7 +211,6 @@ async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
       timestampBytes[i] = Number(tempVal & 0xffn);
       tempVal >>= 8n;
     }
-
     const payload = new Uint8Array(timestampBytes.length + bodyBytes.length);
     payload.set(timestampBytes, 0);
     payload.set(bodyBytes, timestampBytes.length);
@@ -236,10 +222,8 @@ async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
       false,
       ["sign"]
     );
-
     const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, payload));
     const computedHex = [...signature].map(b => b.toString(16).padStart(2, "0")).join("");
-
     return computedHex.toLowerCase() === expectedHex.toLowerCase();
   } catch {
     return false;
