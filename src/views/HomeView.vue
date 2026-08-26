@@ -8,6 +8,7 @@ import GradientText from '../components/effects/GradientText.vue';
 import ChromaGrid, { type ChromaCardItem } from '../components/effects/ChromaGrid.vue';
 import FeedbackModal from '../components/modals/FeedbackModal.vue';
 import LogReportModal from '../components/modals/LogReportModal.vue';
+import translationCoverSvg from '../assets/tools/translation/cover.svg';
 import upscaleCoverSvg from '../assets/tools/upscale-48k/cover.svg';
 import videoCoverSvg from '../assets/tools/video-subtitle/cover.svg';
 import pdfCoverSvg from '../assets/tools/pdf-parse/cover.svg';
@@ -16,9 +17,9 @@ import {
   FileText,
   Search,
   Sparkles,
-  Zap,
   Scan,
   Globe,
+  Languages,
   MessageSquareHeart,
   Terminal
 } from 'lucide-vue-next';
@@ -27,7 +28,7 @@ const ui = useUIStore();
 const showFeedbackModal = ref(false);
 const showLogModal = ref(false);
 
-// 1. 全库工具注册表
+// 1. 全库工具注册表 (离线高精翻译排头位)
 interface ToolItem {
   id: string;
   name: string;
@@ -35,10 +36,19 @@ interface ToolItem {
   subtitle: string;
   category: 'core' | 'document' | 'media' | 'system';
   desc: string;
-  viewTarget?: 'upscale' | 'asr' | 'format' | 'pdf';
+  viewTarget?: 'trans' | 'upscale' | 'asr' | 'format' | 'pdf';
 }
 
 const masterToolList: ToolItem[] = [
+  {
+    id: 'trans',
+    name: '离线高精翻译',
+    image: translationCoverSvg,
+    subtitle: '38 语种神经互译、专业术语锁词与截图 OCR',
+    category: 'core',
+    desc: '38 语种高精神经互译、术语库锁词与图像 OCR 即时翻译',
+    viewTarget: 'trans',
+  },
   {
     id: 'upscale',
     name: '4K/8K 图像超分',
@@ -84,6 +94,7 @@ const flagshipTools = computed<ChromaCardItem[]>(() => {
     const countB = ui.toolUsageCounts[b.id] || 0;
     return countB - countA;
   });
+
   return sorted.slice(0, 3).map((t) => ({
     id: t.id,
     image: t.image,
@@ -96,10 +107,11 @@ const flagshipTools = computed<ChromaCardItem[]>(() => {
 // 3. 分类与搜索
 const searchQuery = ref('');
 const activeCategory = ref('all');
+
 const categoryList = [
   { id: 'all', label: '全部工具', icon: Sparkles },
+  { id: 'core', label: '核心工具/翻译', icon: Languages },
   { id: 'media', label: '音视频/超分', icon: Scan },
-  { id: 'core', label: '核心工具', icon: Zap },
   { id: 'document', label: '文档重构', icon: FileText },
 ];
 
@@ -200,7 +212,6 @@ const openOfficialWebsite = async () => {
                 <Globe :size="14" class="text-[#02c3b4] stroke-[2.2]" />
                 <span>官方网站</span>
               </button>
-
               <button
                 type="button"
                 @click="showFeedbackModal = true"
@@ -210,7 +221,6 @@ const openOfficialWebsite = async () => {
                 <MessageSquareHeart :size="14" class="text-rose-400 stroke-[2.2]" />
                 <span>联系作者</span>
               </button>
-
               <button
                 type="button"
                 @click="showLogModal = true"

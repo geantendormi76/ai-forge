@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/uiStore';
 import ShinyText from '../effects/ShinyText.vue';
 import {
   LayoutDashboard,
+  Languages,
   Film,
   Zap,
   FileText,
@@ -14,31 +15,30 @@ import {
   Flame,
   Workflow,
   Database,
-  Languages,
   Wand2
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
 
-// 1. 核心四大已上线工作台
+// 1. 核心五大已上线工作台 (含离线高精翻译)
 const mainWorkbenches = [
   { id: 'home', label: '工坊主页', icon: LayoutDashboard },
+  { id: 'trans', label: '离线高精翻译', icon: Languages },
   { id: 'upscale', label: '4K/8K 图像超分', icon: Scan },
   { id: 'format', label: '全能格式转换', icon: Zap },
   { id: 'pdf', label: 'PDF 智能解析', icon: FileText },
   { id: 'asr', label: '视频字幕生成', icon: Film },
 ];
 
-// 2. 🌟 未来核心算力前瞻规划 (精准 4 项)
+// 2. 🌟 未来核心算力前瞻规划
 const extensionOperators = [
   { id: 'rpa', label: 'RPA 自动化', icon: Workflow },
   { id: 'rag', label: 'RAG 知识库', icon: Database },
-  { id: 'trans', label: '离线高精翻译', icon: Languages },
   { id: 'ai_edit', label: 'AI 无痕修改', icon: Wand2 },
 ];
 
 const switchView = (id: string) => {
-  if (['home', 'upscale', 'format', 'asr', 'pdf'].includes(id)) {
+  if (['home', 'trans', 'upscale', 'format', 'asr', 'pdf'].includes(id)) {
     ui.navigateToTool(id as any);
   } else {
     const target = extensionOperators.find((o) => o.id === id);
@@ -91,6 +91,7 @@ onMounted(() => {
           <PanelLeftClose :size="16" class="stroke-[2.2]" />
         </button>
       </div>
+
       <!-- 收起态头部 -->
       <div v-else class="flex items-center justify-center w-full">
         <button
@@ -137,6 +138,7 @@ onMounted(() => {
           v-if="!ui.侧边栏收起 && ui.currentView === item.id"
           class="w-1.5 h-1.5 rounded-full bg-[#02c3b4] shadow-[0_0_8px_#02c3b4]"
         />
+
         <div
           v-if="ui.侧边栏收起"
           class="absolute left-14 bg-black/90 text-white font-bold text-xs px-2.5 py-1 rounded-lg border border-white/15 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 shadow-xl z-50"
@@ -148,7 +150,7 @@ onMounted(() => {
       <template v-if="!ui.侧边栏收起">
         <div class="pt-3 pb-1 px-2 flex items-center justify-between">
           <span class="text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider">本地算力扩展</span>
-          <span class="text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded">4 规划</span>
+          <span class="text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded">3 规划</span>
         </div>
         <div
           v-for="item in extensionOperators"
@@ -190,6 +192,7 @@ onMounted(() => {
             <span class="text-[#ffb74d]">已用 {{ ui.quota.used_today }} Tokens</span>
           </div>
         </div>
+
         <div v-else class="flex flex-col items-center justify-center py-1 text-[#02c3b4]">
           <Flame :size="16" class="fill-[#02c3b4]" />
           <span class="text-[9px] font-mono font-bold mt-0.5 text-white">{{ ui.quota.remaining_points }}</span>

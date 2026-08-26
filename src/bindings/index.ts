@@ -4,6 +4,7 @@ import { runFormatConvert } from "./tools/format-converter";
 import { parsePdf } from "./tools/pdf-parse";
 import { runVideoSubtitle, probeVideo } from "./tools/video-subtitle";
 import { runUpscale48k } from "./tools/upscale-48k";
+import { runTranslation, runImageTranslation } from "./tools/translation";
 import {
   checkToolDependencies,
   downloadToolDependencies,
@@ -14,6 +15,7 @@ export * from "./tools/format-converter";
 export * from "./tools/pdf-parse";
 export * from "./tools/video-subtitle";
 export * from "./tools/upscale-48k";
+export * from "./tools/translation";
 export * from "./dependencies";
 
 export interface QuotaLogRecord {
@@ -75,6 +77,8 @@ export const commands = {
   probeVideo,
   runVideoSubtitle,
   runUpscale48k,
+  runTranslation,
+  runImageTranslation,
   cancelCurrentTask,
   getHardwareFingerprint,
   checkToolDependencies,

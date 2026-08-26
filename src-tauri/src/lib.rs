@@ -17,6 +17,10 @@ use video_subtitle::{
     VideoProbeResult, VideoProbeService, VideoSubtitleOptions, VideoSubtitleResult,
     VideoSubtitleTool,
 };
+use translation::{
+    ImageTranslationResult, ImageTranslationTask, TranslationResult, TranslationTask,
+    TranslationTool,
+};
 
 pub struct AppState {
     pub vram_guard: Arc<VramTokenGuard>,
@@ -183,7 +187,6 @@ async fn download_tool_dependencies(
     log::info!("🌐 [依赖下载] 开始拉取依赖: '{}', 落盘目录: {}", tool_id, clean_path_str(&base_dir));
     let deps = ModelManager::get_tool_dependencies(&base_dir, &tool_id).await;
     state.cancel_token.store(false, Ordering::SeqCst);
-
     for item in deps {
         if item.is_ready {
             continue;
@@ -210,7 +213,6 @@ async fn download_tool_dependencies(
             };
             let _ = window_clone.emit("dependency-download-progress", payload);
         };
-
         ModelManager::download_dependency_file(
             &target_path,
             &item,
@@ -249,9 +251,7 @@ async fn run_upscale_48k(
             task.model_path = Some(candidate.to_string_lossy().to_string());
         }
     }
-
     Gatekeeper::check_permission_tokens("upscale-48k", 10).await?;
-
     let window_clone = window.clone();
     let progress_cb = move |current: usize, total: usize, msg: &str| {
         let _ = window_clone.emit(
@@ -263,11 +263,9 @@ async fn run_upscale_48k(
             }),
         );
     };
-
     let start_t = std::time::Instant::now();
     let res = Upscale48kTool::execute(task, state.vram_guard.clone(), Some(progress_cb)).await;
     let elapsed = start_t.elapsed().as_millis() as u64;
-
     Gatekeeper::report_telemetry(
         "upscale-48k",
         elapsed,
@@ -286,7 +284,6 @@ async fn parse_pdf(
 ) -> Result<PdfParseResult, String> {
     log::info!("🚀 [PDF 解析] 收到解析请求: 文件='{}'", file_path);
     Gatekeeper::check_permission_tokens("pdf-parse", 2).await?;
-
     let window_clone = window.clone();
     let progress_cb = move |current: usize, total: usize, msg: &str| {
         let _ = window_clone.emit(
@@ -298,10 +295,8 @@ async fn parse_pdf(
             }),
         );
     };
-
     let pdf_input_path = Path::new(&file_path);
     let target_out_dir = pdf_input_path.parent().unwrap_or_else(|| Path::new("."));
-
     let start_t = std::time::Instant::now();
     let res = PdfParseService::run_parse(
         &file_path,
@@ -311,7 +306,6 @@ async fn parse_pdf(
     )
     .await;
     let elapsed = start_t.elapsed().as_millis() as u64;
-
     Gatekeeper::report_telemetry(
         "pdf-parse",
         elapsed,
@@ -341,10 +335,8 @@ async fn run_video_subtitle(
     let duration_sec = probe_info.map(|p| p.duration_sec).unwrap_or(180.0);
     let minutes = (duration_sec / 60.0).ceil() as u32;
     let tokens_needed = (minutes * 3).max(3);
-
     Gatekeeper::check_permission_tokens("video-subtitle", tokens_needed).await?;
     state.cancel_token.store(false, Ordering::SeqCst);
-
     let window_clone = window.clone();
     let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
         let _ = window_clone.emit(
@@ -356,7 +348,6 @@ async fn run_video_subtitle(
             }),
         );
     });
-
     let start_t = std::time::Instant::now();
     let res = VideoSubtitleTool::run_pipeline_with_progress(
         options,
@@ -366,9 +357,84 @@ async fn run_video_subtitle(
     )
     .await;
     let elapsed = start_t.elapsed().as_millis() as u64;
-
     Gatekeeper::report_telemetry(
         "video-subtitle",
+        elapsed,
+        res.is_ok(),
+        res.as_ref().err().map(|e| e.as_str()),
+    )
+    .await;
+    res
+}
+
+/// 🛡️ 离线高精文本翻译指令 (100% 免费 · 0 Token 扣减)
+#[tauri::command]
+async fn run_translation(
+    task: TranslationTask,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<TranslationResult, String> {
+    state.cancel_token.store(false, Ordering::SeqCst);
+    let window_clone = window.clone();
+    let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
+        let _ = window_clone.emit(
+            "translation-progress",
+            serde_json::json!({
+                "current": current,
+                "total": total,
+                "message": msg
+            }),
+        );
+    });
+    let start_t = std::time::Instant::now();
+    let res = TranslationTool::execute(
+        task,
+        Some(&state.vram_guard),
+        Some(state.cancel_token.clone()),
+        Some(progress_cb),
+    )
+    .await;
+    let elapsed = start_t.elapsed().as_millis() as u64;
+    Gatekeeper::report_telemetry(
+        "translation",
+        elapsed,
+        res.is_ok(),
+        res.as_ref().err().map(|e| e.as_str()),
+    )
+    .await;
+    res
+}
+
+/// 🛡️ 图像与剪贴板截图 OCR 高精翻译指令 (100% 免费 · 0 Token 扣减)
+#[tauri::command]
+async fn run_image_translation(
+    task: ImageTranslationTask,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<ImageTranslationResult, String> {
+    state.cancel_token.store(false, Ordering::SeqCst);
+    let window_clone = window.clone();
+    let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
+        let _ = window_clone.emit(
+            "translation-progress",
+            serde_json::json!({
+                "current": current,
+                "total": total,
+                "message": msg
+            }),
+        );
+    });
+    let start_t = std::time::Instant::now();
+    let res = TranslationTool::execute_image_ocr(
+        task,
+        Some(&state.vram_guard),
+        Some(state.cancel_token.clone()),
+        Some(progress_cb),
+    )
+    .await;
+    let elapsed = start_t.elapsed().as_millis() as u64;
+    Gatekeeper::report_telemetry(
+        "translation_ocr",
         elapsed,
         res.is_ok(),
         res.as_ref().err().map(|e| e.as_str()),
@@ -459,7 +525,9 @@ pub fn run() {
             check_tool_dependencies,
             download_tool_dependencies,
             cancel_dependency_downloads,
-            install_app_update
+            install_app_update,
+            run_translation,
+            run_image_translation
         ])
         .setup(move |_app| {
             log::info!("======================================================================");

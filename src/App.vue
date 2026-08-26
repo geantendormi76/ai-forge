@@ -11,6 +11,7 @@ import Upscale48kView from './views/Upscale48kView.vue';
 import FormatConverterView from './views/FormatConverterView.vue';
 import PdfParseView from './views/PdfParseView.vue';
 import VideoSubtitleView from './views/VideoSubtitleView.vue';
+import TranslationView from './views/TranslationView.vue';
 import {
   Minus,
   Square,
@@ -36,6 +37,7 @@ onMounted(() => {
     <!-- 1. 全景主工作区 -->
     <main class="absolute inset-0 w-full h-full overflow-hidden z-0">
       <HomeView v-if="ui.currentView === 'home'" />
+      <TranslationView v-else-if="ui.currentView === 'trans'" />
       <Upscale48kView v-else-if="ui.currentView === 'upscale'" />
       <FormatConverterView v-else-if="ui.currentView === 'format'" />
       <PdfParseView v-else-if="ui.currentView === 'pdf'" />
@@ -45,6 +47,7 @@ onMounted(() => {
     <!-- 2. 🌟 SOTA 原生拖拽顶栏 -->
     <div class="h-11 w-full flex justify-between items-center absolute top-0 left-0 right-0 z-20 pointer-events-none">
       <div data-tauri-drag-region class="h-full flex-1 pointer-events-auto select-none" style="-webkit-app-region: drag;"></div>
+
       <!-- 右上角物理窗口控制器 (最高层级 z-50) -->
       <div class="flex items-center h-full pointer-events-auto pr-3 gap-1 z-50" style="-webkit-app-region: no-drag;">
         <button

@@ -40,6 +40,7 @@ video-subtitle = { path = "crates/tools/video-subtitle" }
 service-upscale = { path = "crates/services/service-upscale" }
 upscale-48k = { path = "crates/tools/upscale-48k" }
 core-onnx-infer = { path = "crates/core-onnx-infer" }
+translation = { path = "crates/tools/translation" }
 
 [workspace]
 members = [
@@ -61,6 +62,7 @@ members = [
     "crates/tools/format-converter",
     "crates/tools/video-subtitle",
     "crates/tools/upscale-48k",
+    "crates/tools/translation",
     "crates/services/service-ocr",
     "crates/services/service-upscale"
 ]

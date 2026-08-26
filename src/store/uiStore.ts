@@ -8,7 +8,9 @@ import {
 } from '../bindings/index';
 
 const USAGE_STORAGE_KEY = 'zidian_tool_usage_counts';
+
 const DEFAULT_INITIAL_COUNTS: Record<string, number> = {
+  trans: 14,
   upscale: 12,
   asr: 10,
   pdf: 8,
@@ -16,7 +18,7 @@ const DEFAULT_INITIAL_COUNTS: Record<string, number> = {
 };
 
 export const useUIStore = defineStore('ui', () => {
-  const currentView = ref<'home' | 'format' | 'pdf' | 'asr' | 'upscale'>('home');
+  const currentView = ref<'home' | 'format' | 'pdf' | 'asr' | 'upscale' | 'trans'>('home');
   const showRadar = ref(false);
   const radarMode = ref<'global' | 'local'>('global');
   const toast消息 = ref<string | null>(null);
@@ -50,7 +52,7 @@ export const useUIStore = defineStore('ui', () => {
   };
 
   const navigateToTool = async (
-    toolId: 'home' | 'format' | 'pdf' | 'asr' | 'upscale',
+    toolId: 'home' | 'format' | 'pdf' | 'asr' | 'upscale' | 'trans',
     onReady?: () => void
   ) => {
     recordToolUsage(toolId);
@@ -59,6 +61,7 @@ export const useUIStore = defineStore('ui', () => {
       onReady?.();
       return;
     }
+
     try {
       const deps = await checkToolDependencies(toolId);
       const missingDeps = deps.filter((d) => !d.is_ready);
@@ -72,11 +75,12 @@ export const useUIStore = defineStore('ui', () => {
     } catch (e) {
       console.warn(`⚠️ 依赖探测异常，尝试常规直通:`, e);
     }
+
     currentView.value = toolId;
     onReady?.();
   };
 
-  // 👑 纯血解耦：算力状态 0 业务硬编码，初始化为纯中立骨架态
+  // 👑 算力状态中台
   const showQuotaModal = ref(false);
   const isQuotaLoading = ref(false);
   const quota = ref<QuotaStatus>({
@@ -105,7 +109,6 @@ export const useUIStore = defineStore('ui', () => {
     }
   };
 
-  // 状态机挂载即刻自动触发一次单向拉取
   refreshQuota();
 
   const 弹出提示 = (消息: string, 类型: 'success' | 'error' | 'info' = 'success') => {
@@ -138,6 +141,7 @@ export const useUIStore = defineStore('ui', () => {
   };
 
   const toolUsageCounts = ref<Record<string, number>>(loadUsageCounts());
+
   const recordToolUsage = (toolId: string) => {
     const current = toolUsageCounts.value[toolId] || 0;
     const nextCounts = {

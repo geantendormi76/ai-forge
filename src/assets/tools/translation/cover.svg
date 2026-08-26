@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <!-- 主底板深海蓝晶渐变 (满铺) -->
+    <linearGradient id="fullTransBlueSheet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="35%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1e1b4b" />
+    </linearGradient>
+
+    <!-- 右上角 3D 翻折折角渐变 -->
+    <linearGradient id="fullFoldFlapGradTrans" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#93c5fd" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+
+    <!-- 拟真立体折角投影 -->
+    <filter id="foldShadowTrans" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-4" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- 1. 🌟 全屏满铺蓝底卡片主体 (右上角带 3D 折角缺口) -->
+  <path d="M 0 0 
+           L 680 0 
+           L 800 120 
+           L 800 500 
+           L 0 500 Z" 
+        fill="url(#fullTransBlueSheet)" />
+
+  <!-- 2. 全景外边缘晶体高光微边 -->
+  <path d="M 0 1 
+           L 679 1 
+           L 799 121 
+           L 799 499 
+           L 1 499 
+           L 1 0" 
+        fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.25" />
+
+  <!-- 3. 🌟 右上角 3D 拟真翻折三角瓣 -->
+  <g filter="url(#foldShadowTrans)">
+    <path d="M 680 0 
+             L 680 96 
+             A 24 24 0 0 0 704 120 
+             L 800 120 Z" 
+          fill="url(#fullFoldFlapGradTrans)" />
+    <!-- 折角底边阴影暗线 -->
+    <path d="M 680 120 L 800 120" stroke="#000000" stroke-width="2.5" stroke-opacity="0.3" />
+  </g>
+
+  <!-- 4. 🌟 绝对居中超大号字标：TRANS (155px 纯白极粗，绝对视觉焦点) -->
+  <text x="400" y="270" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="155" 
+        font-weight="900" 
+        text-anchor="middle" 
+        letter-spacing="6">TRANS</text>
+
+  <!-- 5. 🌟 绝对居中副标：Offline Neural Translation -->
+  <text x="400" y="350" 
+        fill="#ffffff" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-size="26" 
+        font-weight="700" 
+        text-anchor="middle" 
+        letter-spacing="4" 
+        opacity="0.95">Offline Neural Translation</text>
+
+  <!-- 6. 底部极简结构高光装饰条 (居中舒展) -->
+  <g opacity="0.35" fill="#ffffff">
+    <rect x="220" y="400" width="100" height="7" rx="3.5" />
+    <rect x="340" y="400" width="120" height="7" rx="3.5" />
+    <rect x="480" y="400" width="100" height="7" rx="3.5" />
+  </g>
+</svg>

@@ -58,7 +58,7 @@
     "src-tauri/crates/core-onnx-infer/**",
 
     // =========================================================
-    // 📄 2. [PDF 智能解析全套：前端 + 工具层 + 6大底层 Services]
+    // 📄 3. [PDF 智能解析全套：前端 + 工具层 + 6大底层 Services]
     // =========================================================
     // "src/views/PdfParseView.vue",
     // "src-tauri/crates/tools/pdf-parse/**",
@@ -70,26 +70,42 @@
     // "src-tauri/crates/services/service-table/**"
 
     // =========================================================
-    // 🔍 3. [4K/8K 图像超分全套：前端 + 工具层 + 底层 Service]
+    // 🔍 4. [4K/8K 图像超分全套：前端 + 工具层 + 底层 Service]
     // =========================================================
     // "src/views/Upscale48kView.vue",
     // "src-tauri/crates/tools/upscale-48k/**",
     // "src-tauri/crates/services/service-upscale/**"
 
     // =========================================================
-    // 🎬 4. [视频字幕生成全套：前端 + 工具层 + 2大底层 Services]
+    // 🎬 5. [视频字幕生成全套：前端 + 工具层 + 2大底层 Services]
     // =========================================================
     // "src/views/VideoSubtitleView.vue",
     // "src-tauri/crates/tools/video-subtitle/**",
     // "src-tauri/crates/services/service-asr/**",
-    "src-tauri/crates/services/service-translation/**"
+    // "src-tauri/crates/services/service-translation/**"
 
     // =========================================================
-    // ⚡ 5. [全能格式转换全套：前端 + 工具层 + 底层 Service]
+    // ⚡ 6. [全能格式转换全套：前端 + 工具层 + 底层 Service]
     // =========================================================
     // "src/views/FormatConverterView.vue",
     // "src-tauri/crates/tools/format-converter/**",
     // "src-tauri/crates/services/service-converter/**"
+
+    // =========================================================
+    // ⚡ 7. [翻译工具：前端 + 工具层 + 底层 Service]
+    // =========================================================
+    // "src/views/TranslationView.vue",
+    // "src-tauri/crates/tools/translation/**",
+    // "src-tauri/crates/services/service-ocr/**",
+    // "src-tauri/crates/services/service-translation/**"
+
+    // =========================================================
+    // 🛡️ 2. [10 大底层算法 Services：外科手术式仅提取 lib.rs 门面契约]
+    // 彻底告别内部海量数学矩阵与私有算法，只提取公共 API 说明书！
+    // =========================================================
+    "src-tauri/crates/services/*/src/lib.rs",
+    "src-tauri/crates/services/*/Cargo.toml"
+
   ],
   "ignore": {
     "useGitignore": true,

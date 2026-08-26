@@ -75,6 +75,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tracing",
  "tracing-log",
+ "translation",
  "upscale-48k",
  "video-subtitle",
 ]
@@ -6601,6 +6602,23 @@ version = "0.2.0"
 dependencies = [
  "cmake",
  "serde_json",
+]
+
+[[package]]
+name = "translation"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "core-models-download",
+ "image",
+ "log",
+ "serde",
+ "serde_json",
+ "service-ocr",
+ "service-translation",
+ "shared-contracts",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
