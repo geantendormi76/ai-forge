@@ -5,7 +5,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const OFFICIAL_ED25519_PUBLIC_KEY: &str =
     "a1385cf90acee43d496d5155315ef7ee34c4857c6e2bb502a2c7ee6115147820a1385cf90ace";
-
 const AUTH_BASE_URL: &str = "https://ai.geantendormi.top";
 const COMMERCIAL_SECRET: &str = "ai-forge-commercial-secret-2026";
 
@@ -84,10 +83,8 @@ impl Gatekeeper {
             .map_err(|e| format!("指纹生成失败: {e}"))
     }
 
-    /// 查询设备当前 Tokens 状态与最近账单流水
     pub async fn get_quota_status() -> Result<QuotaStatus, String> {
         let fingerprint = Self::get_device_fingerprint()?;
-
         let lic_path = Path::new("license.lic");
         let is_offline_pro = if lic_path.exists() {
             if let Ok(verifier) = LicenseVerifier::from_hex_public_key(OFFICIAL_ED25519_PUBLIC_KEY) {
@@ -147,10 +144,10 @@ impl Gatekeeper {
             success: true,
             device_fingerprint: fingerprint,
             stage: "offline_fallback".to_string(),
-            daily_limit: 600,
+            daily_limit: 888, // 🌟 离线兜底 888 Tokens
             used_today: 0,
             bonus_points: 0,
-            remaining_points: 600,
+            remaining_points: 888,
             status: "active".to_string(),
             is_offline_pro: false,
             recent_logs: vec![],
@@ -163,7 +160,6 @@ impl Gatekeeper {
         }
 
         let fingerprint = Self::get_device_fingerprint()?;
-
         let lic_path = Path::new("license.lic");
         if lic_path.exists() {
             if let Ok(verifier) = LicenseVerifier::from_hex_public_key(OFFICIAL_ED25519_PUBLIC_KEY) {
@@ -207,7 +203,6 @@ impl Gatekeeper {
             Ok(response) => {
                 let status = response.status();
                 let res_text = response.text().await.unwrap_or_default();
-
                 if status.is_success() {
                     if let Ok(res_json) = serde_json::from_str::<QuotaDeductResponse>(&res_text) {
                         if res_json.success {
@@ -220,11 +215,9 @@ impl Gatekeeper {
                         }
                     }
                 }
-
                 if status.as_u16() == 402 || status.as_u16() == 403 || status.as_u16() == 401 {
                     return Err(format!("🚨 算力拦截 [HTTP {}]: {}", status.as_u16(), res_text));
                 }
-
                 Ok(())
             }
             Err(_) => Ok(()),

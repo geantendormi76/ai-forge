@@ -60,14 +60,14 @@
     // =========================================================
     // 📄 2. [PDF 智能解析全套：前端 + 工具层 + 6大底层 Services]
     // =========================================================
-    "src/views/PdfParseView.vue",
-    "src-tauri/crates/tools/pdf-parse/**",
-    "src-tauri/crates/services/service-pdfium/**",
-    "src-tauri/crates/services/service-doc-parse/**",
-    "src-tauri/crates/services/service-layout/**",
-    "src-tauri/crates/services/service-ocr/**",
-    "src-tauri/crates/services/service-formula/**",
-    "src-tauri/crates/services/service-table/**"
+    // "src/views/PdfParseView.vue",
+    // "src-tauri/crates/tools/pdf-parse/**",
+    // "src-tauri/crates/services/service-pdfium/**",
+    // "src-tauri/crates/services/service-doc-parse/**",
+    // "src-tauri/crates/services/service-layout/**",
+    // "src-tauri/crates/services/service-ocr/**",
+    // "src-tauri/crates/services/service-formula/**",
+    // "src-tauri/crates/services/service-table/**"
 
     // =========================================================
     // 🔍 3. [4K/8K 图像超分全套：前端 + 工具层 + 底层 Service]
@@ -82,7 +82,7 @@
     // "src/views/VideoSubtitleView.vue",
     // "src-tauri/crates/tools/video-subtitle/**",
     // "src-tauri/crates/services/service-asr/**",
-    // "src-tauri/crates/services/service-translation/**"
+    "src-tauri/crates/services/service-translation/**"
 
     // =========================================================
     // ⚡ 5. [全能格式转换全套：前端 + 工具层 + 底层 Service]
@@ -111,8 +111,7 @@
       "data/**",
       "**/*.sqlite3*",
       "dist/**",
-      "deploy/website/**",
-      "src_backup_before_migration/**"
+      "deploy/website/**"
     ]
   },
   "security": {

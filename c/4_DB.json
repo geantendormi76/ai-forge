@@ -27,7 +27,6 @@
       { "pattern": "src-tauri/src/main.rs", "compress": false },
       { "pattern": "package.json", "compress": false },
       { "pattern": "publish_update.py", "compress": false },
-      { "pattern": "generate_brand_icons.py", "compress": false },
       { "pattern": "deploy/cloudflare/auth_worker.js", "compress": false },
       { "pattern": "deploy/cloudflare/wrangler.toml", "compress": false }
     ]
@@ -35,8 +34,6 @@
   "include": [
     "c/HANDOFF_DB.md",
     "publish_update.py",
-    "generate_brand_icons.py",
-    "parse_pe_imports.py",
     ".cargo/**",
     "src-tauri/.cargo/**",
     "src-tauri/Cargo.toml",

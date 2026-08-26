@@ -49,29 +49,20 @@ export const useUIStore = defineStore('ui', () => {
     dependencyCallback.value = null;
   };
 
-  /**
-   * 🛡️ 核心：带依赖检测的智能路由跳转守卫
-   * 适用于全库工具切换：如果缺失本地模型，立即拦截并呼出下载弹窗；全部就绪时才真正切入视窗！
-   */
   const navigateToTool = async (
     toolId: 'home' | 'format' | 'pdf' | 'asr' | 'upscale',
     onReady?: () => void
   ) => {
     recordToolUsage(toolId);
-
     if (toolId === 'home') {
       currentView.value = 'home';
       onReady?.();
       return;
     }
-
     try {
-      // 1. 毫秒级探测当前工具所需模型在本地的真实就绪状态
       const deps = await checkToolDependencies(toolId);
       const missingDeps = deps.filter((d) => !d.is_ready);
-
       if (missingDeps.length > 0) {
-        // 2. 存在缺失依赖，触发拦截模态框
         openDependencyModal(toolId, deps, () => {
           currentView.value = toolId;
           onReady?.();
@@ -81,34 +72,41 @@ export const useUIStore = defineStore('ui', () => {
     } catch (e) {
       console.warn(`⚠️ 依赖探测异常，尝试常规直通:`, e);
     }
-
-    // 3. 所有依赖均已在本地就绪，直通进入
     currentView.value = toolId;
     onReady?.();
   };
 
-  // 算力 HUD 状态
+  // 👑 纯血解耦：算力状态 0 业务硬编码，初始化为纯中立骨架态
   const showQuotaModal = ref(false);
+  const isQuotaLoading = ref(false);
   const quota = ref<QuotaStatus>({
-    success: true,
-    device_fingerprint: 'local_device',
-    stage: 'beta',
-    daily_limit: 600,
+    success: false,
+    device_fingerprint: '',
+    stage: '',
+    daily_limit: 0,
     used_today: 0,
     bonus_points: 0,
-    remaining_points: 600,
+    remaining_points: 0,
     status: 'active',
     is_offline_pro: false,
+    recent_logs: [],
   });
 
   const refreshQuota = async () => {
+    if (isQuotaLoading.value) return;
+    isQuotaLoading.value = true;
     try {
       const res = await getQuotaStatus();
       quota.value = res;
     } catch (e) {
       console.warn('⚠️ 获取云端算力状态异常:', e);
+    } finally {
+      isQuotaLoading.value = false;
     }
   };
+
+  // 状态机挂载即刻自动触发一次单向拉取
+  refreshQuota();
 
   const 弹出提示 = (消息: string, 类型: 'success' | 'error' | 'info' = 'success') => {
     toast消息.value = 消息;
@@ -167,6 +165,7 @@ export const useUIStore = defineStore('ui', () => {
     toolUsageCounts,
     recordToolUsage,
     showQuotaModal,
+    isQuotaLoading,
     quota,
     refreshQuota,
     isDependencyModalOpen,

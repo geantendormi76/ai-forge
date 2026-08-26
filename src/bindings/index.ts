@@ -40,6 +40,18 @@ export async function isPortable(): Promise<boolean> {
   return await invoke<boolean>("is_portable");
 }
 
+export async function getLogDirPath(): Promise<string> {
+  return await invoke<string>("get_log_dir_path");
+}
+
+export async function openLogDir(): Promise<boolean> {
+  return await invoke<boolean>("open_log_dir");
+}
+
+export async function getDiagnosticReport(): Promise<string> {
+  return await invoke<string>("get_diagnostic_report");
+}
+
 export async function getQuotaStatus(): Promise<QuotaStatus> {
   return await invoke<QuotaStatus>("get_quota_status");
 }
@@ -54,6 +66,9 @@ export async function cancelCurrentTask(): Promise<boolean> {
 
 export const commands = {
   isPortable,
+  getLogDirPath,
+  openLogDir,
+  getDiagnosticReport,
   getQuotaStatus,
   runFormatConvert,
   parsePdf,

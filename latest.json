@@ -1,11 +1,11 @@
 {
-  "version": "0.1.19",
-  "notes": "✨ 紫电 AI v0.1.19 工业级 SOTA 版本发布：\n• 全面并网 4 大 AI 工具白盒细粒度进度看板 (毫秒级阶段提示与子进度)\n• 统一中文规范数据命名空间 (%LOCALAPPDATA%\\紫电AI\\Data)\n• 4 大 AI 生产力工具算子与 1.78GB CUDA 运行时按需自愈\n• 纯血 Rust 端侧静默热更新与切块进度事件总线闭环",
-  "pub_date": "2026-08-22T08:10:56Z",
+  "version": "0.1.24",
+  "notes": "✨ 紫电 AI v0.1.24 工业级纯血 SOTA 发布：\n• 全面内嵌 17 个 CUDA 13 / cuDNN 9 核心加速引擎，开箱即用零下载\n• 彻底根除 DirectML 与 DLL 缺失早熟弹窗\n• 极速模型门禁体系，超分仅需 2 秒即刻就绪\n• 纯血 Rust 端侧静默热更新与事件总线闭环",
+  "pub_date": "2026-08-26T08:37:53Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSSzV4Q3E5bDE4S205UDVYQ1pNdmxvREsxc0x2amFkMUVIQlUzZXFNSTY0NGY5L0dFZWFVVXQ3aFBXOFBjRU91ZWwxVjZDK0FTRnJ0V0dFY3N5eUd0eVZ0Y2NMNHhMTHc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3Mzg2MjU2CWZpbGU657Sr55S1QUlfMC4xLjE5X3g2NC1zZXR1cC5leGUKWUNIWDIyQXlmd21yTGt0cWlLeit4WGJVa0hDVFdzSTlKbyt5c2ZFa3ZwcXBVMEhwdjA4emQxaVlPWkxtL01vQlYxeWxlbVY4NW9jY05zMkxjeWIxQ2c9PQo=",
-      "url": "https://assets.geantendormi.top/downloads/zidian-ai-setup-v0.1.19.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSSzV4Q3E5bDE4S25iU293T3UrMmF1Q1Z2TWxyT3FQTE9xTDVDRUZuSHV2NHNxZGV3bVo4YmhwOXozZTRnWENFMXpOaE05eGprU2U4TmNHdjdpeEJLZUZxMWRQU2ZhSkFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NzMzNDcwCWZpbGU657Sr55S1QUlfMC4xLjI0X3g2NC1zZXR1cC5leGUKc2t3MmJpK01mVUpyc1I1SC9TZnJDNFBEdVB4RzR2TmlVOGRGVVd3SEtjV2FiSStmRk5hR1pLS0E0TGFTN2xTcU1ESWNkZVZHdWFBcG05OXVsYkFYRFE9PQo=",
+      "url": "https://assets.geantendormi.top/downloads/zidian-ai-setup-v0.1.24.exe"
     }
   }
 }

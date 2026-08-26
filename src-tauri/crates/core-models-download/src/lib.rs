@@ -57,9 +57,9 @@ pub struct DependencyProgressPayload {
 pub struct ModelManager;
 
 impl ModelManager {
-    /// 🛡️ 三级自愈模型基准目录寻址器 (方案 A 统一命名空间 + 便携双轨)
+    /// 🛡️ 三级自愈模型基准目录寻址器 (统一命名空间 + 便携双轨)
     pub fn resolve_models_base_dir() -> PathBuf {
-        // Level 0: 🌟 便携模式最高优先级 (./Data/models)
+        // Level 0: 便携模式最高优先级 (./Data/models)
         if let Some(portable_models) = PortableEngine::resolve_data_path("models") {
             let _ = std::fs::create_dir_all(&portable_models);
             return portable_models;
@@ -92,13 +92,12 @@ impl ModelManager {
             }
         }
 
-        // Level 3: 🌟 方案 A 现代统一规范区：%LOCALAPPDATA%\紫电AI\Data\models (带历史 ZiDianAI 自动无损迁移)
+        // Level 3: 方案 A 现代统一规范区：%LOCALAPPDATA%\紫电AI\Data\models
         if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
             let base = PathBuf::from(&local_appdata);
             let modern_target = base.join("紫电AI").join("Data").join("models");
             let legacy_target = base.join("ZiDianAI").join("models");
 
-            // 历史平滑自愈搬迁：若存在旧拼音目录且新目录未完全建立，自动迁移文件
             if legacy_target.is_dir() && !modern_target.exists() {
                 let _ = std::fs::create_dir_all(&modern_target);
                 if let Ok(entries) = std::fs::read_dir(&legacy_target) {
@@ -111,7 +110,6 @@ impl ModelManager {
                 let _ = std::fs::remove_dir_all(base.join("ZiDianAI"));
                 tracing::info!("🚚 [平滑迁移] 已将历史模型目录自动归拢至: {:?}", modern_target);
             }
-
             let _ = std::fs::create_dir_all(&modern_target);
             return modern_target;
         }
@@ -119,9 +117,9 @@ impl ModelManager {
         PathBuf::from("models")
     }
 
-    /// 🛡️ 三级自愈 CUDA 运行时目录寻址器 (方案 A 统一命名空间 + 便携双轨)
+    /// 🛡️ 三级自愈 CUDA 运行时目录寻址器
     pub fn resolve_cuda_runtime_dir() -> PathBuf {
-        // Level 0: 🌟 便携模式最高优先级 (./Data/bin/cuda12)
+        // Level 0: 便携模式最高优先级 (./Data/bin/cuda12)
         if let Some(portable_cuda) = PortableEngine::resolve_data_path("bin/cuda12") {
             let _ = std::fs::create_dir_all(&portable_cuda);
             return portable_cuda;
@@ -153,7 +151,7 @@ impl ModelManager {
             }
         }
 
-        // Level 3: 🌟 方案 A 现代统一规范区：%LOCALAPPDATA%\紫电AI\Data\bin\cuda12 (带历史 ZiDianAI 自动无损迁移)
+        // Level 3: 统一规范区：%LOCALAPPDATA%\紫电AI\Data\bin\cuda12
         if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
             let base = PathBuf::from(&local_appdata);
             let modern_target = base.join("紫电AI").join("Data").join("bin").join("cuda12");
@@ -169,9 +167,7 @@ impl ModelManager {
                     }
                 }
                 let _ = std::fs::remove_dir_all(base.join("ZiDianAI"));
-                tracing::info!("🚚 [平滑迁移] 已将历史 CUDA 运行时目录自动归拢至: {:?}", modern_target);
             }
-
             let _ = std::fs::create_dir_all(&modern_target);
             return modern_target;
         }
@@ -208,60 +204,29 @@ impl ModelManager {
         Ok(hex::encode(hasher.finalize()))
     }
 
-    pub fn extract_zip_to_dir(zip_path: &Path, target_dir: &Path) -> Result<(), ModelError> {
-        let file = std::fs::File::open(zip_path)?;
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| ModelError::ZipError(format!("ZIP 打开失败: {e}")))?;
-        std::fs::create_dir_all(target_dir)?;
-        for i in 0..archive.len() {
-            let mut entry = archive.by_index(i)
-                .map_err(|e| ModelError::ZipError(format!("读取 ZIP 条目失败: {e}")))?;
-            let outpath = match entry.enclosed_name() {
-                Some(path) => target_dir.join(path),
-                None => continue,
-            };
-            if (*entry.name()).ends_with('/') || (*entry.name()).ends_with('\\') {
-                std::fs::create_dir_all(&outpath)?;
-            } else {
-                if let Some(p) = outpath.parent() {
-                    if !p.exists() {
-                        std::fs::create_dir_all(p)?;
-                    }
-                }
-                let mut outfile = std::fs::File::create(&outpath)?;
-                std::io::copy(&mut entry, &mut outfile)?;
-            }
-        }
-        Ok(())
-    }
-
     pub async fn get_tool_dependencies(base_dir: &Path, tool_id: &str) -> Vec<DependencyItem> {
         let manifest_items = Self::get_tool_manifest_specs(tool_id);
         let mut result = Vec::new();
-        let cuda_runtime_dir = Self::resolve_cuda_runtime_dir();
+
         for mut item in manifest_items {
-            let is_ready = if item.id == "cuda13_runtime" {
-                cuda_runtime_dir.join("cublas64_13.dll").exists()
-                    && cuda_runtime_dir.join("cublasLt64_12.dll").exists()
-                    && cuda_runtime_dir.join("cudnn_engines_precompiled64_9.dll").exists()
-            } else {
-                let full_path = base_dir.join(&item.relative_path);
-                if full_path.exists() {
-                    if item.sha256.is_empty() {
-                        true
-                    } else if let Ok(meta) = fs::metadata(&full_path).await {
-                        meta.len() == item.size_bytes
-                    } else {
-                        false
-                    }
+            let full_path = base_dir.join(&item.relative_path);
+            let is_ready = if full_path.exists() {
+                if item.sha256.is_empty() {
+                    true
+                } else if let Ok(meta) = fs::metadata(&full_path).await {
+                    meta.len() == item.size_bytes
                 } else {
                     false
                 }
+            } else {
+                false
             };
+
             item.is_ready = is_ready;
             item.size_formatted = Self::format_bytes(item.size_bytes);
             result.push(item);
         }
+
         result
     }
 
@@ -271,21 +236,8 @@ impl ModelManager {
     }
 
     fn get_tool_manifest_specs(tool_id: &str) -> Vec<DependencyItem> {
-        let cuda_runtime_item = DependencyItem {
-            id: "cuda13_runtime".into(),
-            name: "NVIDIA RTX GPU 满血硬件加速引擎".into(),
-            relative_path: "runtimes/cuda13-runtime-v1.0.0.zip".into(),
-            size_bytes: 1_911_513_605,
-            size_formatted: "1.78 GB".into(),
-            sha256: "cd9bd672a296f688105be6cda0ecc5b75f654990e29693608b018fa81dcbf779".into(),
-            download_urls: vec![
-                "https://assets.geantendormi.top/runtimes/cuda13-runtime-v1.0.0.zip".into(),
-            ],
-            is_ready: false,
-        };
         match tool_id {
             "upscale" | "upscale-48k" | "tool-upscale-48k" => vec![
-                cuda_runtime_item,
                 DependencyItem {
                     id: "realesrgan_x4plus".into(),
                     name: "4K/8K 视觉超分重构引擎".into(),
@@ -300,7 +252,6 @@ impl ModelManager {
                 },
             ],
             "asr" | "video-subtitle" | "tool-ASR" => vec![
-                cuda_runtime_item,
                 DependencyItem {
                     id: "moss_asr_09b".into(),
                     name: "离线语音识别引擎".into(),
@@ -453,18 +404,8 @@ impl ModelManager {
         if cancel_token.load(Ordering::Relaxed) {
             return Err(ModelError::Cancelled);
         }
-        let is_zip_archive = item.relative_path.ends_with(".zip") || item.id == "cuda13_runtime";
-        let cuda_runtime_dir = Self::resolve_cuda_runtime_dir();
 
-        if is_zip_archive {
-            if cuda_runtime_dir.join("cublas64_13.dll").exists()
-                && cuda_runtime_dir.join("cublasLt64_12.dll").exists()
-                && cuda_runtime_dir.join("cudnn_engines_precompiled64_9.dll").exists()
-            {
-                on_progress(item.size_bytes, item.size_bytes, "complete");
-                return Ok(cuda_runtime_dir);
-            }
-        } else if target_path.exists() {
+        if target_path.exists() {
             if item.sha256.is_empty() {
                 on_progress(item.size_bytes, item.size_bytes, "complete");
                 return Ok(target_path.to_path_buf());
@@ -489,6 +430,7 @@ impl ModelManager {
             .build()?;
 
         let mut last_error = None;
+
         for url in &item.download_urls {
             if cancel_token.load(Ordering::Relaxed) {
                 return Err(ModelError::Cancelled);
@@ -541,6 +483,7 @@ impl ModelManager {
 
             let mut stream = res.bytes_stream();
             let mut success = true;
+
             on_progress(downloaded, total_size, "downloading");
             let mut last_emit = std::time::Instant::now();
             let mut last_percent = if total_size > 0 {
@@ -554,15 +497,18 @@ impl ModelManager {
                     let _ = file.flush().await;
                     return Err(ModelError::Cancelled);
                 }
+
                 match chunk_res {
                     Ok(chunk) => {
                         file.write_all(&chunk).await?;
                         downloaded += chunk.len() as u64;
+
                         let current_percent = if total_size > 0 {
                             ((downloaded as f64 / total_size as f64) * 100.0) as u32
                         } else {
                             0
                         };
+
                         if current_percent != last_percent || last_emit.elapsed().as_millis() >= 80 {
                             last_percent = current_percent;
                             last_emit = std::time::Instant::now();
@@ -582,6 +528,7 @@ impl ModelManager {
                 file.flush().await?;
                 drop(file);
                 on_progress(downloaded, total_size, "verifying");
+
                 if !item.sha256.is_empty() {
                     let actual_hash = Self::compute_sha256(&part_path).await?;
                     if !actual_hash.eq_ignore_ascii_case(&item.sha256) {
@@ -595,27 +542,13 @@ impl ModelManager {
                     }
                 }
 
-                if is_zip_archive {
-                    on_progress(downloaded, total_size, "extracting");
-                    tracing::info!("📦 正在将 CUDA 运行时解压至: {:?}", cuda_runtime_dir);
-                    let part_clone = part_path.clone();
-                    let target_clone = cuda_runtime_dir.clone();
-                    tokio::task::spawn_blocking(move || {
-                        Self::extract_zip_to_dir(&part_clone, &target_clone)
-                    })
-                    .await
-                    .map_err(|e| ModelError::ZipError(e.to_string()))??;
-                    let _ = fs::remove_file(&part_path).await;
-                    on_progress(total_size, total_size, "complete");
-                    return Ok(cuda_runtime_dir);
-                } else {
-                    fs::rename(&part_path, target_path).await?;
-                    tracing::info!("🎉 模型物理落盘就绪: {:?}", target_path);
-                    on_progress(total_size, total_size, "complete");
-                    return Ok(target_path.to_path_buf());
-                }
+                fs::rename(&part_path, target_path).await?;
+                tracing::info!("🎉 模型物理落盘就绪: {:?}", target_path);
+                on_progress(total_size, total_size, "complete");
+                return Ok(target_path.to_path_buf());
             }
         }
+
         Err(last_error.unwrap_or(ModelError::DownloadFailed))
     }
 }

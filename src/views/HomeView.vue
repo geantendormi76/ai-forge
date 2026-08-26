@@ -6,6 +6,8 @@ import Aurora from '../components/effects/Aurora.vue';
 import DotField from '../components/effects/DotField.vue';
 import GradientText from '../components/effects/GradientText.vue';
 import ChromaGrid, { type ChromaCardItem } from '../components/effects/ChromaGrid.vue';
+import FeedbackModal from '../components/modals/FeedbackModal.vue';
+import LogReportModal from '../components/modals/LogReportModal.vue';
 import upscaleCoverSvg from '../assets/tools/upscale-48k/cover.svg';
 import videoCoverSvg from '../assets/tools/video-subtitle/cover.svg';
 import pdfCoverSvg from '../assets/tools/pdf-parse/cover.svg';
@@ -17,10 +19,13 @@ import {
   Zap,
   Scan,
   Globe,
-  MessageSquareHeart
+  MessageSquareHeart,
+  Terminal
 } from 'lucide-vue-next';
 
 const ui = useUIStore();
+const showFeedbackModal = ref(false);
+const showLogModal = ref(false);
 
 // 1. 全库工具注册表
 interface ToolItem {
@@ -133,10 +138,6 @@ const openOfficialWebsite = async () => {
     window.open('https://geantendormi.top/', '_blank');
   }
 };
-
-const triggerFeedbackModal = () => {
-  ui.弹出提示('💬 感谢反馈！欢迎前往官网交流群提交使用体验与建议。', 'info');
-};
 </script>
 
 <template>
@@ -151,7 +152,7 @@ const triggerFeedbackModal = () => {
       />
     </div>
 
-    <!-- 2. 🌟 点阵流光大网格 (1:1 镜面对齐官网 deploy/website 黄金真值) -->
+    <!-- 2. 点阵流光大网格 -->
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <DotField
         :dot-radius="1.5"
@@ -187,24 +188,37 @@ const triggerFeedbackModal = () => {
               <span class="block text-slate-300">不执着于单点技术的极致拔尖，而是通过全系统协同优化</span>
               <span class="block text-slate-100 mt-1">让 <span class="text-[#ffb74d] font-bold">廉价 AI + 极致框架</span> 创造最大化生产力</span>
             </p>
-            <div class="flex items-center gap-3.5 pt-2 flex-wrap">
+
+            <!-- 🌟 优化后平铺一排的功能按钮组 (flex-nowrap) -->
+            <div class="flex items-center gap-2.5 pt-2 flex-nowrap w-full overflow-x-auto scrollbar-hide">
               <button
                 type="button"
                 @click="openOfficialWebsite"
-                class="h-11 px-6 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/15 hover:border-[#02c3b4]/60 text-white font-black text-sm tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-2.5 cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:shadow-[0_10px_30px_rgba(2,195,180,0.2)] hover:scale-[1.02]"
+                class="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/15 hover:border-[#02c3b4]/60 text-white font-bold text-xs tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:scale-[1.02]"
                 title="访问官方网站 (https://geantendormi.top/)"
               >
-                <Globe :size="17" class="text-[#02c3b4] stroke-[2.2]" />
+                <Globe :size="14" class="text-[#02c3b4] stroke-[2.2]" />
                 <span>官方网站</span>
               </button>
+
               <button
                 type="button"
-                @click="triggerFeedbackModal"
-                class="h-11 px-5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 hover:border-white/20 text-[#c4d4d6] hover:text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-2.5 cursor-pointer shadow-md hover:scale-[1.02]"
-                title="意见反馈"
+                @click="showFeedbackModal = true"
+                class="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 hover:border-white/20 text-[#c4d4d6] hover:text-white font-bold text-xs tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md hover:scale-[1.02]"
+                title="联系作者 (添加微信)"
               >
-                <MessageSquareHeart :size="17" class="text-rose-400 stroke-[2.2]" />
-                <span>意见反馈</span>
+                <MessageSquareHeart :size="14" class="text-rose-400 stroke-[2.2]" />
+                <span>联系作者</span>
+              </button>
+
+              <button
+                type="button"
+                @click="showLogModal = true"
+                class="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl bg-[#02c3b4]/10 hover:bg-[#02c3b4]/20 border border-[#02c3b4]/30 hover:border-[#02c3b4]/60 text-[#02c3b4] hover:text-white font-bold text-xs tracking-wide transition-all duration-200 active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-[0_0_16px_rgba(2,195,180,0.2)] hover:scale-[1.02]"
+                title="查看运行日志与一键复制诊断信息"
+              >
+                <Terminal :size="14" class="stroke-[2.2]" />
+                <span>日志反馈</span>
               </button>
             </div>
           </div>
@@ -290,5 +304,11 @@ const triggerFeedbackModal = () => {
         </section>
       </div>
     </div>
+
+    <!-- 4. 🌟 联系作者 (微信二维码模态框) -->
+    <FeedbackModal v-model:visible="showFeedbackModal" />
+
+    <!-- 5. 🌟 日志反馈 (诊断信息一键复制 + 打开日志目录模态框) -->
+    <LogReportModal v-model:visible="showLogModal" />
   </div>
 </template>
