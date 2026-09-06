@@ -1,0 +1,11 @@
+会话轮次	替换目标配置路径 (第 4 部分)	输出 XML 文件名 (filePath)
+轮次 1	src-tauri/crates/services/service-pdfium/src/**	c/repomix-output-AGENT-pdfium.xml
+轮次 2	src-tauri/crates/services/service-layout/src/**	c/repomix-output-AGENT-layout.xml
+轮次 3	src-tauri/crates/services/service-ocr/src/**	c/repomix-output-AGENT-ocr.xml
+轮次 4	src-tauri/crates/services/service-formula/src/**	c/repomix-output-AGENT-formula.xml
+轮次 5	src-tauri/crates/services/service-table/src/**	c/repomix-output-AGENT-table.xml
+轮次 6	src-tauri/crates/services/service-doc-parse/src/**	c/repomix-output-AGENT-doc-parse.xml
+轮次 7	src-tauri/crates/services/service-upscale/src/**	c/repomix-output-AGENT-upscale.xml
+轮次 8	src-tauri/crates/services/service-translation/src/**	c/repomix-output-AGENT-translation.xml
+轮次 9	src-tauri/crates/services/service-asr/src/**	c/repomix-output-AGENT-asr.xml
+轮次 10	src-tauri/crates/services/service-converter/src/**	c/repomix-output-AGENT-converter.xml

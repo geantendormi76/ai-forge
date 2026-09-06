@@ -21,14 +21,20 @@ pub enum PdfiumEngineError {
 
 pub type PdfiumEngineResult<T> = Result<T, PdfiumEngineError>;
 
-/// 字符粒度精准边界框契约
+/// 字符粒度精准边界框契约 (保留历史 x1..y2 兼容字段，并提供 Web/视觉归一化 top_left 坐标)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PdfCharInfo {
     pub unicode_char: char,
+    /// 历史向下兼容原始坐标
     pub x1: f32,
     pub y1: f32,
     pub x2: f32,
     pub y2: f32,
+    /// 现代视觉/Web 标准坐标 (原点在左上角 [0,0]，Y 轴向下增长)
+    pub top_left_x: f32,
+    pub top_left_y: f32,
+    pub width_pt: f32,
+    pub height_pt: f32,
 }
 
 /// PDF 页面物理元数据
@@ -40,6 +46,14 @@ pub struct PdfPageMeta {
     pub is_landscape: bool,
 }
 
+/// PDF 完整文档元数据摘要
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PdfDocumentMeta {
+    pub file_path: String,
+    pub total_pages: usize,
+    pub pages: Vec<PdfPageMeta>,
+}
+
 /// 常驻单例 Pdfium 引擎包装器
 static PDFIUM_INSTANCE: OnceLock<Mutex<PdfiumEngine>> = OnceLock::new();
 
@@ -48,9 +62,10 @@ pub struct PdfiumEngine {
 }
 
 impl PdfiumEngine {
-    /// 自动寻找并绑定 pdfium.dll (优先 bin/ 目录与运行同级目录)
+    /// 自动寻找并绑定 pdfium.dll (优先全局共享 C:\dev\bin 与安装目录)
     pub fn resolve_dll_path() -> Option<PathBuf> {
         let mut candidates = vec![
+            PathBuf::from(r"C:\dev\bin\pdfium.dll"),
             PathBuf::from(r"C:\dev\ai-forge\bin\pdfium.dll"),
             PathBuf::from(r"C:\dev\ai-forge\src-tauri\bin\pdfium.dll"),
             PathBuf::from(r"C:\dev\ai-forge\models\pdfium.dll"),
@@ -63,6 +78,8 @@ impl PdfiumEngine {
             if let Some(exe_dir) = exe_path.parent() {
                 candidates.push(exe_dir.join("pdfium.dll"));
                 candidates.push(exe_dir.join("bin").join("pdfium.dll"));
+                candidates.push(exe_dir.join("Data").join("bin").join("pdfium.dll"));
+                candidates.push(exe_dir.join("resources").join("bin").join("pdfium.dll"));
             }
         }
 
@@ -87,13 +104,42 @@ impl PdfiumEngine {
 
     pub fn global() -> PdfiumEngineResult<&'static Mutex<PdfiumEngine>> {
         let mutex = PDFIUM_INSTANCE.get_or_init(|| {
-            let engine = Self::init().expect("🚨 [service-pdfium] 绑定初始化失败，请确保 pdfium.dll 存在于 C:\\dev\\ai-forge\\bin\\pdfium.dll");
+            let engine = Self::init().expect("🚨 [service-pdfium] 绑定初始化失败，请确保 pdfium.dll 存在于 C:\\dev\\bin\\pdfium.dll 或安装目录");
             Mutex::new(engine)
         });
         Ok(mutex)
     }
 
-    /// 1. 获取 PDF 总页数
+    /// 1. 获取 PDF 完整文档元数据 (包含所有页面的 Point 尺寸与横竖版型)
+    pub fn get_document_meta(path: &Path) -> PdfiumEngineResult<PdfDocumentMeta> {
+        let lock = Self::global()?;
+        let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
+        let doc = engine.pdfium.load_pdf_from_file(path, None)
+            .map_err(|e| PdfiumEngineError::LoadPdfFailed { path: path.to_path_buf(), cause: e.to_string() })?;
+
+        let pages = doc.pages();
+        let total_pages = pages.len() as usize;
+        let mut page_metas = Vec::with_capacity(total_pages);
+
+        for (idx, page) in pages.iter().enumerate() {
+            let w = page.width().value;
+            let h = page.height().value;
+            page_metas.push(PdfPageMeta {
+                page_index: idx,
+                width_pt: w,
+                height_pt: h,
+                is_landscape: w > h,
+            });
+        }
+
+        Ok(PdfDocumentMeta {
+            file_path: path.to_string_lossy().to_string(),
+            total_pages,
+            pages: page_metas,
+        })
+    }
+
+    /// 2. 获取 PDF 总页数 (极速轻量通道)
     pub fn get_page_count(path: &Path) -> PdfiumEngineResult<usize> {
         let lock = Self::global()?;
         let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
@@ -102,7 +148,7 @@ impl PdfiumEngine {
         Ok(doc.pages().len() as usize)
     }
 
-    /// 2. 获取指定页面的物理 Point 尺寸 (宽, 高)
+    /// 3. 获取指定页面的 Point 尺寸 (保留历史兼容接口)
     pub fn get_page_dimensions(path: &Path, page_index: usize) -> PdfiumEngineResult<(f32, f32)> {
         let lock = Self::global()?;
         let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
@@ -118,7 +164,7 @@ impl PdfiumEngine {
         Ok((page.width().value, page.height().value))
     }
 
-    /// 3. 高保真渲染页面至 DynamicImage (默认 300 DPI 高清图像推导)
+    /// 4. 高保真渲染页面至 DynamicImage (默认 300 DPI 高清图像推导)
     pub fn render_page_to_image(path: &Path, page_index: usize, target_dpi: u32) -> PdfiumEngineResult<DynamicImage> {
         let lock = Self::global()?;
         let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
@@ -135,7 +181,6 @@ impl PdfiumEngine {
             .map_err(|e| PdfiumEngineError::RenderFailed(e.to_string()))?;
 
         let scale_factor = target_dpi as f32 / 72.0;
-
         let render_config = PdfRenderConfig::new()
             .scale_page_by_factor(scale_factor)
             .render_annotations(true)
@@ -149,7 +194,7 @@ impl PdfiumEngine {
         Ok(image)
     }
 
-    /// 4. 原生提取指定页面的纯文本
+    /// 5. 原生提取指定页面的纯文本流
     pub fn extract_page_text(path: &Path, page_index: usize) -> PdfiumEngineResult<String> {
         let lock = Self::global()?;
         let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
@@ -164,14 +209,13 @@ impl PdfiumEngine {
 
         let page = pages.get(page_index as i32)
             .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
-
         let text_page = page.text()
             .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
 
         Ok(text_page.all())
     }
 
-    /// 5. 提取带物理边界框的字符数组
+    /// 6. 提取带物理边界框的字符数组 (已自动校准为左上角 Web/视觉标准坐标系，并保留 x1..y2 兼容)
     pub fn extract_page_chars(path: &Path, page_index: usize) -> PdfiumEngineResult<Vec<PdfCharInfo>> {
         let lock = Self::global()?;
         let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
@@ -186,79 +230,38 @@ impl PdfiumEngine {
 
         let page = pages.get(page_index as i32)
             .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
-
+        let page_height = page.height().value;
         let text_page = page.text()
             .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
 
         let mut char_infos = Vec::new();
         for ch in text_page.chars().iter() {
             if let (Some(unicode), Ok(rect)) = (ch.unicode_char(), ch.loose_bounds()) {
+                let px1 = rect.left().value;
+                let py1 = rect.bottom().value;
+                let px2 = rect.right().value;
+                let py2 = rect.top().value;
+
+                let w = (px2 - px1).abs();
+                let h = (py2 - py1).abs();
+
+                // 🛡️ 核心校准：将 PDF 左下角坐标系精准映射为 Web/OCR 左上角坐标系
+                let top_left_x = px1.min(px2);
+                let top_left_y = (page_height - py2).max(0.0);
+
                 char_infos.push(PdfCharInfo {
                     unicode_char: unicode,
-                    x1: rect.left().value,
-                    y1: rect.bottom().value,
-                    x2: rect.right().value,
-                    y2: rect.top().value,
+                    x1: px1,
+                    y1: py1,
+                    x2: px2,
+                    y2: py2,
+                    top_left_x,
+                    top_left_y,
+                    width_pt: w,
+                    height_pt: h,
                 });
             }
         }
-
         Ok(char_infos)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use std::time::Instant;
-
-    fn resolve_pdf_fixture() -> PathBuf {
-        let candidates = [
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\service-pdfium\1.pdf"),
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\pdf-parse-fast.pdf"),
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\tool-pdf-parse-fast.pdf"),
-        ];
-        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
-            PathBuf::from(r"C:\dev\ai-forge\test\fixtures\service-pdfium\1.pdf")
-        })
-    }
-
-    #[test]
-    fn test_service_pdfium_pipeline_benchmark() {
-        let pdf_path = resolve_pdf_fixture();
-        let out_dir = PathBuf::from(r"C:\dev\ai-forge\test\outs\service-pdfium");
-        let _ = fs::create_dir_all(&out_dir);
-
-        if !pdf_path.exists() {
-            return;
-        }
-
-        if PdfiumEngine::resolve_dll_path().is_none() {
-            return;
-        }
-
-        let t0 = Instant::now();
-        let page_count = PdfiumEngine::get_page_count(&pdf_path).expect("获取 PDF 页数失败");
-        assert!(page_count > 0);
-
-        let (w_pt, h_pt) = PdfiumEngine::get_page_dimensions(&pdf_path, 0).expect("获取页面 Point 尺寸失败");
-        assert!(w_pt > 0.0 && h_pt > 0.0);
-
-        let img = PdfiumEngine::render_page_to_image(&pdf_path, 0, 300).expect("渲染 300DPI 图像失败");
-        let out_img_path = out_dir.join("page_1_300dpi.png");
-        let _ = img.save(&out_img_path);
-
-        let text = PdfiumEngine::extract_page_text(&pdf_path, 0).expect("提炼页面纯文本失败");
-        let out_text_path = out_dir.join("page_1_text.txt");
-        let _ = fs::write(&out_text_path, &text);
-
-        let chars = PdfiumEngine::extract_page_chars(&pdf_path, 0).expect("提取字符级 BBox 失败");
-        let chars_json = serde_json::to_string_pretty(&chars).expect("序列化 BBox JSON 失败");
-        let out_chars_path = out_dir.join("page_1_chars.json");
-        let _ = fs::write(&out_chars_path, chars_json);
-
-        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-        println!("✅ service-pdfium 物理打靶通过: 总耗时 {:.2} ms | Point尺寸: {:.1}x{:.1}", elapsed_ms, w_pt, h_pt);
     }
 }

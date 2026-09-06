@@ -21,25 +21,37 @@ tauri-plugin-log = "2.0.0"
 log = "0.4"
 tracing = "0.1"
 tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+tokio = { version = "1.38", features = ["full"] }
+thiserror = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+image = "0.25"
+
+# 🛡️ 共享契约与核心中台
 shared-contracts = { path = "crates/shared-contracts" }
 core-models-download = { path = "crates/core-models-download" }
-pdf-parse = { path = "crates/tools/pdf-parse" }
 core-security = { path = "crates/core-security" }
-service-asr = { path = "crates/services/service-asr" }
-service-translation = { path = "crates/services/service-translation" }
+core-onnx-infer = { path = "crates/core-onnx-infer" }
+
+# 🛡️ 10 大纯血原子模型底座 (100% 完整挂载)
+service-pdfium = { path = "crates/services/service-pdfium" }
 service-layout = { path = "crates/services/service-layout" }
+service-ocr = { path = "crates/services/service-ocr" }
 service-formula = { path = "crates/services/service-formula" }
 service-table = { path = "crates/services/service-table" }
 service-doc-parse = { path = "crates/services/service-doc-parse" }
-service-pdfium = { path = "crates/services/service-pdfium" }
+service-upscale = { path = "crates/services/service-upscale" }
+service-translation = { path = "crates/services/service-translation" }
+service-asr = { path = "crates/services/service-asr" }
 service-converter = { path = "crates/services/service-converter" }
+
+# 历史过渡工具门面 (保留向下兼容)
+pdf-parse = { path = "crates/tools/pdf-parse" }
 format-converter = { path = "crates/tools/format-converter" }
 video-subtitle = { path = "crates/tools/video-subtitle" }
-service-upscale = { path = "crates/services/service-upscale" }
 upscale-48k = { path = "crates/tools/upscale-48k" }
-core-onnx-infer = { path = "crates/core-onnx-infer" }
 translation = { path = "crates/tools/translation" }
 
 [workspace]
@@ -58,12 +70,19 @@ members = [
     "crates/services/service-doc-parse",
     "crates/services/service-pdfium",
     "crates/services/service-converter",
+    "crates/services/service-ocr",
+    "crates/services/service-upscale",
     "crates/tools/pdf-parse",
     "crates/tools/format-converter",
     "crates/tools/video-subtitle",
     "crates/tools/upscale-48k",
-    "crates/tools/translation",
-    "crates/services/service-ocr",
-    "crates/services/service-upscale"
+    "crates/tools/translation"
 ]
 resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"

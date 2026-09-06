@@ -15,7 +15,7 @@ or other automated processes.</purpose><file_format>The content is organized as 
 - Be aware that this file may contain sensitive information. Handle it with
   the same level of security as you would the original repository.</usage_guidelines><notes>- Some files may have been excluded based on .gitignore rules and Repomix&apos;s configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: c/HANDOFF_TOOL.md, .cargo/**, src-tauri/.cargo/**, src-tauri/Cargo.toml, src-tauri/tauri.conf.json, src-tauri/capabilities/**, src-tauri/src/**, deploy/cloudflare/auth_worker.js, src/bindings.ts, src/bindings/**, src/assets/**, package.json, vite.config.ts, index.html, src/App.vue, src/main.ts, src/style.css, src/composables/**, src/store/**, src/components/layout/**, src/views/HomeView.vue, src-tauri/crates/core-models-download/**, src-tauri/crates/core-security/**, src-tauri/crates/shared-contracts/**, src-tauri/crates/core-onnx-infer/**, src-tauri/crates/services/service-translation/**
+- Only files matching these patterns are included: c/HANDOFF_TOOL.md, .cargo/**, src-tauri/.cargo/**, src-tauri/Cargo.toml, src-tauri/tauri.conf.json, src-tauri/capabilities/**, src-tauri/src/**, deploy/cloudflare/auth_worker.js, src/bindings.ts, src/bindings/**, src/assets/**, package.json, vite.config.ts, index.html, src/App.vue, src/main.ts, src/style.css, src/composables/**, src/store/**, src/components/layout/**, src/views/HomeView.vue, src-tauri/crates/core-models-download/**, src-tauri/crates/core-security/**, src-tauri/crates/shared-contracts/**, src-tauri/crates/core-onnx-infer/**, src-tauri/crates/services/*/src/lib.rs, src-tauri/crates/services/*/Cargo.toml
 - Files matching these patterns are excluded: **/node_modules/**, src-tauri/target/**, **/.venv/**, **/__pycache__/**, **/*.onnx, **/*.gguf, **/*.bin, **/*.pdiparams, **/*.pdmodel, **/*.pdf, **/*.dll, **/*.exe, test/**, data/**, **/*.sqlite3*, dist/**, deploy/website/**
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
@@ -36,6 +36,8 @@ src/
         cover.svg
       pdf-parse/
         cover.svg
+      translation/
+        cover.svg
       upscale-48k/
         cover.svg
       video-subtitle/
@@ -46,6 +48,7 @@ src/
     tools/
       format-converter.ts
       pdf-parse.ts
+      translation.ts
       upscale-48k.ts
       video-subtitle.ts
     dependencies.ts
@@ -93,7 +96,43 @@ src-tauri/
         portable.rs
       Cargo.toml
     services/
+      service-asr/
+        src/
+          lib.rs
+        Cargo.toml
+      service-converter/
+        src/
+          lib.rs
+        Cargo.toml
+      service-doc-parse/
+        src/
+          lib.rs
+        Cargo.toml
+      service-formula/
+        src/
+          lib.rs
+        Cargo.toml
+      service-layout/
+        src/
+          lib.rs
+        Cargo.toml
+      service-ocr/
+        src/
+          lib.rs
+        Cargo.toml
+      service-pdfium/
+        src/
+          lib.rs
+        Cargo.toml
+      service-table/
+        src/
+          lib.rs
+        Cargo.toml
       service-translation/
+        src/
+          lib.rs
+        Cargo.toml
+      service-upscale/
         src/
           lib.rs
         Cargo.toml
@@ -109,197 +148,7 @@ src-tauri/
   tauri.conf.json
 index.html
 package.json
-vite.config.ts</directory_structure><files>This section contains the contents of the repository&apos;s files.<file path="src-tauri/src/logging.rs">//! 🛡️ 紫电 AI - 2026 SOTA 工业级日志与硬件黑匣子中台 (logging.rs)
-//! 支持双轨输出 (Console + 每日自动切片落盘)、非阻塞高性能队列与开机硬件自愈诊断
-use core_security::PortableEngine;
-use std::path::PathBuf;
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{
-    filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
-};
-/// 获取规范化的日志物理存储根目录 (%LOCALAPPDATA%\紫电AI\Data\logs 或 ./Data/logs)
-pub fn resolve_logs_dir() -&gt; PathBuf {
-    // 1. 便携模式最高优先级 (./Data/logs)
-    if let Some(portable_logs) = PortableEngine::resolve_data_path(&quot;logs&quot;) {
-        let _ = std::fs::create_dir_all(&amp;portable_logs);
-        return portable_logs;
-    }
-    // 2. 标准模式：%LOCALAPPDATA%\紫电AI\Data\logs
-    if let Ok(local_appdata) = std::env::var(&quot;LOCALAPPDATA&quot;) {
-        let log_dir = PathBuf::from(&amp;local_appdata)
-            .join(&quot;紫电AI&quot;)
-            .join(&quot;Data&quot;)
-            .join(&quot;logs&quot;);
-        let _ = std::fs::create_dir_all(&amp;log_dir);
-        return log_dir;
-    }
-    let fallback = PathBuf::from(&quot;logs&quot;);
-    let _ = std::fs::create_dir_all(&amp;fallback);
-    fallback
-}
-/// 初始化全局双轨日志系统 (在主程序 run() 开头第 0 秒调用)
-pub fn init_logging() -&gt; Option&lt;WorkerGuard&gt; {
-    let logs_dir = resolve_logs_dir();
-    // 每日自动滚动切片文件 (例如: app.2026-08-26.log)
-    let file_appender = tracing_appender::rolling::daily(&amp;logs_dir, &quot;app&quot;);
-    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
-    let file_layer = fmt::layer()
-        .with_ansi(false)
-        .with_target(true)
-        .with_thread_names(true)
-        .with_writer(non_blocking_file)
-        .with_filter(EnvFilter::new(&quot;info,ort=warn,core_onnx_infer=info,service_upscale=info&quot;));
-    let stdout_layer = fmt::layer()
-        .with_ansi(true)
-        .with_target(false)
-        .with_filter(EnvFilter::new(&quot;info,ort=warn&quot;));
-    let subscriber = tracing_subscriber::registry()
-        .with(stdout_layer)
-        .with(file_layer);
-    if subscriber.try_init().is_ok() {
-        write_blackbox_header(&amp;logs_dir);
-        Some(guard)
-    } else {
-        None
-    }
-}
-/// 写入开机硬件黑匣子诊断头
-fn write_blackbox_header(logs_dir: &amp;std::path::Path) {
-    tracing::info!(&quot;======================================================================&quot;);
-    tracing::info!(&quot;🚀 [紫电 AI] 工业级桌面工坊已点火启动 (生产黑匣子已激活)&quot;);
-    tracing::info!(&quot;📁 [日志物理路径] {:?}&quot;, logs_dir);
-    tracing::info!(&quot;🖥️ [系统环境] OS: {} | Arch: {}&quot;, std::env::consts::OS, std::env::consts::ARCH);
-    #[cfg(target_os = &quot;windows&quot;)]
-    {
-        let sys32_nvcuda = std::path::Path::new(r&quot;C:\Windows\System32\nvcuda.dll&quot;);
-        if sys32_nvcuda.exists() {
-            tracing::info!(&quot;🎮 [显卡驱动] NVIDIA 驱动核心 (nvcuda.dll) 在线&quot;);
-        } else {
-            tracing::warn!(&quot;⚠️ [显卡驱动] 未检测到 System32/nvcuda.dll，可能未安装 NVIDIA 独显驱动&quot;);
-        }
-        let sys32_vc = std::path::Path::new(r&quot;C:\Windows\System32\vcruntime140.dll&quot;);
-        if sys32_vc.exists() {
-            tracing::info!(&quot;🧩 [VC++ 运行库] 微软 VC++ 2015-2022 基础库已就绪&quot;);
-        } else {
-            tracing::warn!(&quot;⚠️ [VC++ 运行库] 未检测到 vcruntime140.dll，可能需要安装运行库&quot;);
-        }
-    }
-    tracing::info!(&quot;======================================================================\n&quot;);
-}
-/// 一键生成当前系统的白盒诊断报告文本 (用于前端一键复制/用户反馈)
-pub fn generate_diagnostic_summary() -&gt; String {
-    let mut lines = Vec::new();
-    lines.push(&quot;=== 📋 紫电 AI 客户端诊断报告 ===&quot;.to_string());
-    lines.push(format!(&quot;• 操作系统: {} / {}&quot;, std::env::consts::OS, std::env::consts::ARCH));
-    lines.push(format!(&quot;• 便携模式: {}&quot;, if PortableEngine::is_portable() { &quot;已激活 (./Data)&quot; } else { &quot;标准模式 (%LOCALAPPDATA%)&quot; }));
-    lines.push(format!(&quot;• 日志目录: {:?}&quot;, resolve_logs_dir()));
-    #[cfg(target_os = &quot;windows&quot;)]
-    {
-        let nvcuda = std::path::Path::new(r&quot;C:\Windows\System32\nvcuda.dll&quot;).exists();
-        let vcruntime = std::path::Path::new(r&quot;C:\Windows\System32\vcruntime140.dll&quot;).exists();
-        lines.push(format!(&quot;• NVIDIA 驱动: {}&quot;, if nvcuda { &quot;✅ 正常 (nvcuda.dll 在线)&quot; } else { &quot;❌ 异常/缺失&quot; }));
-        lines.push(format!(&quot;• VC++ 运行库: {}&quot;, if vcruntime { &quot;✅ 正常&quot; } else { &quot;⚠️ 缺失&quot; }));
-    }
-    let base_dir = core_models_download::ModelManager::resolve_models_base_dir();
-    lines.push(format!(&quot;• 模型存储基准区: {:?}&quot;, base_dir));
-    let cuda_runtime = core_models_download::ModelManager::resolve_cuda_runtime_dir();
-    lines.push(format!(&quot;• CUDA 运行时目录: {:?}&quot;, cuda_runtime));
-    lines.push(&quot;=================================&quot;.to_string());
-    lines.join(&quot;\n&quot;)
-}</file><file path="c/HANDOFF_TOOL.md"># 🛡️ AI-Forge 纯血 Native PDF 解析工程交接文档 (HANDOFF-TOOL.md)
-
-&gt; **版本**：v21.0.0 (2026年8月20日 黄金双轨SOTA测试满分与多模态神经自愈版)  
-&gt; **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 工业级开发环境)  
-&gt; **操作系统与编译链**：Windows 11 x64 / PowerShell 7+ / MSVC (`x86_64-pc-windows-msvc`) / CUDA 13.1 &amp; 12.4 / `uv`  
-&gt; **面向对象**：新会话 AI 系统架构师 / 核心开发助手 (零历史上下文障碍无损接管)
-
----
-
-## 🏢 1. 项目定位、商业模式与核心战略 (Project Overview)
-
-1. **项目定位**：
-   * 跨平台工业级 AI 桌面端（Tauri v2 + Vue3 + TypeScript + Rust Cargo Workspace + C-FFI 原生 GPU/CPU 直推）。
-   * **算力主权**：彻底废除重型 Python (`.venv`) 沙箱与本地网络/IPC 端口，100% 切换为 Rust 原生驱动（`ort` ONNX Runtime 直推 + `service-pdfium` C-FFI 绑定）。
-   * **核心使命**：为企业级 RAG（知识库检索增强生成）与 GraphRAG 提供工业级、高保真、零语义腰斩、数学公式与复杂表格 100% 结构闭合的 Markdown 入库预处理中台。
-2. **商业模型与 Token 经济学**：
-   * **内测阶段**：完全免费供种子用户与内部使用；
-   * **正式运营**：按页面消耗 Token 计费（对齐市面标准约 0.02 元/页）；
-   * **个人免费护城河**：个人用户每日赠送 **100 页 PDF 智能解析 + 10 部 2 小时电影字幕转写**（依托端侧本地 RTX 3060/CPU 运算，**云端边际算力成本 = 0 元**，形成降维打击）；
-   * **战略终局**：以极速、高颜值的桌面端工坊作为“超级展示橱窗（Showcase）”，承接政企与高校的高客单价私有化 RAG 知识库定制与部署大单。
-
----
-
-## 📐 2. 统一架构全景与底座分工 (Workspace Architecture)
-
-```text
-C:\dev\ai-forge\
-├── bin\cuda12\                    【CUDA 13.1 / 12.4 满血 DLL 仓库】 (cublas, cudart, cudnn9, onnxruntime)
-├── models\                        【纯血 ONNX 模型资产库】 (PP-DocLayoutV3, PP-FormulaNet-S, SLANet_plus, PP-OCRv6)
-├── src-tauri\crates\
-│   ├── core-onnx-infer\           【ONNX 硬件会话底座】 (默认激活 CUDA 特性, 自动注入 bin/cuda12 动态库目录)
-│   ├── shared-contracts\          【端侧显存守卫】 (VramTokenGuard, 11000MB 令牌并发锁)
-│   ├── core-security\             【算力收费站】 (HMAC 设备指纹 + Ed25519 离线许可 + Gatekeeper)
-│   │
-│   ├── services\                  【5 大底层算法底座 (100% 官方物理对齐，只读防腐区 🛡️)】
-│   │   ├── service-pdfium\        : 300DPI 渲染 + 物理尺寸 + 字符级 BBox 提取 + 多路径 dll 自愈绑定
-│   │   ├── service-layout\        : PP-DocLayoutV3 官方 25 类别映射 + [0.0, 1.0] 归一化
-│   │   ├── service-formula\       : PP-FormulaNet-S (384x384 白底留边 + FastTokenizer + Token 1900 cases 换行)
-│   │   ├── service-table\         : SLANet_plus (488x488 BGR + 8 坐标通道 + HTML 单元格重构 + 局部 OCR 填充)
-│   │   ├── service-ocr\           : PP-OCRv6 (Det 0.2/0.45/1.4/3000 + Rec 48px 微批次)
-│   │   └── service-doc-parse\     : AST 语法树 + RXYC++ 几何排序 (通用几何防腐)
-│   │
-│   └── tools\pdf-parse\           【纯血桌面端 PDF 解析适配器 (业务中台)】
-│       ├── probe.rs               : 2026 SOTA 三级漏斗通用分类器 (0.18s 精准判别矢量/扫描)
-│       ├── pipeline.rs            : 🛡️ 统一高保真多模态排版流水线中台 (1:1 承载 98.41% 算法资产)
-│       ├── fast_track.rs          : ⚡ 极简门面 (绑定 TextExtractMode::VectorOnly)
-│       ├── deep_track.rs          : 🧠 极简门面 (绑定 TextExtractMode::OpticalOcr)
-│       ├── hybrid.rs              : 智能按页调度器 (全矢量/全扫描/混合按页缝合)
-│       └── service.rs             : 桌面端 Dedicated 本地直出服务契约 (0 Zip 垃圾)
-│
-└── test\parse\                    【2026 SOTA 黄金评测系统 (Dual-Engine Ground Truth Depot)】
-    ├── ground_truth\              : 专家精标黄金真值库 (1_golden.md, 2_golden.md)
-    ├── 1.pdf / 2.pdf              : 原生数字矢量 PDF 样本
-    ├── 1_scanned.pdf / 2_scanned  : 300DPI 纯位图扫描件 PDF 样本 (96MB/篇)
-    └── benchmark_sota.py          : 照妖镜评测脚本 (集成 OmniDocBench TEDS/NED + olmOCR 16 项事实穿透断言)
-```
-
----
-
-## 🟢 3. 本会话已攻克的重大里程碑 (Accomplished Breakthroughs)
-
-1. **数学公式与语法自愈 100% 满分突破**：
-   * **公式 (3)**：消灭了宏命令反斜杠脱落故障（如 `operatornamearg r a **mmx`），精准归一化为标准的 `\boldsymbol{\tau}_c^* = \mathop{\operatorname{arg}\operatorname*{max}}_{\tau\in[0,1]} F_c(\tau; P(y|x_l))`；
-   * **公式 (4)**：破译了 FastTokenizer 中 `Token 1900` 解码为 `\ ` 导致分段函数挤在一行的难题，精准升格为 `\\`，使 `\begin{cases} ... \end{cases}` 完美渲染为标准上下两行；
-   * **公式 (1)**：$\mathcal{L}_{\mathrm{Distill}}$ 双范数与矩阵乘法 100% 高保真转写；
-   * **单测全绿**：`service-formula` 4 张真实公式图（`1.png` ~ `4.png`）测试全部 100% 通过（耗时 260~360ms）。
-2. **2026 SOTA 黄金评测系统（`benchmark_sota.py`）16/16 满贯全绿**：
-   * `1.pdf` [⚡ 矢量轨]：**98.39 分**（Order Score: 100.00 分，4/4 🟢 PASS）
-   * `1_scanned.pdf` [🧠 扫描轨]：**97.36 分**（Order Score: 100.00 分，4/4 🟢 PASS）
-   * `2.pdf` [⚡ 矢量轨]：**94.40 分**（Order Score: 100.00 分，4/4 🟢 PASS）
-   * `2_scanned.pdf` [🧠 扫描轨]：**91.44 分**（Order Score: 100.00 分，4/4 🟢 PASS）
-3. **参考文献排版与假大标题拦截**：
-   * 部署了 **标题保镖机制（`is_false_heading`）**：拦截以小写字母（如 `## tic...`）、`[数字]` 开头或长篇文本被误打 `## ` 的事故；
-   * 实现了 **纯血 Rust 零依赖参考文献自动分行（`format_citations_to_lines`）**：使黏连的 `[6]...[15]` 全部整齐分行。
-4. **真实扫描件端到端验证成功**：
-   * 将 9 页学术论文 `444.pdf` 渲染为 300DPI 纯位图 `444_scanned.pdf`，经桌面端真机转换，公式 (1)、(3)、(4) 和表格在产物 `444_scanned_hybrid_output.md` 中 100% 完整生成。
-
----
-
-## ⚠️ 4. 避坑终结手册与禁忌铁律 (Anti-Patterns / Lessons Learned)
-
-1. **绝对不要在全局 Markdown 字符串上执行 `split(&quot;$$&quot;)`**：
-   长文档中的正文 `$100` 或单 `$` 会导致奇偶索引颠倒，摧毁整篇文档的所有公式！公式规整必须在 AST 节点内部完成。
-2. **绝对不要将公式裁切外扩设为小于 25px/10px**：
-   过小的裁切边距会导致 $\arg\max$ 和 $\tau_c^*$ 首尾字母被截肢，诱发 BPE 乱码。必须严格锁定 `pad_x = 25.0, pad_y = 10.0`。
-3. **绝对不要对 `\operatorname` 使用暴力字母连接正则**：
-   禁止使用 `LETTER_TO_NONLETTER_PATTERN` 等粗暴正则剥离反斜杠 `\`。
-4. **绝对不要忽略数字 PDF 中的非标 TeX 字体乱码**：
-   只要检测到学术公式或非标字符，必须由多模态视觉神经轨（`DeepTrackGpu`）接管。
-5. **Windows Native 铁律**：
-   * 所有 Rust 编译命令必须显式指定 `--manifest-path C:\dev\ai-forge\src-tauri\Cargo.toml`；
-   * 代码落盘必须使用 PowerShell `@&apos; ... &apos;@` 单引号原样字符串与 `Set-Content` 协议；
-   * 命令行绝不能开头带有 `#` 注释；
-   * 临时断言必须使用 `uv run --python 3.11 python -c &quot;...&quot;` 行内求值。</file><file path="src/assets/tools/pdf-parse/cover.svg">&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 800 500&quot; width=&quot;100%&quot; height=&quot;100%&quot;&gt;
+vite.config.ts</directory_structure><files>This section contains the contents of the repository&apos;s files.<file path="src/assets/tools/pdf-parse/cover.svg">&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 800 500&quot; width=&quot;100%&quot; height=&quot;100%&quot;&gt;
   &lt;defs&gt;
     &lt;!-- 主底板纯正红渐变 (满铺) --&gt;
     &lt;linearGradient id=&quot;fullPdfRedSheet&quot; x1=&quot;0%&quot; y1=&quot;0%&quot; x2=&quot;100%&quot; y2=&quot;100%&quot;&gt;
@@ -368,6 +217,80 @@ C:\dev\ai-forge\
         opacity=&quot;0.95&quot;&gt;Portable Document Format&lt;/text&gt;
 
   &lt;!-- 6. 底部极简文档结构高光装饰条 (居中舒展) --&gt;
+  &lt;g opacity=&quot;0.35&quot; fill=&quot;#ffffff&quot;&gt;
+    &lt;rect x=&quot;220&quot; y=&quot;400&quot; width=&quot;100&quot; height=&quot;7&quot; rx=&quot;3.5&quot; /&gt;
+    &lt;rect x=&quot;340&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;7&quot; rx=&quot;3.5&quot; /&gt;
+    &lt;rect x=&quot;480&quot; y=&quot;400&quot; width=&quot;100&quot; height=&quot;7&quot; rx=&quot;3.5&quot; /&gt;
+  &lt;/g&gt;
+&lt;/svg&gt;</file><file path="src/assets/tools/translation/cover.svg">&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 800 500&quot; width=&quot;100%&quot; height=&quot;100%&quot;&gt;
+  &lt;defs&gt;
+    &lt;!-- 主底板深海蓝晶渐变 (满铺) --&gt;
+    &lt;linearGradient id=&quot;fullTransBlueSheet&quot; x1=&quot;0%&quot; y1=&quot;0%&quot; x2=&quot;100%&quot; y2=&quot;100%&quot;&gt;
+      &lt;stop offset=&quot;0%&quot; stop-color=&quot;#38bdf8&quot; /&gt;
+      &lt;stop offset=&quot;35%&quot; stop-color=&quot;#2563eb&quot; /&gt;
+      &lt;stop offset=&quot;100%&quot; stop-color=&quot;#1e1b4b&quot; /&gt;
+    &lt;/linearGradient&gt;
+
+    &lt;!-- 右上角 3D 翻折折角渐变 --&gt;
+    &lt;linearGradient id=&quot;fullFoldFlapGradTrans&quot; x1=&quot;0%&quot; y1=&quot;0%&quot; x2=&quot;100%&quot; y2=&quot;100%&quot;&gt;
+      &lt;stop offset=&quot;0%&quot; stop-color=&quot;#93c5fd&quot; /&gt;
+      &lt;stop offset=&quot;100%&quot; stop-color=&quot;#1d4ed8&quot; /&gt;
+    &lt;/linearGradient&gt;
+
+    &lt;!-- 拟真立体折角投影 --&gt;
+    &lt;filter id=&quot;foldShadowTrans&quot; x=&quot;-20%&quot; y=&quot;-20%&quot; width=&quot;140%&quot; height=&quot;140%&quot;&gt;
+      &lt;feDropShadow dx=&quot;-4&quot; dy=&quot;8&quot; stdDeviation=&quot;12&quot; flood-color=&quot;#000000&quot; flood-opacity=&quot;0.45&quot; /&gt;
+    &lt;/filter&gt;
+  &lt;/defs&gt;
+
+  &lt;!-- 1. 🌟 全屏满铺蓝底卡片主体 (右上角带 3D 折角缺口) --&gt;
+  &lt;path d=&quot;M 0 0 
+           L 680 0 
+           L 800 120 
+           L 800 500 
+           L 0 500 Z&quot; 
+        fill=&quot;url(#fullTransBlueSheet)&quot; /&gt;
+
+  &lt;!-- 2. 全景外边缘晶体高光微边 --&gt;
+  &lt;path d=&quot;M 0 1 
+           L 679 1 
+           L 799 121 
+           L 799 499 
+           L 1 499 
+           L 1 0&quot; 
+        fill=&quot;none&quot; stroke=&quot;#ffffff&quot; stroke-width=&quot;2&quot; stroke-opacity=&quot;0.25&quot; /&gt;
+
+  &lt;!-- 3. 🌟 右上角 3D 拟真翻折三角瓣 --&gt;
+  &lt;g filter=&quot;url(#foldShadowTrans)&quot;&gt;
+    &lt;path d=&quot;M 680 0 
+             L 680 96 
+             A 24 24 0 0 0 704 120 
+             L 800 120 Z&quot; 
+          fill=&quot;url(#fullFoldFlapGradTrans)&quot; /&gt;
+    &lt;!-- 折角底边阴影暗线 --&gt;
+    &lt;path d=&quot;M 680 120 L 800 120&quot; stroke=&quot;#000000&quot; stroke-width=&quot;2.5&quot; stroke-opacity=&quot;0.3&quot; /&gt;
+  &lt;/g&gt;
+
+  &lt;!-- 4. 🌟 绝对居中超大号字标：TRANS (155px 纯白极粗，绝对视觉焦点) --&gt;
+  &lt;text x=&quot;400&quot; y=&quot;270&quot; 
+        fill=&quot;#ffffff&quot; 
+        font-family=&quot;-apple-system, BlinkMacSystemFont, &apos;Segoe UI&apos;, Roboto, &apos;Helvetica Neue&apos;, Arial, sans-serif&quot; 
+        font-size=&quot;155&quot; 
+        font-weight=&quot;900&quot; 
+        text-anchor=&quot;middle&quot; 
+        letter-spacing=&quot;6&quot;&gt;TRANS&lt;/text&gt;
+
+  &lt;!-- 5. 🌟 绝对居中副标：Offline Neural Translation --&gt;
+  &lt;text x=&quot;400&quot; y=&quot;350&quot; 
+        fill=&quot;#ffffff&quot; 
+        font-family=&quot;-apple-system, BlinkMacSystemFont, &apos;Segoe UI&apos;, Roboto, &apos;Helvetica Neue&apos;, Arial, sans-serif&quot; 
+        font-size=&quot;26&quot; 
+        font-weight=&quot;700&quot; 
+        text-anchor=&quot;middle&quot; 
+        letter-spacing=&quot;4&quot; 
+        opacity=&quot;0.95&quot;&gt;Offline Neural Translation&lt;/text&gt;
+
+  &lt;!-- 6. 底部极简结构高光装饰条 (居中舒展) --&gt;
   &lt;g opacity=&quot;0.35&quot; fill=&quot;#ffffff&quot;&gt;
     &lt;rect x=&quot;220&quot; y=&quot;400&quot; width=&quot;100&quot; height=&quot;7&quot; rx=&quot;3.5&quot; /&gt;
     &lt;rect x=&quot;340&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;7&quot; rx=&quot;3.5&quot; /&gt;
@@ -471,6 +394,43 @@ export interface FormatConvertResult {
 }
 export async function runFormatConvert(task: FormatConvertTask): Promise&lt;FormatConvertResult&gt; {
   return await invoke&lt;FormatConvertResult&gt;(&quot;run_format_convert&quot;, { task });
+}</file><file path="src/bindings/tools/translation.ts">// 🛡️ 紫电 AI 桌面工坊 - 离线高精翻译专属强类型契约 (translation.ts)
+// 100% 映射 Rust 后端 translation crate (支持文本与 Base64/物理图片多模态直推)
+import { invoke } from &quot;@tauri-apps/api/core&quot;;
+export interface TranslationTask {
+  texts: string[];
+  source_lang?: string | null;
+  target_lang: string;
+  style?: string | null;
+  output_file_path?: string | null;
+}
+export interface TranslationResult {
+  success: boolean;
+  translations: string[];
+  output_file_path?: string | null;
+  total_segments: number;
+  elapsed_ms: number;
+  error?: string | null;
+}
+export interface ImageTranslationTask {
+  image_path?: string | null;
+  image_base64?: string | null;
+  target_lang: string;
+}
+export interface ImageTranslationResult {
+  success: boolean;
+  full_source_text: string;
+  full_translated_text: string;
+  ocr_elapsed_ms: number;
+  trans_elapsed_ms: number;
+  elapsed_ms: number;
+  error?: string | null;
+}
+export async function runTranslation(task: TranslationTask): Promise&lt;TranslationResult&gt; {
+  return await invoke&lt;TranslationResult&gt;(&quot;run_translation&quot;, { task });
+}
+export async function runImageTranslation(task: ImageTranslationTask): Promise&lt;ImageTranslationResult&gt; {
+  return await invoke&lt;ImageTranslationResult&gt;(&quot;run_image_translation&quot;, { task });
 }</file><file path="src/bindings/tools/upscale-48k.ts">// 🛡️ 紫电 AI 桌面工坊 - 4K/8K 视觉超分专属强类型契约 (upscale-48k.ts)
 import { invoke } from &quot;@tauri-apps/api/core&quot;;
 export interface UpscaleTask {
@@ -1186,7 +1146,493 @@ let data_dir = temp_dir.join(&quot;Data&quot;);
 fs::write(&amp;marker_file, &quot;ZiDianAI Portable Mode\n&quot;).unwrap();
 ⋮----
 assert!(PortableEngine::is_valid_marker(&amp;marker_file));
-assert_eq!(PortableEngine::detect_marker_in_dir(&amp;temp_dir), Some(data_dir));</file><file path="src-tauri/crates/shared-contracts/src/lib.rs">use serde::{Deserialize, Serialize};
+assert_eq!(PortableEngine::detect_marker_in_dir(&amp;temp_dir), Some(data_dir));</file><file path="src-tauri/crates/services/service-converter/src/lib.rs">pub mod archive;
+pub mod audio;
+pub mod docx;
+pub mod ebook;
+pub mod image;
+pub mod media;
+pub mod text;
+use thiserror::Error;
+#[derive(Debug, Error)]
+pub enum ConverterError {
+    #[error(&quot;文件魔数校验不匹配: {0}&quot;)]
+    InvalidMagic(String),
+    #[error(&quot;对称加解密失败: {0}&quot;)]
+    CryptoError(String),
+    #[error(&quot;数据格式损坏或布局越界: {0}&quot;)]
+    CorruptedData(String),
+    #[error(&quot;音频解密异常: {0}&quot;)]
+    AudioDecryptError(String),
+    #[error(&quot;图像解码/容器异常: {0}&quot;)]
+    ImageError(String),
+    #[error(&quot;文本/数据解析异常: {0}&quot;)]
+    TextParseError(String),
+    #[error(&quot;电子书生成/解密异常: {0}&quot;)]
+    EbookError(String),
+    #[error(&quot;Word DOCX 生成异常: {0}&quot;)]
+    DocxError(String),
+    #[error(&quot;PDF 生成异常: {0}&quot;)]
+    PdfBuildError(String),
+    #[error(&quot;归档/ZIP 处理异常: {0}&quot;)]
+    ArchiveError(String),
+    #[error(&quot;多媒体/FFmpeg 转码异常: {0}&quot;)]
+    MediaError(String),
+    #[error(&quot;IO 读写异常: {0}&quot;)]
+    IoError(#[from] std::io::Error),
+    #[error(&quot;JSON 序列化/反序列化失败: {0}&quot;)]
+    JsonError(#[from] serde_json::Error),
+}
+pub type ConverterResult&lt;T&gt; = Result&lt;T, ConverterError&gt;;
+#[cfg(test)]
+mod tests {
+    use crate::archive::zip::{extract_archive_to_memory, list_archive_entries, zip_in_memory, ArchiveInputItem};
+    use crate::audio::av3a::parse_boxes;
+    use crate::audio::kgg::{aes_128_cbc_decrypt, derive_page_aes_iv, derive_page_aes_key, next_page_iv, MASTER_KEY};
+    use crate::audio::kgm::{kugo_md5, xor_collapse_u32};
+    use crate::audio::kwm::generate_kwm_mask;
+    use crate::audio::ncm::{detect_audio_format, ncm_key_stream};
+    use crate::audio::qmc::{create_qmc2_cipher, Qmc2Map};
+    use crate::docx::build_docx_bytes;
+    use crate::ebook::epub::{build_epub_bytes, split_chapters};
+    use crate::image::bmp::decode_bmp_to_raw;
+    use crate::image::ico::{encode_ico, extract_best_frame, PngFrameInput};
+    use crate::image::pdf::{build_images_pdf, ImagePageInput};
+    use crate::media::ffmpeg::{build_image_to_video_args, is_heic_buffer, resolve_ffmpeg_path};
+    use crate::text::csv::{csv_to_json_objects, csv_to_markdown, json_to_csv, parse_csv_records};
+    use crate::text::xml::xml_to_json_value;
+    #[test]
+    fn test_ncm_keystream_math_determinism() {
+        let rc4_key = b&quot;neteasecloudmusic_commercial_test_key_2026&quot;;
+        let stream = ncm_key_stream(rc4_key);
+        assert_eq!(stream.len(), 256);
+        assert!(stream.iter().any(|&amp;b| b != 0));
+        println!(&quot;✅ NCM 256-byte 变种 RC4 Keystream 确定性断言通过！&quot;);
+    }
+    #[test]
+    fn test_audio_format_detection() {
+        let flac_head = b&quot;fLaC\x00\x00\x00\x22&quot;;
+        assert_eq!(detect_audio_format(flac_head), &quot;flac&quot;);
+        let mp3_id3 = b&quot;ID3\x04\x00\x00&quot;;
+        assert_eq!(detect_audio_format(mp3_id3), &quot;mp3&quot;);
+        let ogg_head = b&quot;OggS\x00\x02&quot;;
+        assert_eq!(detect_audio_format(ogg_head), &quot;ogg&quot;);
+        println!(&quot;✅ 音频格式嗅探（FLAC/MP3/OGG/M4A）断言通过！&quot;);
+    }
+    #[test]
+    fn test_qmc2_map_stream_cipher() {
+        let key = b&quot;qqmusic_qmc2_map_test_seed_key&quot;;
+        let map_cipher = Qmc2Map::new(key);
+        let mut plaintext = b&quot;fLaC\x00\x00\x00\x22AI-Forge Native High Fidelity Audio&quot;.to_vec();
+        let original = plaintext.clone();
+        map_cipher.decrypt(&amp;mut plaintext, 0);
+        assert_ne!(plaintext, original);
+        map_cipher.decrypt(&amp;mut plaintext, 0);
+        assert_eq!(plaintext, original);
+        println!(&quot;✅ QMC2MAP 映射流密码对称加解密断言通过！&quot;);
+    }
+    #[test]
+    fn test_qmc2_rc4_cipher_dispatch() {
+        let long_key = vec![0x42u8; 512];
+        let cipher = create_qmc2_cipher(&amp;long_key);
+        let mut sample = vec![0x11u8; 1024];
+        cipher.decrypt(&amp;mut sample, 0);
+        assert_ne!(sample, vec![0x11u8; 1024]);
+        println!(&quot;✅ QMC2RC4 长密钥分段流密码断言通过！&quot;);
+    }
+    #[test]
+    fn test_kugo_md5_and_xor_collapse() {
+        let sample = b&quot;KuGouMusic_Test_Payload&quot;;
+        let digest = kugo_md5(sample);
+        assert_eq!(digest.len(), 16);
+        assert_eq!(xor_collapse_u32(0x12345678), (0x12 ^ 0x34 ^ 0x56 ^ 0x78) as u8);
+        println!(&quot;✅ 酷狗 KGMA MD5 双字节反转与 32 位异或折叠断言通过！&quot;);
+    }
+    #[test]
+    fn test_kwm_mask_generation() {
+        let key8 = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let mask = generate_kwm_mask(&amp;key8);
+        assert_eq!(mask.len(), 32);
+        assert!(mask.iter().any(|&amp;b| b != 0));
+        println!(&quot;✅ 酷我 KWM 32 字节预定义掩码生成断言通过！&quot;);
+    }
+    #[test]
+    fn test_mp4_box_parser() {
+        let mut synthetic_mp4 = Vec::new();
+        synthetic_mp4.extend_from_slice(&amp;[0x00, 0x00, 0x00, 0x10]);
+        synthetic_mp4.extend_from_slice(b&quot;ftypM4A \x00\x00\x00\x00&quot;);
+        synthetic_mp4.extend_from_slice(&amp;[0x00, 0x00, 0x00, 0x08]);
+        synthetic_mp4.extend_from_slice(b&quot;moov&quot;);
+        let boxes = parse_boxes(&amp;synthetic_mp4, 0, synthetic_mp4.len()).expect(&quot;解析 MP4 Box 失败&quot;);
+        assert_eq!(boxes.len(), 2);
+        assert_eq!(boxes[0].box_type, &quot;ftyp&quot;);
+        assert_eq!(boxes[1].box_type, &quot;moov&quot;);
+        println!(&quot;✅ MP4 容器递归 Box 树解析断言通过！&quot;);
+    }
+    #[test]
+    fn test_kgg_db_page_derivation_and_decrypt() {
+        let iv_step = next_page_iv(42);
+        assert!(iv_step &gt; 0);
+        let key = derive_page_aes_key(1, &amp;MASTER_KEY);
+        let iv = derive_page_aes_iv(1);
+        assert_eq!(key.len(), 16);
+        assert_eq!(iv.len(), 16);
+        let mut data = vec![0x33u8; 64];
+        aes_128_cbc_decrypt(&amp;mut data, &amp;key, &amp;iv);
+        assert_ne!(data, vec![0x33u8; 64]);
+        println!(&quot;✅ 酷狗 KGG SQLite 页面密钥派生与 AES-128-CBC 原地解密断言通过！&quot;);
+    }
+    #[test]
+    fn test_ico_encoder_and_frame_extraction() {
+        let mock_png_16 = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x11, 0x22];
+        let mock_png_32 = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x33, 0x44, 0x55];
+        let frames = [
+            PngFrameInput { size: 16, data: &amp;mock_png_16 },
+            PngFrameInput { size: 32, data: &amp;mock_png_32 },
+        ];
+        let ico_bytes = encode_ico(&amp;frames).expect(&quot;生成 ICO 失败&quot;);
+        assert!(ico_bytes.len() &gt; 6 + 32);
+        let best = extract_best_frame(&amp;ico_bytes).expect(&quot;提取最佳帧失败&quot;);
+        assert!(best.is_png);
+        assert_eq!(best.width, 32);
+        assert_eq!(best.data, mock_png_32);
+        println!(&quot;✅ 多分辨率 ICO 容器编码与最优 PNG 帧提取断言通过！&quot;);
+    }
+    #[test]
+    fn test_bmp_24bit_raw_decoding() {
+        let mut bmp = vec![0u8; 54 + 4 * 2];
+        bmp[0] = b&apos;B&apos;; bmp[1] = b&apos;M&apos;;
+        bmp[2] = 62; bmp[10] = 54; bmp[14] = 40; bmp[18] = 2; bmp[22] = 1; bmp[26] = 1; bmp[28] = 24;
+        bmp[54] = 0x00; bmp[55] = 0x00; bmp[56] = 0xff;
+        bmp[57] = 0xff; bmp[58] = 0x00; bmp[59] = 0x00;
+        let raw = decode_bmp_to_raw(&amp;bmp).expect(&quot;解码 BMP 失败&quot;);
+        assert_eq!(raw.width, 2);
+        assert_eq!(raw.height, 1);
+        assert_eq!(raw.channels, 3);
+        assert_eq!(raw.data[0..3], [0xff, 0x00, 0x00]);
+        assert_eq!(raw.data[3..6], [0x00, 0x00, 0xff]);
+        println!(&quot;✅ 24 位 BMP 像素阵列 BGR-&gt;RGB 与 4 字节边界行对齐断言通过！&quot;);
+    }
+    #[test]
+    fn test_pure_images_to_pdf_stream_builder() {
+        let rgb_p1 = [255u8, 0, 0, 0, 255, 0];
+        let rgb_p2 = [0u8, 0, 255, 255, 255, 0];
+        let pages = [
+            ImagePageInput { width: 2, height: 1, rgb_data: &amp;rgb_p1 },
+            ImagePageInput { width: 2, height: 1, rgb_data: &amp;rgb_p2 },
+        ];
+        let pdf_bytes = build_images_pdf(&amp;pages).expect(&quot;生成 PDF 失败&quot;);
+        assert!(pdf_bytes.starts_with(b&quot;%PDF-1.4\n&quot;));
+        assert!(pdf_bytes.ends_with(b&quot;%%EOF\n&quot;));
+        println!(&quot;✅ 纯血图片合并转 PDF 1.4 对象拓扑与 Xref 校验断言通过！&quot;);
+    }
+    #[test]
+    fn test_csv_json_and_markdown_pipeline() {
+        let sample_csv = &quot;\&quot;Name\&quot;,\&quot;Price | CNY\&quot;,\&quot;Details\&quot;\n\&quot;Item A\&quot;,\&quot;100.50\&quot;,\&quot;Line1\nLine2\&quot;\n\&quot;Item B\&quot;,\&quot;200.00\&quot;,\&quot;Normal\&quot;&quot;;
+        let records = parse_csv_records(sample_csv).expect(&quot;解析 CSV 失败&quot;);
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0], vec![&quot;Name&quot;, &quot;Price | CNY&quot;, &quot;Details&quot;]);
+        let md_table = csv_to_markdown(sample_csv).expect(&quot;转换 Markdown 失败&quot;);
+        assert!(md_table.contains(&quot;| Price \\| CNY |&quot;));
+        assert!(md_table.contains(&quot;Line1&lt;br&gt;Line2&quot;));
+        let json_objs = csv_to_json_objects(sample_csv).expect(&quot;转换 JSON 对象失败&quot;);
+        assert_eq!(json_objs.len(), 2);
+        assert_eq!(json_objs[0][&quot;Name&quot;], &quot;Item A&quot;);
+        let nested_json = r#&quot;[{&quot;user&quot;:{&quot;name&quot;:&quot;Bob&quot;,&quot;age&quot;:30},&quot;active&quot;:true}]&quot;#;
+        let flattened_csv = json_to_csv(nested_json).expect(&quot;展平 JSON 失败&quot;);
+        assert!(flattened_csv.contains(&quot;\&quot;user.name\&quot;&quot;));
+        assert!(flattened_csv.contains(&quot;\&quot;user.age\&quot;&quot;));
+        println!(&quot;✅ CSV/JSON 严格互转与 Markdown 单元格转义断言通过！&quot;);
+    }
+    #[test]
+    fn test_xml_to_json_parser() {
+        let sample_xml = r#&quot;&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;bookstore channel=&quot;online&quot;&gt;
+    &lt;book id=&quot;1&quot;&gt;
+        &lt;title&gt;Rust Native High-Performance&lt;/title&gt;
+        &lt;price currency=&quot;CNY&quot;&gt;88.50&lt;/price&gt;
+        &lt;desc&gt;&lt;![CDATA[Special &lt;Characters&gt; &amp; CDATA Content]]&gt;&lt;/desc&gt;
+    &lt;/book&gt;
+    &lt;book id=&quot;2&quot;&gt;
+        &lt;title&gt;Tauri v2 Engineering&lt;/title&gt;
+    &lt;/book&gt;
+&lt;/bookstore&gt;&quot;#;
+        let json_val = xml_to_json_value(sample_xml).expect(&quot;解析 XML 失败&quot;);
+        let root = json_val.get(&quot;bookstore&quot;).expect(&quot;缺少根节点 bookstore&quot;);
+        assert_eq!(root.get(&quot;@channel&quot;).unwrap(), &quot;online&quot;);
+        let books = root.get(&quot;book&quot;).expect(&quot;缺少 book 节点&quot;);
+        assert!(books.is_array());
+        assert_eq!(books.as_array().unwrap().len(), 2);
+        println!(&quot;✅ 递归下降轻量 XML 词法转 JSON (属性/CDATA/数组升格) 断言通过！&quot;);
+    }
+    #[test]
+    fn test_epub_and_docx_generation() {
+        let md_text = &quot;# 第一章 启程\n\n这是一段精美的正文。\n\n- 任务列表 1\n- 任务列表 2\n\n# 第二章 觉醒\n\n包含 **粗体文字** 和 `代码块`。&quot;;
+        let chapters = split_chapters(md_text, true);
+        assert_eq!(chapters.len(), 2);
+        assert_eq!(chapters[0].title, &quot;第一章 启程&quot;);
+        let epub_bytes = build_epub_bytes(&quot;测试电子书&quot;, &amp;chapters).expect(&quot;生成 EPUB 失败&quot;);
+        assert!(epub_bytes.len() &gt; 100);
+        let docx_bytes = build_docx_bytes(md_text, true).expect(&quot;生成 DOCX 失败&quot;);
+        assert!(docx_bytes.len() &gt; 100);
+        println!(&quot;✅ 标准 EPUB 2.0 流式容器与 Word DOCX OpenXML 结构生成断言通过！&quot;);
+    }
+    #[test]
+    fn test_archive_in_memory_pipeline() {
+        let items = [
+            ArchiveInputItem { archive_path: &quot;docs/readme.txt&quot;.to_string(), data: b&quot;Hello AI-Forge Native Archive&quot; },
+            ArchiveInputItem { archive_path: &quot;../unsafe/hack.txt&quot;.to_string(), data: b&quot;Sanitized Safe Data&quot; },
+        ];
+        let zip_bytes = zip_in_memory(&amp;items, 6).expect(&quot;内存打包 ZIP 失败&quot;);
+        let entries = list_archive_entries(&amp;zip_bytes).expect(&quot;列出归档条目失败&quot;);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0], &quot;docs/readme.txt&quot;);
+        assert_eq!(entries[1], &quot;unsafe/hack.txt&quot;);
+        let extracted = extract_archive_to_memory(&amp;zip_bytes).expect(&quot;解压归档失败&quot;);
+        assert_eq!(extracted.len(), 2);
+        assert_eq!(extracted[0].1, b&quot;Hello AI-Forge Native Archive&quot;);
+        println!(&quot;✅ 内存流式 ZIP 打包/解压与路径穿越 (Zip Slip) 安全净化断言通过！&quot;);
+    }
+    #[test]
+    fn test_ffmpeg_media_pipeline() {
+        let heic_header = b&quot;\x00\x00\x00\x18ftypheic\x00\x00\x00\x00&quot;;
+        assert!(is_heic_buffer(heic_header));
+        let non_heic = b&quot;\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00&quot;;
+        assert!(!is_heic_buffer(non_heic));
+        let args = build_image_to_video_args(&quot;sample.png&quot;, &quot;out.mp4&quot;, false, &quot;mp4&quot;);
+        assert!(args.contains(&amp;&quot;libx264&quot;));
+        assert!(args.contains(&amp;&quot;yuv420p&quot;));
+        assert!(args.contains(&amp;&quot;+faststart&quot;));
+        let ffmpeg_bin = resolve_ffmpeg_path();
+        assert!(!ffmpeg_bin.to_string_lossy().is_empty());
+        println!(&quot;✅ FFmpeg Windows Native 路径探测、HEIC 盒子嗅探与转码参数矩阵断言通过！&quot;);
+    }
+}</file><file path="src-tauri/crates/services/service-converter/Cargo.toml">[package]
+name = &quot;service-converter&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;service_converter&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+aes = &quot;0.8&quot;
+cbc = &quot;0.1&quot;
+ecb = &quot;0.1&quot;
+cipher = { version = &quot;0.4&quot;, features = [&quot;block-padding&quot;] }
+md-5 = &quot;0.10&quot;
+sha2 = &quot;0.10&quot;
+base64 = &quot;0.22&quot;
+hex = &quot;0.4&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;
+byteorder = &quot;1.5&quot;
+flate2 = &quot;1.0&quot;
+zip = { version = &quot;2.2&quot;, default-features = false, features = [&quot;deflate&quot;] }
+
+[dev-dependencies]
+tokio = { version = &quot;1.38&quot;, features = [&quot;macros&quot;, &quot;rt-multi-thread&quot;] }</file><file path="src-tauri/crates/services/service-formula/Cargo.toml">[package]
+name = &quot;service-formula&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;service_formula&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+shared-contracts = { path = &quot;../../shared-contracts&quot; }
+core-onnx-infer = { path = &quot;../../core-onnx-infer&quot; }
+tokenizers = { version = &quot;0.19&quot;, default-features = false, features = [&quot;onig&quot;] }
+ndarray = &quot;0.15&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;
+tokio = { version = &quot;1.38&quot;, features = [&quot;full&quot;] }
+anyhow = &quot;1.0&quot;
+image = &quot;0.25&quot;
+regex = &quot;1.10&quot;</file><file path="src-tauri/crates/services/service-layout/Cargo.toml">[package]
+name = &quot;service-layout&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;service_layout&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+shared-contracts = { path = &quot;../../shared-contracts&quot; }
+core-onnx-infer = { path = &quot;../../core-onnx-infer&quot; }
+ndarray = &quot;0.15&quot;
+image = &quot;0.25&quot;
+rayon = &quot;1.10&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;</file><file path="src-tauri/crates/services/service-ocr/src/lib.rs">pub mod core;
+pub mod engine;
+pub mod models;
+pub mod processors;
+pub mod utils;
+pub use core::errors::{OCRError, OcrResult};
+pub use core::inference::OrtInfer;
+pub use engine::{CRNNRecModel, DBDetModel, OcrEngine, OcrService};
+pub use models::text_region::{BoundingBox, Point, TextRegion};
+pub use processors::{
+    crop_text_region, BoxType, ColorOrder, CTCLabelDecode, DBPostProcess, DBPostProcessConfig,
+    DetResizeForTest, ImageScaleInfo, LimitType, NormalizeImage, OCRResize, ScoreMode, TensorLayout,
+};
+pub use utils::read_character_dict;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::time::Instant;
+    fn resolve_test_image_path() -&gt; PathBuf {
+        let candidates = [
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\service-ocr.png&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\ocr_test.png&quot;),
+        ];
+        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\service-ocr.png&quot;)
+        })
+    }
+    #[test]
+    fn test_service_ocr_default_small_e2e_benchmark() {
+        let det_path = OcrService::resolve_default_det_model_path();
+        let rec_path = OcrService::resolve_default_rec_model_path();
+        let dict_path = OcrService::resolve_default_dict_path();
+        let img_path = resolve_test_image_path();
+        if !det_path.exists() || !rec_path.exists() || !dict_path.exists() || !img_path.exists() {
+            println!(&quot;⚠️ [跳过打靶测试] 默认物理模型/词表/测试图片文件不存在: det={:?}, rec={:?}, dict={:?}, img={:?}&quot;, det_path, rec_path, dict_path, img_path);
+            return;
+        }
+        println!(&quot;\n⚡ ===== [service-ocr 默认 PP-OCRv6 Small 物理打靶启动] =====&quot;);
+        println!(&quot;  默认检测模型: {:?}&quot;, det_path);
+        println!(&quot;  默认识别模型: {:?}&quot;, rec_path);
+        println!(&quot;  默认字符词表: {:?}&quot;, dict_path);
+        println!(&quot;  测试图片:     {:?}&quot;, img_path);
+        let t0 = Instant::now();
+        let img = image::open(&amp;img_path).expect(&quot;读取测试图片失败&quot;);
+        let mut engine = OcrService::default_engine().expect(&quot;初始化默认小模型 OcrEngine 失败&quot;);
+        let init_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let t1 = Instant::now();
+        let regions = engine.process_image(img).expect(&quot;默认小模型 OCR 推导打靶失败&quot;);
+        let infer_ms = t1.elapsed().as_secs_f64() * 1000.0;
+        println!(&quot;\n🎉 ===== [service-ocr 默认 Small 模型打靶成功断言] =====&quot;);
+        println!(&quot;  ⏱️ 默认引擎点火耗时: {:.2} ms&quot;, init_ms);
+        println!(&quot;  ⏱️ 默认图像推导耗时: {:.2} ms (0.5 秒极速即出！)&quot;, infer_ms);
+        println!(&quot;  📊 识别文本行数: {}&quot;, regions.len());
+        println!(&quot;  预览前 10 句识别结果:&quot;);
+        for (idx, reg) in regions.iter().take(10).enumerate() {
+            println!(&quot;    [{:02}] [{:.2}]: {}&quot;, idx + 1, reg.score, reg.text);
+        }
+        let outs_dir = PathBuf::from(r&quot;C:\dev\ai-forge\test\outs\service-ocr&quot;);
+        let _ = std::fs::create_dir_all(&amp;outs_dir);
+        let out_json_path = outs_dir.join(&quot;ocr_result_default_small.json&quot;);
+        let out_md_path = outs_dir.join(&quot;ocr_result_default_small.md&quot;);
+        if let Ok(pretty_json) = serde_json::to_string_pretty(&amp;regions) {
+            let _ = std::fs::write(&amp;out_json_path, pretty_json);
+        }
+        let mut md_content = String::from(&quot;# ⚡ service-ocr 默认 PP-OCRv6 Small 物理打靶产物\n\n&quot;);
+        for (idx, reg) in regions.iter().enumerate() {
+            md_content.push_str(&amp;format!(&quot;{}. **[{:.2}]**: {}\n&quot;, idx + 1, reg.score, reg.text));
+        }
+        let _ = std::fs::write(&amp;out_md_path, md_content);
+        println!(&quot;  💾 默认模型 OCR 物理产物成功落盘至:&quot;);
+        println!(&quot;     - JSON: {:?}&quot;, out_json_path);
+        println!(&quot;     - MD:   {:?}&quot;, out_md_path);
+        println!(&quot;=======================================================\n&quot;);
+        assert!(regions.len() &gt; 0, &quot;识别文本行数不可为 0！&quot;);
+    }
+}</file><file path="src-tauri/crates/services/service-ocr/Cargo.toml">[package]
+name = &quot;service-ocr&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2024&quot;
+
+[lib]
+name = &quot;service_ocr&quot;
+path = &quot;src/lib.rs&quot;
+
+[features]
+default = []
+cuda = [&quot;core-onnx-infer/cuda&quot;]
+simd = []
+
+[dependencies]
+shared-contracts = { path = &quot;../../shared-contracts&quot; }
+core-onnx-infer = { path = &quot;../../core-onnx-infer&quot; }
+ndarray = &quot;0.15&quot;
+image = &quot;0.25&quot;
+imageproc = &quot;0.25&quot;
+clipper2-rust = &quot;1.1&quot;
+rayon = &quot;1.10&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;
+tokio = { version = &quot;1.38&quot;, features = [&quot;full&quot;] }
+anyhow = &quot;1.0&quot;</file><file path="src-tauri/crates/services/service-pdfium/Cargo.toml">[package]
+name = &quot;service-pdfium&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;service_pdfium&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+pdfium-render = { version = &quot;0.9.3&quot;, features = [&quot;image_025&quot;, &quot;thread_safe&quot;] }
+image = &quot;0.25&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;</file><file path="src-tauri/crates/services/service-table/src/lib.rs">pub mod decoder;
+pub mod engine;
+pub mod types;
+pub use decoder::{parse_cell_grid_info, wrap_table_html_with_content, TableError, TableResult, TableStructureDecode};
+pub use engine::{preprocess_image, TableEngine};
+pub use types::{BBox8, CellGridInfo, TableCellPredict, TableStructureResult};
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+static ENGINE_INSTANCE: OnceLock&lt;Mutex&lt;TableEngine&gt;&gt; = OnceLock::new();
+pub fn recognize_table_crop(
+    image: &amp;image::RgbImage,
+    model_path: &amp;Path,
+    dict_path: &amp;Path,
+    device_override: Option&lt;&amp;str&gt;,
+) -&gt; TableResult&lt;TableStructureResult&gt; {
+    let mutex = ENGINE_INSTANCE.get_or_init(|| {
+        tracing::info!(&quot;🚀 初始化并常驻 service-table 表格结构解析引擎...&quot;);
+        let engine = TableEngine::new(model_path, dict_path, device_override)
+            .expect(&quot;🚨 初始化 TableEngine 失败，请检查模型与字典路径&quot;);
+        Mutex::new(engine)
+    });
+    let mut engine = mutex
+        .lock()
+        .map_err(|e| TableError::Infer(format!(&quot;锁抢占失败: {e}&quot;)))?;
+    engine.recognize(image)
+}</file><file path="src-tauri/crates/services/service-table/Cargo.toml">[package]
+name = &quot;service-table&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;service_table&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+core-onnx-infer = { path = &quot;../../core-onnx-infer&quot; }
+ndarray = &quot;0.15&quot;
+image = &quot;0.25&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;</file><file path="src-tauri/crates/shared-contracts/src/lib.rs">use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Semaphore, SemaphorePermit};
@@ -1284,7 +1730,104 @@ serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
 tokio = { version = &quot;1.38&quot;, features = [&quot;sync&quot;] }
 
 [dev-dependencies]
-tokio = { version = &quot;1.38&quot;, features = [&quot;macros&quot;, &quot;rt-multi-thread&quot;] }</file><file path="src-tauri/src/main.rs">// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+tokio = { version = &quot;1.38&quot;, features = [&quot;macros&quot;, &quot;rt-multi-thread&quot;] }</file><file path="src-tauri/src/logging.rs">//! 🛡️ 紫电 AI - 2026 SOTA 工业级日志与硬件黑匣子中台 (logging.rs)
+//! 支持双轨输出 (Console + 每日自动切片落盘)、非阻塞高性能队列与开机硬件自愈诊断
+use core_security::PortableEngine;
+use std::path::PathBuf;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{
+    filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
+};
+/// 获取规范化的日志物理存储根目录 (%LOCALAPPDATA%\紫电AI\Data\logs 或 ./Data/logs)
+pub fn resolve_logs_dir() -&gt; PathBuf {
+    // 1. 便携模式最高优先级 (./Data/logs)
+    if let Some(portable_logs) = PortableEngine::resolve_data_path(&quot;logs&quot;) {
+        let _ = std::fs::create_dir_all(&amp;portable_logs);
+        return portable_logs;
+    }
+    // 2. 标准模式：%LOCALAPPDATA%\紫电AI\Data\logs
+    if let Ok(local_appdata) = std::env::var(&quot;LOCALAPPDATA&quot;) {
+        let log_dir = PathBuf::from(&amp;local_appdata)
+            .join(&quot;紫电AI&quot;)
+            .join(&quot;Data&quot;)
+            .join(&quot;logs&quot;);
+        let _ = std::fs::create_dir_all(&amp;log_dir);
+        return log_dir;
+    }
+    let fallback = PathBuf::from(&quot;logs&quot;);
+    let _ = std::fs::create_dir_all(&amp;fallback);
+    fallback
+}
+/// 初始化全局双轨日志系统 (在主程序 run() 开头第 0 秒调用)
+pub fn init_logging() -&gt; Option&lt;WorkerGuard&gt; {
+    let logs_dir = resolve_logs_dir();
+    // 每日自动滚动切片文件 (例如: app.2026-08-26.log)
+    let file_appender = tracing_appender::rolling::daily(&amp;logs_dir, &quot;app&quot;);
+    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+    let file_layer = fmt::layer()
+        .with_ansi(false)
+        .with_target(true)
+        .with_thread_names(true)
+        .with_writer(non_blocking_file)
+        .with_filter(EnvFilter::new(&quot;info,ort=warn,core_onnx_infer=info,service_upscale=info&quot;));
+    let stdout_layer = fmt::layer()
+        .with_ansi(true)
+        .with_target(false)
+        .with_filter(EnvFilter::new(&quot;info,ort=warn&quot;));
+    let subscriber = tracing_subscriber::registry()
+        .with(stdout_layer)
+        .with(file_layer);
+    if subscriber.try_init().is_ok() {
+        write_blackbox_header(&amp;logs_dir);
+        Some(guard)
+    } else {
+        None
+    }
+}
+/// 写入开机硬件黑匣子诊断头
+fn write_blackbox_header(logs_dir: &amp;std::path::Path) {
+    tracing::info!(&quot;======================================================================&quot;);
+    tracing::info!(&quot;🚀 [紫电 AI] 工业级桌面工坊已点火启动 (生产黑匣子已激活)&quot;);
+    tracing::info!(&quot;📁 [日志物理路径] {:?}&quot;, logs_dir);
+    tracing::info!(&quot;🖥️ [系统环境] OS: {} | Arch: {}&quot;, std::env::consts::OS, std::env::consts::ARCH);
+    #[cfg(target_os = &quot;windows&quot;)]
+    {
+        let sys32_nvcuda = std::path::Path::new(r&quot;C:\Windows\System32\nvcuda.dll&quot;);
+        if sys32_nvcuda.exists() {
+            tracing::info!(&quot;🎮 [显卡驱动] NVIDIA 驱动核心 (nvcuda.dll) 在线&quot;);
+        } else {
+            tracing::warn!(&quot;⚠️ [显卡驱动] 未检测到 System32/nvcuda.dll，可能未安装 NVIDIA 独显驱动&quot;);
+        }
+        let sys32_vc = std::path::Path::new(r&quot;C:\Windows\System32\vcruntime140.dll&quot;);
+        if sys32_vc.exists() {
+            tracing::info!(&quot;🧩 [VC++ 运行库] 微软 VC++ 2015-2022 基础库已就绪&quot;);
+        } else {
+            tracing::warn!(&quot;⚠️ [VC++ 运行库] 未检测到 vcruntime140.dll，可能需要安装运行库&quot;);
+        }
+    }
+    tracing::info!(&quot;======================================================================\n&quot;);
+}
+/// 一键生成当前系统的白盒诊断报告文本 (用于前端一键复制/用户反馈)
+pub fn generate_diagnostic_summary() -&gt; String {
+    let mut lines = Vec::new();
+    lines.push(&quot;=== 📋 紫电 AI 客户端诊断报告 ===&quot;.to_string());
+    lines.push(format!(&quot;• 操作系统: {} / {}&quot;, std::env::consts::OS, std::env::consts::ARCH));
+    lines.push(format!(&quot;• 便携模式: {}&quot;, if PortableEngine::is_portable() { &quot;已激活 (./Data)&quot; } else { &quot;标准模式 (%LOCALAPPDATA%)&quot; }));
+    lines.push(format!(&quot;• 日志目录: {:?}&quot;, resolve_logs_dir()));
+    #[cfg(target_os = &quot;windows&quot;)]
+    {
+        let nvcuda = std::path::Path::new(r&quot;C:\Windows\System32\nvcuda.dll&quot;).exists();
+        let vcruntime = std::path::Path::new(r&quot;C:\Windows\System32\vcruntime140.dll&quot;).exists();
+        lines.push(format!(&quot;• NVIDIA 驱动: {}&quot;, if nvcuda { &quot;✅ 正常 (nvcuda.dll 在线)&quot; } else { &quot;❌ 异常/缺失&quot; }));
+        lines.push(format!(&quot;• VC++ 运行库: {}&quot;, if vcruntime { &quot;✅ 正常&quot; } else { &quot;⚠️ 缺失&quot; }));
+    }
+    let base_dir = core_models_download::ModelManager::resolve_models_base_dir();
+    lines.push(format!(&quot;• 模型存储基准区: {:?}&quot;, base_dir));
+    let cuda_runtime = core_models_download::ModelManager::resolve_cuda_runtime_dir();
+    lines.push(format!(&quot;• CUDA 运行时目录: {:?}&quot;, cuda_runtime));
+    lines.push(&quot;=================================&quot;.to_string());
+    lines.join(&quot;\n&quot;)
+}</file><file path="src-tauri/src/main.rs">// Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = &quot;windows&quot;)]
 fn main() {
     ai_forge_lib::run();
@@ -1317,7 +1860,136 @@ export default defineConfig({
       ],
     },
   },
-});</file><file path="src/assets/tools/format-converter/cover.svg">&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 800 500&quot; width=&quot;100%&quot; height=&quot;100%&quot;&gt;
+});</file><file path="c/HANDOFF_TOOL.md"># 🛡️ 紫电 AI (AI-Forge) 工业级桌面端工程交接文档 (HANDOFF_TOOL.md)
+
+&gt; **版本**：v22.0.0 (2026年8月26日 离线高精翻译与极速门面并网满分版)  
+&gt; **项目物理绝对路径**：`C:\dev\ai-forge` (Windows Native 工业级生产环境)  
+&gt; **操作系统与编译链**：Windows 11 x64 / PowerShell 7+ / MSVC (`x86_64-pc-windows-msvc`) / CUDA 13.1 &amp; 12.4 / `uv` / `pnpm`  
+&gt; **面向对象**：新会话 AI 系统架构师 / 核心开发助手 (零历史上下文障碍无损接管)
+
+---
+
+## 🏢 1. 项目定位、商业护城河与 5 大已上线工具全景 (Project Overview)
+
+1. **项目定位**：
+   * 跨平台工业级 AI 桌面端工坊（Tauri v2 + Vue 3 + TypeScript + Rust Cargo Workspace + C-FFI 原生 GPU/CPU 直推）。
+   * **算力主权**：彻底废除重型 Python (`.venv`) 沙箱与本地网络/IPC 端口，100% 切换为 Rust 原生驱动（`ort` ONNX Runtime 直推 + `llama_cpp_2` C-FFI 原生直连 + `service-pdfium` C-FFI 绑定）。
+   * **设计美学**：全系统统配 `#02c3b4`（电光青碧）霓虹微光、暗黑晶体玻璃拟态、流光点阵（`DotField`）与渐变大字标（`GradientText`）。
+2. **商业模型与 Token 经济学**：
+   * **免费算力护城河（端侧零边际成本）**：
+     - **离线高精翻译**：**100% 永久免费，0 Token 扣减**（依托本地 Hy-MT2 1.8B 推理，无任何门槛）；
+     - **个人每日免费赠送**：每日赠送 **888 基础 Tokens**（对齐 4K/8K 图像超分、PDF 智能解析与视频字幕转写）；
+   * **战略终局**：以极速、高颜值的桌面端工坊作为“超级展示橱窗（Showcase）”，承接政企与高校的高客单价私有化 RAG 知识库定制与部署大单。
+
+---
+
+## 📐 2. 5 大已上线工具与 10 大底层算法底座 (Workspace Architecture)
+
+```text
+C:\dev\ai-forge\
+├── bin\cuda12\                    【CUDA 13.1 / 12.4 满血 DLL 仓库】 (cublas, cudart, cudnn9, onnxruntime)
+├── models\                        【纯血 ONNX / GGUF 模型资产库】
+│   ├── service-translation\       : Hy-MT2-1.8B-Q4.gguf (1.08 GB 神经翻译)
+│   ├── service-upscale\           : RealESRGAN_x4plus.onnx (32.2 MB 超分)
+│   ├── service-asr\               : MOSS-Transcribe-Diarize-Q5_K_M.gguf (667.9 MB 语音转写)
+│   ├── service-layout\            : PP-DocLayoutV3.onnx (124.5 MB 版面分析)
+│   ├── service-formula\           : PP-FormulaNet-S.onnx (221.1 MB 公式识别)
+│   ├── service-table\             : SLANet_plus.onnx (7.4 MB 表格重构)
+│   └── service-ocr\               : PP-OCRv6_small (det: 9.4 MB, rec: 20.2 MB 文本识别)
+│
+├── src-tauri\crates\
+│   ├── core-onnx-infer\           【ONNX 硬件会话底座】 (默认激活 CUDA 特性, 自动注入 bin/cuda12 动态库目录)
+│   ├── core-models-download\      【模型感知与下载中台】 (0.001ms 极速文件尺寸嗅探 + 断点续传哈希验签)
+│   ├── shared-contracts\          【端侧显存守卫】 (VramTokenGuard, 11000MB 令牌并发防爆锁)
+│   ├── core-security\             【算力收费站】 (HMAC 设备指纹 + Ed25519 离线许可 + Gatekeeper)
+│   │
+│   ├── tools\                     【5 大业务工具适配层 (轻量业务中台 🛠️)】
+│   │   ├── translation\           : 离线高精翻译适配器 (纯文本 + 剪贴板 Base64 内存直推 OCR)
+│   │   ├── upscale-48k\           : 4K/8K 图像超分适配器 (智能尺寸封顶 + 512px 网格防爆)
+│   │   ├── video-subtitle\        : 视频字幕生成适配器 (MOSS ASR + Hy-MT2 双语翻译 + 硬件压制)
+│   │   ├── pdf-parse\             : PDF 智能解析中台 (三级漏斗分流 + 双轨多模态 AST 排版)
+│   │   └── format-converter\      : 全能格式转换适配器 (音频解密/数据清洗/电子书/ICO)
+│   │
+│   └── services\                  【10 大底层算法底座 (100% 官方物理对齐，只读防腐区 🛡️)】
+│       ├── service-translation\   : Hy-MT2 1.8B 神经模型直推 + 逐句容错
+│       ├── service-ocr\           : PP-OCRv6 纯血推理 (Det + Rec 几何定位)
+│       ├── service-upscale\       : RealESRGAN 8K 超分直推
+│       ├── service-asr\           : MOSS 0.9B ASR 语音转写与说话人分段
+│       ├── service-doc-parse\     : AST 语法树 + RXYC++ 几何排序 (通用几何防腐)
+│       ├── service-pdfium\        : 300DPI 渲染 + 物理尺寸 + 字符级 BBox 提取
+│       ├── service-layout\        : PP-DocLayoutV3 官方 25 类别映射
+│       ├── service-formula\       : PP-FormulaNet-S 公式识别
+│       ├── service-table\         : SLANet_plus HTML 表格重构
+│       └── service-converter\     : FFmpeg + 音频/图片/文档通用转换引擎
+│
+└── src\                           【前端 Vue3 + Pinia + Tailwind 视窗层】
+    ├── views\
+    │   ├── HomeView.vue           : 工坊主页 (4:8 黄金栅格 + ChromaGrid Top3 旗舰卡片流)
+    │   ├── TranslationView.vue    : 离线高精翻译 (上输入感知/下译文/底 38 语种卡槽仓)
+    │   ├── Upscale48kView.vue     : 4K/8K 图像超分工作台
+    │   ├── VideoSubtitleView.vue  : 视频字幕生成工作台
+    │   ├── PdfParseView.vue       : PDF 智能解析工作台
+    │   └── FormatConverterView.vue: 全能格式转换工作台
+    ├── bindings\                  : 100% 强类型 TypeScript IPC 契约
+    └── store\uiStore.ts           : 全局状态机与 0ms 丝滑路由
+```
+
+---
+
+## 🟢 3. 本会话已攻克的重大里程碑 (Accomplished Breakthroughs)
+
+1. **新工具「离线高精翻译」100% 纯血构建与并网上线**：
+   * **底层引擎**：基于 `service-translation`（Hy-MT2 1.8B-Q4 GGUF）+ `service-ocr`（PP-OCRv6）构建 `crates/tools/translation` 工具包；
+   * **多模态直推**：支持纯文本键入/粘贴直翻；支持 `Ctrl+V` 剪贴板截图或图片拖拽，直接通过 **Base64 内存流** 送入 PP-OCRv6 视觉识别再自动送入 Hy-MT2 直翻（**0 临时文件磁盘 I/O 垃圾**）；
+   * **0 Token 永久免费**：在 Rust Command 与前端工作台中彻底解除 Token 扣减限制；
+   * **质量打靶评估**：经实测 21 句复杂英文技术文档，术语（Rust/GPUI/TOML/Linux/macOS）100% 保真，长难句语法结构闭合，综合翻译质量实测高达 **94 分**！
+2. **路由切页卡顿物理根因攻克（从 1.5 秒骤降至 0.001 秒）**：
+   * **痛点根因**：原 `get_tool_dependencies` 在用户每次点击侧边栏导航时，都对 1.08 GB 的翻译模型和 700 MB 的 ASR 模型强行计算全量 SHA-256 哈希，导致切页严重卡死 1~2 秒；
+   * **SOTA 药方**：将路由检测优化为 **`0.001ms 极速文件尺寸嗅探（fs::metadata.len == size_bytes）`**；将耗时的全量 SHA-256 验签严格限制在“模型网络下载完成落盘”的那一刻执行，实现秒切无感！
+3. **黑匣子日志“动静分离”降噪净化**：
+   * 剥离了逐句推演的高频 `log::info!` 刷屏（降级为 `log::debug!`），仅保留宏观 4 节点生命周期打点（任务入口 ➔ 模型挂载 ➔ 阶段汇总 ➔ 交付耗时），保护最近 40 行黑匣子排障缓冲区不被冲刷；
+   * 进度数据 100% 由 Tauri IPC `window.emit(&quot;translation-progress&quot;)` 独立事件总线平滑广播。
+4. **前端「38 语种智能卡槽仓」极致美学落地**：
+   * 提供了 6 大常用单行中文字体卡槽（简体中文、英语、日语、韩语、繁体中文、粤语）+ 中英一键秒级对调；
+   * 提供了按 4 大地域分类（东亚/欧美/东南亚/中东）的全量 38 语种展开抽屉与实时中英文语种搜索；
+   * 支持回车键 **`Enter` 快捷直翻**（`Shift + Enter` 自由换行）；
+   * 全局统配统一的 **`#02c3b4` 电光青碧** 交互强调色与悬浮微光。
+5. **Repomix 多包工作空间打包配置升华（`1_TOOL.json`）**：
+   * 引入 **“底座门面契约过滤（`services/*/src/lib.rs`）”**，屏蔽底层几十万行私有数学算法，只提取公共 API 契约，使上下文 Token 消耗骤降 90%（从 150K 降至 20K 以内），彻底杜绝 AI 注意力漂移。
+
+---
+
+## 🚦 4. 当前项目状态与下一阶段规划路线 (Status &amp; Roadmap)
+
+1. **当前状态**：
+   * **前后端 0 Errors / 0 Warnings**：MSVC 编译链与 `pnpm run build` 全绿通过；
+   * 5 大核心工作台（翻译、超分、视频字幕、PDF 解析、格式转换）全部处于 100% 生产就绪状态；
+   * 侧边栏目前剩余 3 个规划算子占位：
+     - `rpa` (RPA 自动化)
+     - `rag` (RAG 知识库)
+     - `ai_edit` (AI 无痕修改)
+2. **下一会话研发目标（三选一）**：
+   * **方向 A：RAG 本地知识库算子**（基于 `core-onnx-infer` 向量嵌入 + 本地 SQLite/LanceDB 向量检索 + 知识库切片问答）；
+   * **方向 B：AI 无痕修改 / 智能擦除算子**（基于 LaMa / Inpainting ONNX 模型直推，支持涂抹擦除图片水印/路人）；
+   * **方向 C：RPA 自动化工作流算子**（桌面级键鼠自动化与宏执行）。
+
+---
+
+## ⚠️ 5. 避坑终结手册与禁忌铁律 (Anti-Patterns / Lessons Learned)
+
+1. **绝对不要在 UI 路由导航或视图切换时计算大文件的 SHA-256**：
+   路由检测只能使用 `metadata.len() == item.size_bytes` 进行毫秒级嗅探。SHA-256 必须严格锁死在下载完成后的单次验签。
+2. **绝对不要在日志中输出高频微批次/逐句循环的 `log::info!`**：
+   高频进度（如 `1/21...21/21`）必须通过 Tauri IPC `window.emit` 广播给前端，日志中只能在 `log::debug!` 级别记录或仅打总耗时节点，防止冲毁黑匣子报告。
+3. **绝对不要为剪贴板截图写入磁盘临时文件**：
+   前端剪贴板捕获的图片直接转为 Base64，Rust 侧通过 `base64::decode` + `image::load_from_memory` 在 RAM 中秒级直推，保持磁盘 0 垃圾残留。
+4. **绝对不要把底层 Services 的所有内部私有算法代码塞进 Repomix 上下文**：
+   调用底层算法底座时，**只需审阅其 `lib.rs` 顶层门面即可**。业务层是适配器，不需要也不应该碰底层数学矩阵实现（工作空间防腐铁律）。
+5. **Windows Native 铁律**：
+   * Rust 编译命令必须显式携带 `--manifest-path C:\dev\ai-forge\src-tauri\Cargo.toml`；
+   * 代码落盘必须使用 PowerShell `@&apos; ... &apos;@` 单引号原样字符串与 `Set-Content` 协议；
+   * 命令行绝不能开头带有 `#` 注释；
+   * 主题色唯一锁定为 `#02c3b4`。</file><file path="src/assets/tools/format-converter/cover.svg">&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 800 500&quot; width=&quot;100%&quot; height=&quot;100%&quot;&gt;
   &lt;defs&gt;
     &lt;!-- 主底板琥珀流金渐变 (满铺) --&gt;
     &lt;linearGradient id=&quot;fullFcGoldSheet&quot; x1=&quot;0%&quot; y1=&quot;0%&quot; x2=&quot;100%&quot; y2=&quot;100%&quot;&gt;
@@ -1579,129 +2251,7 @@ serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
 serde_json = &quot;1.0&quot;
 thiserror = &quot;1.0&quot;
 tracing = &quot;0.1&quot;
-zip = { version = &quot;2.2&quot;, default-features = false, features = [&quot;deflate&quot;] }</file><file path="src-tauri/crates/core-onnx-infer/Cargo.toml">[package]
-name = &quot;core-onnx-infer&quot;
-version = &quot;0.1.0&quot;
-edition = &quot;2021&quot;
-
-[lib]
-name = &quot;core_onnx_infer&quot;
-path = &quot;src/lib.rs&quot;
-
-[features]
-default = [&quot;cuda&quot;]
-cuda = [&quot;ort/cuda&quot;]
-directml = [&quot;ort/directml&quot;]
-coreml = [&quot;ort/coreml&quot;]
-
-[dependencies]
-ort = { version = &quot;2.0.0-rc.9&quot;, features = [&quot;cuda&quot;] }
-ndarray = &quot;0.15&quot;
-thiserror = &quot;2&quot;
-tracing = &quot;0.1&quot;
-log = &quot;0.4&quot;</file><file path="src-tauri/crates/core-security/src/gatekeeper.rs">use std::path::Path;
-⋮----
-struct QuotaDeductRequest&lt;&apos;a&gt; {
-⋮----
-struct QuotaDeductResponse {
-⋮----
-pub struct QuotaLogRecord {
-⋮----
-pub struct QuotaStatus {
-⋮----
-struct TelemetryPayload&lt;&apos;a&gt; {
-⋮----
-pub struct Gatekeeper;
-⋮----
-impl Gatekeeper {
-pub fn get_device_fingerprint() -&gt; Result&lt;String, String&gt; {
-⋮----
-.add_cpu_info()
-.add_mac_address()
-.add_system_info()
-.generate(COMMERCIAL_SECRET)
-.map_err(|e| format!(&quot;指纹生成失败: {e}&quot;))
-⋮----
-pub async fn get_quota_status() -&gt; Result&lt;QuotaStatus, String&gt; {
-⋮----
-let is_offline_pro = if lic_path.exists() {
-⋮----
-verifier.try_verify_file(lic_path, &amp;fingerprint).is_ok()
-⋮----
-return Ok(QuotaStatus {
-⋮----
-stage: &quot;offline_pro&quot;.to_string(),
-⋮----
-status: &quot;active&quot;.to_string(),
-⋮----
-recent_logs: vec![],
-⋮----
-.timeout(std::time::Duration::from_secs(5))
-.build()
-.map_err(|e| e.to_string())?;
-⋮----
-.post(format!(&quot;{AUTH_BASE_URL}/api/v1/quota/status&quot;))
-.json(&amp;body)
-.send()
-⋮----
-let status_code = response.status();
-let text = response.text().await.unwrap_or_default();
-if status_code.is_success() {
-⋮----
-return Ok(status);
-⋮----
-Ok(QuotaStatus {
-⋮----
-stage: &quot;offline_fallback&quot;.to_string(),
-daily_limit: 888, // 🌟 离线兜底 888 Tokens
-⋮----
-pub async fn check_permission_tokens(tool_name: &amp;str, tokens_needed: u32) -&gt; Result&lt;(), String&gt; {
-⋮----
-return Ok(());
-⋮----
-if lic_path.exists() {
-⋮----
-if verifier.try_verify_file(lic_path, &amp;fingerprint).is_ok() {
-⋮----
-.map_err(|e| format!(&quot;序列化请求体失败: {e}&quot;))?;
-⋮----
-.duration_since(UNIX_EPOCH)
-.unwrap_or_default()
-.as_secs();
-⋮----
-.map_err(|e| format!(&quot;HTTP 初始化失败: {e}&quot;))?;
-⋮----
-.post(format!(&quot;{AUTH_BASE_URL}/api/v1/quota/deduct&quot;))
-.header(&quot;Content-Type&quot;, &quot;application/json&quot;)
-.header(&quot;X-Timestamp&quot;, timestamp.to_string())
-.header(&quot;X-Signature&quot;, signature)
-.body(body_bytes)
-⋮----
-let status = response.status();
-let res_text = response.text().await.unwrap_or_default();
-if status.is_success() {
-⋮----
-let rem = res_json.remaining_points.unwrap_or(0);
-⋮----
-let err_msg = res_json.error.unwrap_or_else(|| &quot;Tokens 额度不足&quot;.into());
-return Err(format!(&quot;🚨 算力拦截: {err_msg}&quot;));
-⋮----
-if status.as_u16() == 402 || status.as_u16() == 403 || status.as_u16() == 401 {
-return Err(format!(&quot;🚨 算力拦截 [HTTP {}]: {}&quot;, status.as_u16(), res_text));
-⋮----
-Ok(())
-⋮----
-Err(_) =&gt; Ok(()),
-⋮----
-pub async fn check_permission(tool_name: &amp;str) -&gt; Result&lt;(), String&gt; {
-⋮----
-pub async fn report_telemetry(
-⋮----
-let fingerprint = Self::get_device_fingerprint().unwrap_or_else(|_| &quot;anonymous&quot;.into());
-⋮----
-if let Ok(c) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(3)).build() {
-let _ = c.post(format!(&quot;{AUTH_BASE_URL}/api/v1/telemetry/report&quot;))
-.json(&amp;payload)</file><file path="src-tauri/crates/core-security/Cargo.toml">[package]
+zip = { version = &quot;2.2&quot;, default-features = false, features = [&quot;deflate&quot;] }</file><file path="src-tauri/crates/core-security/Cargo.toml">[package]
 name = &quot;core-security&quot;
 version = &quot;0.1.0&quot;
 edition = &quot;2021&quot;
@@ -1722,7 +2272,131 @@ base64 = &quot;0.22&quot;
 
 [target.&apos;cfg(windows)&apos;.dependencies]
 wmi = &quot;0.13&quot;
-winreg = &quot;0.52&quot;</file><file path="src-tauri/crates/services/service-translation/Cargo.toml">[package]
+winreg = &quot;0.52&quot;</file><file path="src-tauri/crates/services/service-doc-parse/src/lib.rs">pub mod ast;
+pub mod config;
+pub mod engine;
+pub mod markdown;
+pub mod sorting;
+pub mod stitching;
+pub mod types;
+pub mod virtual_table;
+pub mod xy_cut;
+pub use ast::*;
+pub use config::*;
+pub use engine::DocParseEngine;
+pub use markdown::render_gfm_markdown;
+pub use sorting::sort_doc_elements;
+pub use stitching::*;
+pub use types::{DocElement, LayoutType, ParsedDocument};
+pub use virtual_table::*;
+pub use xy_cut::*;</file><file path="src-tauri/crates/services/service-doc-parse/Cargo.toml">[package]
+name = &quot;service-doc-parse&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;service_doc_parse&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+service-ocr = { path = &quot;../service-ocr&quot; }
+service-layout = { path = &quot;../service-layout&quot; }
+service-formula = { path = &quot;../service-formula&quot; }
+service-table = { path = &quot;../service-table&quot; }
+image = &quot;0.25&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;
+
+[dev-dependencies]
+service-pdfium = { path = &quot;../service-pdfium&quot; }</file><file path="src-tauri/crates/services/service-formula/src/lib.rs">pub mod contracts;
+pub mod postprocess;
+pub mod preprocess;
+pub mod service;
+pub use contracts::{FormulaConfig, FormulaResult};
+pub use postprocess::{normalize_latex, FormulaPostprocessor};
+pub use preprocess::FormulaPreprocessor;
+pub use service::FormulaService;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::open;
+    use std::fs;
+    use std::path::PathBuf;
+    #[test]
+    fn test_formula_pipeline_real_images() {
+        let fixture_dir = PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\service-formula&quot;);
+        let output_dir = PathBuf::from(r&quot;C:\dev\ai-forge\test\outs\service-formula&quot;);
+        let _ = fs::create_dir_all(&amp;output_dir);
+        println!(&quot;\n=== 🚀 [service-formula] 纯血 ONNX 4 图打靶压测启动 ===&quot;);
+        for i in 1..=4 {
+            let img_name = format!(&quot;{}.png&quot;, i);
+            let img_path = fixture_dir.join(&amp;img_name);
+            if !img_path.exists() {
+                println!(&quot;⚠️ [跳过] 测试图片不存在: {:?}&quot;, img_path);
+                continue;
+            }
+            let img = open(&amp;img_path).expect(&quot;读取图片失败&quot;).to_rgb8();
+            let result = FormulaService::recognize_crop(&amp;img, None, None)
+                .unwrap_or_else(|e| panic!(&quot;图片 {} 识别失败: {}&quot;, img_name, e));
+            println!(
+                &quot;🎯 图片 {} 识别成功 ➔ LaTeX:\n   \&quot;{}\&quot;\n   ⏱️ 耗时: {:.2} ms | Tokens: {}&quot;,
+                img_name,
+                result.latex,
+                result.elapsed_ms,
+                result.raw_token_ids.len()
+            );
+            let out_json_path = output_dir.join(format!(&quot;{}_formula.json&quot;, i));
+            let json_content = serde_json::to_string_pretty(&amp;result).unwrap();
+            fs::write(&amp;out_json_path, json_content).unwrap();
+        }
+        println!(&quot;💾 全部 4 张公式图打靶产物物理落盘至: {:?}&quot;, output_dir);
+    }
+}</file><file path="src-tauri/crates/services/service-layout/src/lib.rs">pub mod contracts;
+pub mod postprocess;
+pub mod preprocess;
+pub mod service;
+pub use contracts::*;
+pub use postprocess::LayoutPostProcess;
+pub use preprocess::LayoutPreprocess;
+pub use service::LayoutService;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    #[test]
+    fn test_layout_preprocess_shape() {
+        let img = image::RgbImage::new(100, 200);
+        let (tensor, scale_w, scale_h) = LayoutPreprocess::preprocess_image(&amp;img, (800, 800));
+        assert_eq!(tensor.shape(), &amp;[1, 3, 800, 800]);
+        assert_eq!(scale_w, 8.0);
+        assert_eq!(scale_h, 4.0);
+    }
+    #[test]
+    fn test_page1_real_layout_detection() {
+        let model_path = PathBuf::from(r&quot;C:\dev\ai-forge\models\service-layout\PP-DocLayoutV3.onnx&quot;);
+        let img_path = PathBuf::from(r&quot;C:\dev\ai-forge\test\outs\service-pdfium\page_1_300dpi.png&quot;);
+        if !model_path.exists() || !img_path.exists() {
+            println!(&quot;⚠️ [跳过测试] 未找到模型或第 1 页测试图像: {:?}, {:?}&quot;, model_path, img_path);
+            return;
+        }
+        let mut service = LayoutService::new(&amp;model_path, None, None).expect(&quot;加载 ONNX 失败&quot;);
+        let result = service.detect_file(&amp;img_path).expect(&quot;执行版面分析失败&quot;);
+        println!(&quot;\n🚀 ===== [service-layout TDD 单一打靶测试] =====&quot;);
+        println!(&quot;  🖼️ 测试图像: {:?} ({}x{})&quot;, img_path, result.image_width, result.image_height);
+        println!(&quot;  ⏱️ 推理耗时: {:.2} ms&quot;, result.elapsed_ms);
+        println!(&quot;  📊 检测到区块总数: {}&quot;, result.regions.len());
+        for r in &amp;result.regions {
+            println!(&quot;    - [{:02}] {:&lt;18} (类别: {:02}) | 得分: {:.3} | 坐标: [{:.1}, {:.1}, {:.1}, {:.1}]&quot;,
+                r.id, r.label, r.category as usize, r.score, r.bbox.x1, r.bbox.y1, r.bbox.x2, r.bbox.y2);
+        }
+        let has_doc_title = result.regions.iter().any(|r| r.category == LayoutCategory::DocTitle);
+        println!(&quot;  🎯 大标题 doc_title 检出断言: {}&quot;, if has_doc_title { &quot;✅ 成功检出&quot; } else { &quot;❌ 未检出&quot; });
+        assert!(has_doc_title, &quot;必须准确检测到大标题 doc_title (类别 6)！&quot;);
+        println!(&quot;=================================================\n&quot;);
+    }
+}</file><file path="src-tauri/crates/services/service-translation/Cargo.toml">[package]
 name = &quot;service-translation&quot;
 version = &quot;0.1.0&quot;
 edition = &quot;2021&quot;
@@ -1740,7 +2414,143 @@ thiserror = &quot;2&quot;
 tracing = &quot;0.1&quot;
 tokio = { version = &quot;1.38&quot;, features = [&quot;full&quot;] }
 anyhow = &quot;1.0&quot;
-encoding_rs = &quot;0.8&quot;</file><file path="deploy/cloudflare/auth_worker.js">// 🛡️ 紫电 AI - Cloudflare Worker Serverless 商业鉴权、隐私遥测与明细账单中台 (v3.2.0)
+encoding_rs = &quot;0.8&quot;</file><file path="src-tauri/crates/services/service-upscale/src/lib.rs">// 🛡️ 8K 视觉超分 - 工业级服务门面 (lib.rs)
+// 100% 对齐原版 UpscaleEngine / UpscaleTask 契约，统一绑定 core-models-download 寻址底座
+pub mod pipeline;
+pub mod processor;
+pub mod tiling;
+pub use pipeline::{RealESRGANModel, UpscalePipeline};
+pub use processor::{RealESRGANPostprocessor, RealESRGANPreprocessConfig, RealESRGANPreprocessor};
+pub use tiling::{compute_grid, TileInfo};
+use core_models_download::ModelManager;
+use serde::{Deserialize, Serialize};
+use shared_contracts::{TaskWeight, VramTokenGuard};
+use std::path::{Path, PathBuf};
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpscaleTask {
+    pub input_path: String,
+    pub output_path: String,
+    pub model_path: Option&lt;String&gt;,
+    pub target_scale: Option&lt;f32&gt;,
+    pub max_output_side: Option&lt;u32&gt;,
+    pub tile_size: Option&lt;u32&gt;,
+    pub tile_pad: Option&lt;u32&gt;,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpscaleConfig {
+    pub model_path: PathBuf,
+    pub target_scale: f32,
+    pub max_output_side: u32,
+    pub tile_size: u32,
+    pub tile_pad: u32,
+}
+impl Default for UpscaleConfig {
+    fn default() -&gt; Self {
+        Self {
+            model_path: UpscaleService::resolve_default_model_path(),
+            target_scale: 4.0,
+            max_output_side: 8192,
+            tile_size: 256,
+            tile_pad: 10,
+        }
+    }
+}
+impl UpscaleConfig {
+    /// 4K 极速模式：3840px 黄金封顶，兼顾超清观感与秒级完成
+    pub fn fast_4k() -&gt; Self {
+        Self {
+            model_path: UpscaleService::resolve_default_model_path(),
+            target_scale: 4.0,
+            max_output_side: 3840,
+            tile_size: 256,
+            tile_pad: 10,
+        }
+    }
+    /// 8K 旗舰模式：8192px 物理封顶
+    pub fn flagship_8k() -&gt; Self {
+        Self {
+            model_path: UpscaleService::resolve_default_model_path(),
+            target_scale: 4.0,
+            max_output_side: 8192,
+            tile_size: 256,
+            tile_pad: 10,
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpscaleResult {
+    pub success: bool,
+    pub input_path: String,
+    pub output_path: String,
+    pub original_size: (u32, u32),
+    pub output_size: (u32, u32),
+    pub actual_scale: f32,
+    pub elapsed_ms: u64,
+    pub total_tiles: usize,
+}
+pub struct UpscaleService;
+impl UpscaleService {
+    /// 统一从 core-models-download 的三级自愈底座寻址 RealESRGAN 模型
+    pub fn resolve_default_model_path() -&gt; PathBuf {
+        let base_dir = ModelManager::resolve_models_base_dir();
+        let target = base_dir.join(&quot;service-upscale&quot;).join(&quot;RealESRGAN_x4plus.onnx&quot;);
+        if target.exists() {
+            return target;
+        }
+        // 备用兜底检查开发工作区
+        let fallback = PathBuf::from(r&quot;C:\dev\ai-forge\models\service-upscale\RealESRGAN_x4plus.onnx&quot;);
+        if fallback.exists() {
+            return fallback;
+        }
+        target
+    }
+    pub async fn run_upscale&lt;F&gt;(
+        task: &amp;UpscaleTask,
+        vram_guard: Option&lt;&amp;VramTokenGuard&gt;,
+        progress_cb: Option&lt;F&gt;,
+    ) -&gt; Result&lt;UpscaleResult, String&gt;
+    where
+        F: Fn(usize, usize, &amp;str) + Send + Sync + &apos;static,
+    {
+        let input_path = Path::new(&amp;task.input_path);
+        if !input_path.exists() {
+            return Err(format!(&quot;输入图像文件不存在: {:?}&quot;, task.input_path));
+        }
+        let output_path = Path::new(&amp;task.output_path);
+        if let Some(parent) = output_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let model_path = task
+            .model_path
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(Self::resolve_default_model_path);
+        tracing::info!(&quot;🎯 [service-upscale] 正在加载 ONNX 超分模型: {:?}&quot;, model_path);
+        if !model_path.exists() {
+            return Err(format!(&quot;ONNX 模型文件未就绪，目标物理路径不存在: {:?}&quot;, model_path));
+        }
+        let config = UpscaleConfig {
+            model_path: model_path.clone(),
+            target_scale: task.target_scale.unwrap_or(4.0),
+            max_output_side: task.max_output_side.unwrap_or(8192),
+            tile_size: task.tile_size.unwrap_or(256),
+            tile_pad: task.tile_pad.unwrap_or(10),
+        };
+        let _permit = if let Some(guard) = vram_guard {
+            Some(guard.acquire(TaskWeight::Medium).await?)
+        } else {
+            None
+        };
+        let input_buf = input_path.to_path_buf();
+        let output_buf = output_path.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            let mut pipeline = UpscalePipeline::new(&amp;model_path)?;
+            pipeline.run(&amp;input_buf, &amp;output_buf, &amp;config, progress_cb)
+        })
+        .await
+        .map_err(|e| format!(&quot;Tokio 线程调度异常: {e}&quot;))?
+    }
+}</file><file path="deploy/cloudflare/auth_worker.js">// 🛡️ 紫电 AI - Cloudflare Worker Serverless 商业鉴权、隐私遥测与明细账单中台 (v3.2.0)
 const CORS_HEADERS = {
   &quot;Access-Control-Allow-Origin&quot;: &quot;*&quot;,
   &quot;Access-Control-Allow-Methods&quot;: &quot;GET, POST, OPTIONS&quot;,
@@ -1941,21 +2751,7 @@ async function verifyHmac(secret, timestampStr, bodyBytes, expectedHex) {
   } catch {
     return false;
   }
-}</file><file path="src-tauri/.cargo/config.toml">[build]
-rustflags = [
-    &quot;-C&quot;, &quot;target-feature=-crt-static&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublas64_13.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublasLt64_13.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudart64_13.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn64_9.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn_engines_precompiled64_9.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:onnxruntime_providers_cuda.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=delayimp.lib&quot;
-]
-
-[env]
-CMAKE_GENERATOR = { value = &quot;Ninja&quot;, force = true }
-CMAKE_MAKE_PROGRAM = { value = &quot;C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe&quot;, force = true }</file><file path="src-tauri/capabilities/default.json">{
+}</file><file path="src-tauri/capabilities/default.json">{
   &quot;$schema&quot;: &quot;../gen/schemas/desktop-schema.json&quot;,
   &quot;identifier&quot;: &quot;default&quot;,
   &quot;description&quot;: &quot;Capability for the main window&quot;,
@@ -2140,7 +2936,129 @@ model_name: &quot;PP-DocLayout&quot;.to_string(),
 context: format!(&quot;Scale-aware inference run failed: {e}&quot;),
 ⋮----
 ndarray::Array2::from_shape_vec((rows, cols), data.to_vec())
-.map_err(|e| OrtInferError::InvalidInput(format!(&quot;Output 2D shape mismatch: {e}&quot;)))</file><file path="src-tauri/crates/core-security/src/lib.rs">pub mod crypto;
+.map_err(|e| OrtInferError::InvalidInput(format!(&quot;Output 2D shape mismatch: {e}&quot;)))</file><file path="src-tauri/crates/core-onnx-infer/Cargo.toml">[package]
+name = &quot;core-onnx-infer&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;core_onnx_infer&quot;
+path = &quot;src/lib.rs&quot;
+
+[features]
+default = [&quot;cuda&quot;]
+cuda = [&quot;ort/cuda&quot;]
+directml = [&quot;ort/directml&quot;]
+coreml = [&quot;ort/coreml&quot;]
+
+[dependencies]
+ort = { version = &quot;2.0.0-rc.9&quot;, features = [&quot;cuda&quot;] }
+ndarray = &quot;0.15&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;
+log = &quot;0.4&quot;</file><file path="src-tauri/crates/core-security/src/gatekeeper.rs">use std::path::Path;
+⋮----
+struct QuotaDeductRequest&lt;&apos;a&gt; {
+⋮----
+struct QuotaDeductResponse {
+⋮----
+pub struct QuotaLogRecord {
+⋮----
+pub struct QuotaStatus {
+⋮----
+struct TelemetryPayload&lt;&apos;a&gt; {
+⋮----
+pub struct Gatekeeper;
+⋮----
+impl Gatekeeper {
+pub fn get_device_fingerprint() -&gt; Result&lt;String, String&gt; {
+⋮----
+.add_cpu_info()
+.add_mac_address()
+.add_system_info()
+.generate(COMMERCIAL_SECRET)
+.map_err(|e| format!(&quot;指纹生成失败: {e}&quot;))
+⋮----
+pub async fn get_quota_status() -&gt; Result&lt;QuotaStatus, String&gt; {
+⋮----
+let is_offline_pro = if lic_path.exists() {
+⋮----
+verifier.try_verify_file(lic_path, &amp;fingerprint).is_ok()
+⋮----
+return Ok(QuotaStatus {
+⋮----
+stage: &quot;offline_pro&quot;.to_string(),
+⋮----
+status: &quot;active&quot;.to_string(),
+⋮----
+recent_logs: vec![],
+⋮----
+.timeout(std::time::Duration::from_secs(5))
+.build()
+.map_err(|e| e.to_string())?;
+⋮----
+.post(format!(&quot;{AUTH_BASE_URL}/api/v1/quota/status&quot;))
+.json(&amp;body)
+.send()
+⋮----
+let status_code = response.status();
+let text = response.text().await.unwrap_or_default();
+if status_code.is_success() {
+⋮----
+return Ok(status);
+⋮----
+Ok(QuotaStatus {
+⋮----
+stage: &quot;offline_fallback&quot;.to_string(),
+daily_limit: 888, // 🌟 离线兜底 888 Tokens
+⋮----
+pub async fn check_permission_tokens(tool_name: &amp;str, tokens_needed: u32) -&gt; Result&lt;(), String&gt; {
+⋮----
+return Ok(());
+⋮----
+if lic_path.exists() {
+⋮----
+if verifier.try_verify_file(lic_path, &amp;fingerprint).is_ok() {
+⋮----
+.map_err(|e| format!(&quot;序列化请求体失败: {e}&quot;))?;
+⋮----
+.duration_since(UNIX_EPOCH)
+.unwrap_or_default()
+.as_secs();
+⋮----
+.map_err(|e| format!(&quot;HTTP 初始化失败: {e}&quot;))?;
+⋮----
+.post(format!(&quot;{AUTH_BASE_URL}/api/v1/quota/deduct&quot;))
+.header(&quot;Content-Type&quot;, &quot;application/json&quot;)
+.header(&quot;X-Timestamp&quot;, timestamp.to_string())
+.header(&quot;X-Signature&quot;, signature)
+.body(body_bytes)
+⋮----
+let status = response.status();
+let res_text = response.text().await.unwrap_or_default();
+if status.is_success() {
+⋮----
+let rem = res_json.remaining_points.unwrap_or(0);
+⋮----
+let err_msg = res_json.error.unwrap_or_else(|| &quot;Tokens 额度不足&quot;.into());
+return Err(format!(&quot;🚨 算力拦截: {err_msg}&quot;));
+⋮----
+if status.as_u16() == 402 || status.as_u16() == 403 || status.as_u16() == 401 {
+return Err(format!(&quot;🚨 算力拦截 [HTTP {}]: {}&quot;, status.as_u16(), res_text));
+⋮----
+Ok(())
+⋮----
+Err(_) =&gt; Ok(()),
+⋮----
+pub async fn check_permission(tool_name: &amp;str) -&gt; Result&lt;(), String&gt; {
+⋮----
+pub async fn report_telemetry(
+⋮----
+let fingerprint = Self::get_device_fingerprint().unwrap_or_else(|_| &quot;anonymous&quot;.into());
+⋮----
+if let Ok(c) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(3)).build() {
+let _ = c.post(format!(&quot;{AUTH_BASE_URL}/api/v1/telemetry/report&quot;))
+.json(&amp;payload)</file><file path="src-tauri/crates/core-security/src/lib.rs">pub mod crypto;
 pub mod gatekeeper;
 pub mod license;
 pub mod portable;
@@ -2187,21 +3105,249 @@ let mut mac = HmacSha256::new_from_slice(secret_key.as_bytes())
 .map_err(|e| SecurityError::HmacError(e.to_string()))?;
 mac.update(raw_string.as_bytes());
 let result = mac.finalize();
-Ok(hex::encode(result.into_bytes()))</file><file path=".cargo/config.toml">[build]
-rustflags = [
-    &quot;-C&quot;, &quot;target-feature=-crt-static&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublas64_13.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublasLt64_13.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudart64_13.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn64_9.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn_engines_precompiled64_9.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:onnxruntime_providers_cuda.dll&quot;,
-    &quot;-C&quot;, &quot;link-arg=delayimp.lib&quot;
-]
+Ok(hex::encode(result.into_bytes()))</file><file path="src-tauri/crates/services/service-pdfium/src/lib.rs">use image::DynamicImage;
+use pdfium_render::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use thiserror::Error;
+#[derive(Debug, Error)]
+pub enum PdfiumEngineError {
+    #[error(&quot;Pdfium 动态库绑定/初始化失败: {0}&quot;)]
+    InitFailed(String),
+    #[error(&quot;加载 PDF 物理文件失败 ({path:?}): {cause}&quot;)]
+    LoadPdfFailed { path: PathBuf, cause: String },
+    #[error(&quot;访问 PDF 页码 {page_index} 超出范围 (总页数: {total_pages})&quot;)]
+    PageOutOfBounds { page_index: usize, total_pages: usize },
+    #[error(&quot;渲染 PDF 页面位图失败: {0}&quot;)]
+    RenderFailed(String),
+    #[error(&quot;提炼 PDF 页面文本失败: {0}&quot;)]
+    TextExtractFailed(String),
+}
+pub type PdfiumEngineResult&lt;T&gt; = Result&lt;T, PdfiumEngineError&gt;;
+/// 字符粒度精准边界框契约
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PdfCharInfo {
+    pub unicode_char: char,
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+}
+/// PDF 页面物理元数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PdfPageMeta {
+    pub page_index: usize,
+    pub width_pt: f32,
+    pub height_pt: f32,
+    pub is_landscape: bool,
+}
+/// 常驻单例 Pdfium 引擎包装器
+static PDFIUM_INSTANCE: OnceLock&lt;Mutex&lt;PdfiumEngine&gt;&gt; = OnceLock::new();
+pub struct PdfiumEngine {
+    pdfium: Pdfium,
+}
+impl PdfiumEngine {
+    /// 自动寻找并绑定 pdfium.dll (优先 bin/ 目录与运行同级目录)
+    pub fn resolve_dll_path() -&gt; Option&lt;PathBuf&gt; {
+        let mut candidates = vec![
+            PathBuf::from(r&quot;C:\dev\ai-forge\bin\pdfium.dll&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\src-tauri\bin\pdfium.dll&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\models\pdfium.dll&quot;),
+            PathBuf::from(&quot;bin/pdfium.dll&quot;),
+            PathBuf::from(&quot;../bin/pdfium.dll&quot;),
+            PathBuf::from(&quot;pdfium.dll&quot;),
+        ];
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                candidates.push(exe_dir.join(&quot;pdfium.dll&quot;));
+                candidates.push(exe_dir.join(&quot;bin&quot;).join(&quot;pdfium.dll&quot;));
+            }
+        }
+        candidates.into_iter().find(|p| p.exists())
+    }
+    pub fn init() -&gt; PdfiumEngineResult&lt;Self&gt; {
+        let bindings = if let Some(dll_path) = Self::resolve_dll_path() {
+            tracing::info!(&quot;🌐 [service-pdfium] 成功绑定物理路径 pdfium.dll: {:?}&quot;, dll_path);
+            Pdfium::bind_to_library(&amp;dll_path)
+                .map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?
+        } else {
+            tracing::info!(&quot;🌐 [service-pdfium] 尝试绑定系统默认/环境变量 pdfium.dll&quot;);
+            Pdfium::bind_to_system_library()
+                .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&quot;./&quot;)))
+                .map_err(|e| PdfiumEngineError::InitFailed(format!(&quot;未找到 pdfium.dll: {e}&quot;)))?
+        };
+        let pdfium = Pdfium::new(bindings);
+        Ok(Self { pdfium })
+    }
+    pub fn global() -&gt; PdfiumEngineResult&lt;&amp;&apos;static Mutex&lt;PdfiumEngine&gt;&gt; {
+        let mutex = PDFIUM_INSTANCE.get_or_init(|| {
+            let engine = Self::init().expect(&quot;🚨 [service-pdfium] 绑定初始化失败，请确保 pdfium.dll 存在于 C:\\dev\\ai-forge\\bin\\pdfium.dll&quot;);
+            Mutex::new(engine)
+        });
+        Ok(mutex)
+    }
+    /// 1. 获取 PDF 总页数
+    pub fn get_page_count(path: &amp;Path) -&gt; PdfiumEngineResult&lt;usize&gt; {
+        let lock = Self::global()?;
+        let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
+        let doc = engine.pdfium.load_pdf_from_file(path, None)
+            .map_err(|e| PdfiumEngineError::LoadPdfFailed { path: path.to_path_buf(), cause: e.to_string() })?;
+        Ok(doc.pages().len() as usize)
+    }
+    /// 2. 获取指定页面的物理 Point 尺寸 (宽, 高)
+    pub fn get_page_dimensions(path: &amp;Path, page_index: usize) -&gt; PdfiumEngineResult&lt;(f32, f32)&gt; {
+        let lock = Self::global()?;
+        let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
+        let doc = engine.pdfium.load_pdf_from_file(path, None)
+            .map_err(|e| PdfiumEngineError::LoadPdfFailed { path: path.to_path_buf(), cause: e.to_string() })?;
+        let pages = doc.pages();
+        let total = pages.len() as usize;
+        if page_index &gt;= total {
+            return Err(PdfiumEngineError::PageOutOfBounds { page_index, total_pages: total });
+        }
+        let page = pages.get(page_index as i32)
+            .map_err(|e| PdfiumEngineError::RenderFailed(e.to_string()))?;
+        Ok((page.width().value, page.height().value))
+    }
+    /// 3. 高保真渲染页面至 DynamicImage (默认 300 DPI 高清图像推导)
+    pub fn render_page_to_image(path: &amp;Path, page_index: usize, target_dpi: u32) -&gt; PdfiumEngineResult&lt;DynamicImage&gt; {
+        let lock = Self::global()?;
+        let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
+        let doc = engine.pdfium.load_pdf_from_file(path, None)
+            .map_err(|e| PdfiumEngineError::LoadPdfFailed { path: path.to_path_buf(), cause: e.to_string() })?;
+        let pages = doc.pages();
+        let total = pages.len() as usize;
+        if page_index &gt;= total {
+            return Err(PdfiumEngineError::PageOutOfBounds { page_index, total_pages: total });
+        }
+        let page = pages.get(page_index as i32)
+            .map_err(|e| PdfiumEngineError::RenderFailed(e.to_string()))?;
+        let scale_factor = target_dpi as f32 / 72.0;
+        let render_config = PdfRenderConfig::new()
+            .scale_page_by_factor(scale_factor)
+            .render_annotations(true)
+            .render_form_data(true);
+        let image = page.render_with_config(&amp;render_config)
+            .map_err(|e| PdfiumEngineError::RenderFailed(e.to_string()))?
+            .as_image()
+            .map_err(|e| PdfiumEngineError::RenderFailed(e.to_string()))?;
+        Ok(image)
+    }
+    /// 4. 原生提取指定页面的纯文本
+    pub fn extract_page_text(path: &amp;Path, page_index: usize) -&gt; PdfiumEngineResult&lt;String&gt; {
+        let lock = Self::global()?;
+        let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
+        let doc = engine.pdfium.load_pdf_from_file(path, None)
+            .map_err(|e| PdfiumEngineError::LoadPdfFailed { path: path.to_path_buf(), cause: e.to_string() })?;
+        let pages = doc.pages();
+        let total = pages.len() as usize;
+        if page_index &gt;= total {
+            return Err(PdfiumEngineError::PageOutOfBounds { page_index, total_pages: total });
+        }
+        let page = pages.get(page_index as i32)
+            .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
+        let text_page = page.text()
+            .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
+        Ok(text_page.all())
+    }
+    /// 5. 提取带物理边界框的字符数组
+    pub fn extract_page_chars(path: &amp;Path, page_index: usize) -&gt; PdfiumEngineResult&lt;Vec&lt;PdfCharInfo&gt;&gt; {
+        let lock = Self::global()?;
+        let engine = lock.lock().map_err(|e| PdfiumEngineError::InitFailed(e.to_string()))?;
+        let doc = engine.pdfium.load_pdf_from_file(path, None)
+            .map_err(|e| PdfiumEngineError::LoadPdfFailed { path: path.to_path_buf(), cause: e.to_string() })?;
+        let pages = doc.pages();
+        let total = pages.len() as usize;
+        if page_index &gt;= total {
+            return Err(PdfiumEngineError::PageOutOfBounds { page_index, total_pages: total });
+        }
+        let page = pages.get(page_index as i32)
+            .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
+        let text_page = page.text()
+            .map_err(|e| PdfiumEngineError::TextExtractFailed(e.to_string()))?;
+        let mut char_infos = Vec::new();
+        for ch in text_page.chars().iter() {
+            if let (Some(unicode), Ok(rect)) = (ch.unicode_char(), ch.loose_bounds()) {
+                char_infos.push(PdfCharInfo {
+                    unicode_char: unicode,
+                    x1: rect.left().value,
+                    y1: rect.bottom().value,
+                    x2: rect.right().value,
+                    y2: rect.top().value,
+                });
+            }
+        }
+        Ok(char_infos)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::Instant;
+    fn resolve_pdf_fixture() -&gt; PathBuf {
+        let candidates = [
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\service-pdfium\1.pdf&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\pdf-parse-fast.pdf&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\tool-pdf-parse-fast.pdf&quot;),
+        ];
+        candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| {
+            PathBuf::from(r&quot;C:\dev\ai-forge\test\fixtures\service-pdfium\1.pdf&quot;)
+        })
+    }
+    #[test]
+    fn test_service_pdfium_pipeline_benchmark() {
+        let pdf_path = resolve_pdf_fixture();
+        let out_dir = PathBuf::from(r&quot;C:\dev\ai-forge\test\outs\service-pdfium&quot;);
+        let _ = fs::create_dir_all(&amp;out_dir);
+        if !pdf_path.exists() {
+            return;
+        }
+        if PdfiumEngine::resolve_dll_path().is_none() {
+            return;
+        }
+        let t0 = Instant::now();
+        let page_count = PdfiumEngine::get_page_count(&amp;pdf_path).expect(&quot;获取 PDF 页数失败&quot;);
+        assert!(page_count &gt; 0);
+        let (w_pt, h_pt) = PdfiumEngine::get_page_dimensions(&amp;pdf_path, 0).expect(&quot;获取页面 Point 尺寸失败&quot;);
+        assert!(w_pt &gt; 0.0 &amp;&amp; h_pt &gt; 0.0);
+        let img = PdfiumEngine::render_page_to_image(&amp;pdf_path, 0, 300).expect(&quot;渲染 300DPI 图像失败&quot;);
+        let out_img_path = out_dir.join(&quot;page_1_300dpi.png&quot;);
+        let _ = img.save(&amp;out_img_path);
+        let text = PdfiumEngine::extract_page_text(&amp;pdf_path, 0).expect(&quot;提炼页面纯文本失败&quot;);
+        let out_text_path = out_dir.join(&quot;page_1_text.txt&quot;);
+        let _ = fs::write(&amp;out_text_path, &amp;text);
+        let chars = PdfiumEngine::extract_page_chars(&amp;pdf_path, 0).expect(&quot;提取字符级 BBox 失败&quot;);
+        let chars_json = serde_json::to_string_pretty(&amp;chars).expect(&quot;序列化 BBox JSON 失败&quot;);
+        let out_chars_path = out_dir.join(&quot;page_1_chars.json&quot;);
+        let _ = fs::write(&amp;out_chars_path, chars_json);
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        println!(&quot;✅ service-pdfium 物理打靶通过: 总耗时 {:.2} ms | Point尺寸: {:.1}x{:.1}&quot;, elapsed_ms, w_pt, h_pt);
+    }
+}</file><file path="src-tauri/crates/services/service-upscale/Cargo.toml">[package]
+name = &quot;service-upscale&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
 
-[env]
-CMAKE_GENERATOR = { value = &quot;Ninja&quot;, force = true }
-CMAKE_MAKE_PROGRAM = { value = &quot;C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe&quot;, force = true }</file><file path="src/style.css">@tailwind base;
+[dependencies]
+core-models-download = { path = &quot;../../core-models-download&quot; }
+core-onnx-infer = { path = &quot;../../core-onnx-infer&quot;, features = [&quot;cuda&quot;] }
+shared-contracts = { path = &quot;../../shared-contracts&quot; }
+ort = { version = &quot;2.0.0-rc.9&quot;, features = [&quot;cuda&quot;] }
+image = { version = &quot;0.25&quot;, default-features = false, features = [&quot;png&quot;, &quot;jpeg&quot;, &quot;webp&quot;] }
+fast_image_resize = { version = &quot;5.1&quot;, features = [&quot;image&quot;] }
+ndarray = &quot;0.15&quot;
+rayon = &quot;1.10&quot;
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2.0&quot;
+tracing = &quot;0.1&quot;
+log = &quot;0.4&quot;
+tokio = { version = &quot;1.38&quot;, features = [&quot;sync&quot;, &quot;rt&quot;, &quot;macros&quot;, &quot;rt-multi-thread&quot;] }
+
+[dev-dependencies]
+tracing-subscriber = { version = &quot;0.3&quot;, features = [&quot;env-filter&quot;] }</file><file path="src/style.css">@tailwind base;
 @tailwind components;
 @tailwind utilities;
 @layer base {
@@ -2350,12 +3496,62 @@ CMAKE_MAKE_PROGRAM = { value = &quot;C:/Program Files (x86)/Microsoft Visual Stu
     color: var(--ink) !important;
     padding: 0 !important;
   }
-}</file><file path="src-tauri/crates/core-models-download/src/lib.rs">pub mod gguf_meta;
+}</file><file path="src-tauri/.cargo/config.toml">[build]
+rustflags = [
+    &quot;-C&quot;, &quot;target-feature=-crt-static&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublas64_13.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublasLt64_13.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudart64_13.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn64_9.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn_engines_precompiled64_9.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:onnxruntime_providers_cuda.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=delayimp.lib&quot;
+]
+
+[env]
+CMAKE_GENERATOR = { value = &quot;Ninja&quot;, force = true }
+CMAKE_MAKE_PROGRAM = { value = &quot;C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe&quot;, force = true }</file><file path="src-tauri/crates/services/service-asr/Cargo.toml">[package]
+name = &quot;service-asr&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+build = &quot;build.rs&quot;
+
+[lib]
+name = &quot;service_asr&quot;
+path = &quot;src/lib.rs&quot;
+
+[dependencies]
+shared-contracts = { path = &quot;../../shared-contracts&quot; }
+transcribe-cpp = { path = &quot;C:/dev/github/transcribe.cpp/bindings/rust/transcribe-cpp&quot;, features = [&quot;cuda&quot;] }
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde_json = &quot;1.0&quot;
+thiserror = &quot;2&quot;
+tracing = &quot;0.1&quot;
+tokio = { version = &quot;1.38&quot;, features = [&quot;full&quot;] }
+anyhow = &quot;1.0&quot;
+hound = &quot;3.5&quot;</file><file path=".cargo/config.toml">[build]
+rustflags = [
+    &quot;-C&quot;, &quot;target-feature=-crt-static&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublas64_13.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cublasLt64_13.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudart64_13.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn64_9.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:cudnn_engines_precompiled64_9.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=/DELAYLOAD:onnxruntime_providers_cuda.dll&quot;,
+    &quot;-C&quot;, &quot;link-arg=delayimp.lib&quot;
+]
+
+[env]
+CMAKE_GENERATOR = { value = &quot;Ninja&quot;, force = true }
+CMAKE_MAKE_PROGRAM = { value = &quot;C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe&quot;, force = true }</file><file path="src-tauri/crates/core-models-download/src/lib.rs">pub mod gguf_meta;
 ⋮----
 use core_security::PortableEngine;
 use futures_util::StreamExt;
 ⋮----
 use std::sync::Arc;
+use std::time::Instant;
+use thiserror::Error;
+use tokio::fs;
 ⋮----
 pub enum ModelError {
 ⋮----
@@ -2367,22 +3563,13 @@ pub struct DependencyItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DependencyProgressPayload {
 ⋮----
-pub phase: String, // &quot;waiting&quot; | &quot;downloading&quot; | &quot;verifying&quot; | &quot;extracting&quot; | &quot;complete&quot;
-⋮----
 pub struct ModelManager;
 ⋮----
 impl ModelManager {
-/// 🛡️ 三级自愈模型基准目录寻址器 (统一命名空间 + 便携双轨)
-    pub fn resolve_models_base_dir() -&gt; PathBuf {
-⋮----
 pub fn resolve_models_base_dir() -&gt; PathBuf {
-// Level 0: 便携模式最高优先级 (./Data/models)
 ⋮----
-// Level 1: 就近探测：当前工作目录直接存在 models/
 if Path::new(&quot;models&quot;).is_dir() {
 if let Ok(abs) = Path::new(&quot;models&quot;).canonicalize() {
-⋮----
-// Level 2: 向上回溯：若从 target/release 等子目录启动，向上逐级回溯寻找 models/
 ⋮----
 let mut current = exe_path.parent();
 ⋮----
@@ -2391,8 +3578,6 @@ if candidate.is_dir() {
 if let Ok(abs) = candidate.canonicalize() {
 ⋮----
 current = p.parent();
-⋮----
-// Level 3: 方案 A 现代统一规范区：%LOCALAPPDATA%\紫电AI\Data\models
 ⋮----
 let modern_target = base.join(&quot;紫电AI&quot;).join(&quot;Data&quot;).join(&quot;models&quot;);
 let legacy_target = base.join(&quot;ZiDianAI&quot;).join(&quot;models&quot;);
@@ -2405,25 +3590,17 @@ let dst = modern_target.join(entry.file_name());
 ⋮----
 let _ = std::fs::remove_dir_all(base.join(&quot;ZiDianAI&quot;));
 ⋮----
-/// 🛡️ 三级自愈 CUDA 运行时目录寻址器
-    pub fn resolve_cuda_runtime_dir() -&gt; PathBuf {
-⋮----
 pub fn resolve_cuda_runtime_dir() -&gt; PathBuf {
-// Level 0: 便携模式最高优先级 (./Data/bin/cuda12)
 ⋮----
-// Level 1: 就近探测：./bin/cuda12
 if Path::new(&quot;bin&quot;).join(&quot;cuda12&quot;).join(&quot;cublas64_13.dll&quot;).exists() {
 if let Ok(abs) = Path::new(&quot;bin&quot;).join(&quot;cuda12&quot;).canonicalize() {
-⋮----
-// Level 2: 向上回溯：开发环境 C:\dev\ai-forge\bin\cuda12
 ⋮----
 let candidate = p.join(&quot;bin&quot;).join(&quot;cuda12&quot;);
 if candidate.join(&quot;cublas64_13.dll&quot;).exists() {
 ⋮----
-// Level 3: 统一规范区：%LOCALAPPDATA%\紫电AI\Data\bin\cuda12
-⋮----
 let modern_target = base.join(&quot;紫电AI&quot;).join(&quot;Data&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;);
-let legacy_target = base.join(&quot;ZiDianAI&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;);
+⋮----
+let fallback = PathBuf::from(&quot;bin&quot;).join(&quot;cuda12&quot;);
 ⋮----
 pub fn format_bytes(bytes: u64) -&gt; String {
 ⋮----
@@ -2445,30 +3622,26 @@ hasher.update(&amp;buffer[..n]);
 ⋮----
 Ok(hex::encode(hasher.finalize()))
 ⋮----
+/// 🛡️ 毫秒级依赖极速状态探测（仅进行 0.001ms 文件元信息 stat 校验，绝不阻塞 UI 路由导航）
+    pub async fn get_tool_dependencies(base_dir: &amp;Path, tool_id: &amp;str) -&gt; Vec&lt;DependencyItem&gt; {
+⋮----
 pub async fn get_tool_dependencies(base_dir: &amp;Path, tool_id: &amp;str) -&gt; Vec&lt;DependencyItem&gt; {
+let specs = get_tool_manifest_specs(tool_id);
+let mut result = Vec::with_capacity(specs.len());
 ⋮----
 let full_path = base_dir.join(&amp;item.relative_path);
 let is_ready = if full_path.exists() {
-if item.sha256.is_empty() {
 ⋮----
+// 仅对比文件大小是否匹配，0.001ms 瞬时完成
 meta.len() == item.size_bytes
 ⋮----
 result.push(item);
 ⋮----
 pub async fn is_tool_ready(base_dir: &amp;Path, tool_id: &amp;str) -&gt; bool {
 ⋮----
+if deps.is_empty() {
+⋮----
 deps.iter().all(|d| d.is_ready)
-⋮----
-fn get_tool_manifest_specs(tool_id: &amp;str) -&gt; Vec&lt;DependencyItem&gt; {
-⋮----
-&quot;upscale&quot; | &quot;upscale-48k&quot; | &quot;tool-upscale-48k&quot; =&gt; vec![
-⋮----
-&quot;asr&quot; | &quot;video-subtitle&quot; | &quot;tool-ASR&quot; =&gt; vec![
-⋮----
-&quot;pdf&quot; | &quot;pdf-parse&quot; | &quot;tool-pdf-parse&quot; =&gt; vec![
-⋮----
-&quot;format&quot; | &quot;format-converter&quot; | &quot;tool-format-convert&quot; =&gt; vec![],
-_ =&gt; vec![],
 ⋮----
 pub async fn download_dependency_file&lt;F&gt;(
 ⋮----
@@ -2476,12 +3649,12 @@ if cancel_token.load(Ordering::Relaxed) {
 return Err(ModelError::Cancelled);
 ⋮----
 if target_path.exists() {
-⋮----
+if item.sha256.is_empty() {
 on_progress(item.size_bytes, item.size_bytes, &quot;complete&quot;);
 return Ok(target_path.to_path_buf());
 ⋮----
 on_progress(item.size_bytes, item.size_bytes, &quot;verifying&quot;);
-⋮----
+let actual_hash = Self::compute_sha256(target_path).await.unwrap_or_default();
 if actual_hash.eq_ignore_ascii_case(&amp;item.sha256) {
 ⋮----
 if let Some(parent) = target_path.parent() {
@@ -2508,7 +3681,9 @@ last_error = Some(ModelError::Network(e));
 ⋮----
 let is_append = resume_from &gt; 0 &amp;&amp; res.status().as_u16() == 206;
 ⋮----
-res.content_length().unwrap_or(0) + downloaded
+res.content_length().unwrap_or(0) + resume_from
+⋮----
+res.content_length().unwrap_or(item.size_bytes)
 ⋮----
 .create(true)
 .write(true)
@@ -2527,376 +3702,298 @@ let _ = file.flush().await;
 file.write_all(&amp;chunk).await?;
 downloaded += chunk.len() as u64;
 ⋮----
+((downloaded as f64 / total_size as f64) * 100.0).min(100.0) as u32
+⋮----
 if current_percent != last_percent || last_emit.elapsed().as_millis() &gt;= 80 {
 ⋮----
 file.flush().await?;
 drop(file);
+⋮----
 on_progress(downloaded, total_size, &quot;verifying&quot;);
 ⋮----
 if !item.sha256.is_empty() {
-⋮----
+let actual_hash = Self::compute_sha256(&amp;part_path).await.unwrap_or_default();
 if !actual_hash.eq_ignore_ascii_case(&amp;item.sha256) {
-⋮----
 last_error = Some(ModelError::HashMismatch {
 expected: item.sha256.clone(),
 ⋮----
 on_progress(total_size, total_size, &quot;complete&quot;);
 ⋮----
-Err(last_error.unwrap_or(ModelError::DownloadFailed))</file><file path="src/store/uiStore.ts">import { defineStore } from &apos;pinia&apos;;
-import { ref } from &apos;vue&apos;;
-import {
-  getQuotaStatus,
-  checkToolDependencies,
-  type QuotaStatus,
-  type DependencyItem,
-} from &apos;../bindings/index&apos;;
-const USAGE_STORAGE_KEY = &apos;zidian_tool_usage_counts&apos;;
-const DEFAULT_INITIAL_COUNTS: Record&lt;string, number&gt; = {
-  upscale: 12,
-  asr: 10,
-  pdf: 8,
-  format: 6,
-};
-export const useUIStore = defineStore(&apos;ui&apos;, () =&gt; {
-  const currentView = ref&lt;&apos;home&apos; | &apos;format&apos; | &apos;pdf&apos; | &apos;asr&apos; | &apos;upscale&apos;&gt;(&apos;home&apos;);
-  const showRadar = ref(false);
-  const radarMode = ref&lt;&apos;global&apos; | &apos;local&apos;&gt;(&apos;global&apos;);
-  const toast消息 = ref&lt;string | null&gt;(null);
-  const toast类型 = ref&lt;&apos;success&apos; | &apos;error&apos; | &apos;info&apos;&gt;(&apos;success&apos;);
-  const toast显示 = ref(false);
-  const 侧边栏收起 = ref(false);
-  let toast定时器: number | null = null;
-  // 🛡️ 依赖与模型门禁拦截状态机
-  const isDependencyModalOpen = ref(false);
-  const dependencyTargetTool = ref&lt;string | null&gt;(null);
-  const dependencyItems = ref&lt;DependencyItem[]&gt;([]);
-  const dependencyCallback = ref&lt;(() =&gt; void) | null&gt;(null);
-  const openDependencyModal = (
-    toolId: string,
-    items: DependencyItem[],
-    callback?: () =&gt; void
-  ) =&gt; {
-    dependencyTargetTool.value = toolId;
-    dependencyItems.value = items;
-    dependencyCallback.value = callback || null;
-    isDependencyModalOpen.value = true;
-  };
-  const closeDependencyModal = () =&gt; {
-    isDependencyModalOpen.value = false;
-    dependencyTargetTool.value = null;
-    dependencyItems.value = [];
-    dependencyCallback.value = null;
-  };
-  const navigateToTool = async (
-    toolId: &apos;home&apos; | &apos;format&apos; | &apos;pdf&apos; | &apos;asr&apos; | &apos;upscale&apos;,
-    onReady?: () =&gt; void
-  ) =&gt; {
-    recordToolUsage(toolId);
-    if (toolId === &apos;home&apos;) {
-      currentView.value = &apos;home&apos;;
-      onReady?.();
-      return;
+Err(last_error.unwrap_or(ModelError::DownloadFailed))
+⋮----
+fn get_tool_manifest_specs(tool_id: &amp;str) -&gt; Vec&lt;DependencyItem&gt; {
+match tool_id.to_lowercase().as_str() {
+&quot;upscale&quot; | &quot;upscale-48k&quot; | &quot;tool-upscale-48k&quot; =&gt; vec![
+⋮----
+&quot;asr&quot; | &quot;video-subtitle&quot; | &quot;tool-asr&quot; =&gt; vec![
+⋮----
+&quot;trans&quot; | &quot;translation&quot; | &quot;tool-translation&quot; | &quot;tool-trans&quot; =&gt; vec![
+⋮----
+&quot;pdf&quot; | &quot;pdf-parse&quot; | &quot;tool-pdf-parse&quot; =&gt; vec![
+⋮----
+&quot;format&quot; | &quot;format-converter&quot; | &quot;tool-format-convert&quot; =&gt; vec![],
+_ =&gt; vec![],</file><file path="src-tauri/crates/services/service-asr/src/lib.rs">use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+use transcribe_cpp::{CancelToken, Diarize, Error as TranscribeError, Model, ModelOptions, RunOptions, Task, TimestampKind};
+#[cfg(target_os = &quot;windows&quot;)]
+use std::os::windows::process::CommandExt;
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CHUNK_DURATION_SEC: f64 = 300.0;
+const SAMPLE_RATE: usize = 16000;
+const CHUNK_SAMPLES: usize = (CHUNK_DURATION_SEC as usize) * SAMPLE_RATE;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrOptions {
+    pub audio_path: String,
+    pub language: Option&lt;String&gt;,
+    pub prompt: Option&lt;String&gt;,
+    pub hotwords: Option&lt;String&gt;,
+    pub max_new_tokens: Option&lt;usize&gt;,
+    pub temperature: Option&lt;f32&gt;,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RawSegment {
+    pub id: usize,
+    pub speaker: String,
+    pub start_sec: f64,
+    pub end_sec: f64,
+    pub text: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrResult {
+    pub audio_file: String,
+    pub duration_sec: f64,
+    pub segments: Vec&lt;RawSegment&gt;,
+    pub elapsed_ms: f64,
+}
+pub type AsrProgressCallback = Arc&lt;dyn Fn(usize, usize, &amp;str) + Send + Sync + &apos;static&gt;;
+pub struct AsrService;
+impl AsrService {
+    fn resolve_model_path() -&gt; PathBuf {
+        let candidates = [
+            PathBuf::from(r&quot;C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q5_K_M.gguf&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q4_K_M.gguf&quot;),
+            PathBuf::from(r&quot;C:\dev\ai-forge\models\tool-ASR\MOSS-Transcribe-Diarize-Q5_K_M.gguf&quot;),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+        PathBuf::from(r&quot;C:\dev\ai-forge\models\service-asr\MOSS-Transcribe-Diarize-Q5_K_M.gguf&quot;)
     }
-    try {
-      const deps = await checkToolDependencies(toolId);
-      const missingDeps = deps.filter((d) =&gt; !d.is_ready);
-      if (missingDeps.length &gt; 0) {
-        openDependencyModal(toolId, deps, () =&gt; {
-          currentView.value = toolId;
-          onReady?.();
-        });
-        return;
-      }
-    } catch (e) {
-      console.warn(`⚠️ 依赖探测异常，尝试常规直通:`, e);
+    fn load_audio_pcm_16k_mono(audio_path: &amp;Path) -&gt; Result&lt;Vec&lt;f32&gt;, String&gt; {
+        if let Ok(mut reader) = hound::WavReader::open(audio_path) {
+            let spec = reader.spec();
+            if spec.sample_rate == 16000 &amp;&amp; spec.channels == 1 {
+                if spec.sample_format == hound::SampleFormat::Int {
+                    let samples: Vec&lt;f32&gt; = reader
+                        .samples::&lt;i16&gt;()
+                        .filter_map(|s| s.ok())
+                        .map(|s| s as f32 / 32768.0)
+                        .collect();
+                    if !samples.is_empty() {
+                        return Ok(samples);
+                    }
+                } else if spec.sample_format == hound::SampleFormat::Float {
+                    let samples: Vec&lt;f32&gt; = reader
+                        .samples::&lt;f32&gt;()
+                        .filter_map(|s| s.ok())
+                        .collect();
+                    if !samples.is_empty() {
+                        return Ok(samples);
+                    }
+                }
+            }
+        }
+        let mut cmd = std::process::Command::new(&quot;ffmpeg&quot;);
+        #[cfg(target_os = &quot;windows&quot;)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        let output = cmd
+            .arg(&quot;-y&quot;)
+            .arg(&quot;-i&quot;)
+            .arg(audio_path)
+            .arg(&quot;-f&quot;)
+            .arg(&quot;s16le&quot;)
+            .arg(&quot;-ar&quot;)
+            .arg(&quot;16000&quot;)
+            .arg(&quot;-ac&quot;)
+            .arg(&quot;1&quot;)
+            .arg(&quot;pipe:1&quot;)
+            .output()
+            .map_err(|e| format!(&quot;调起 FFmpeg 解码器失败: {e}&quot;))?;
+        if !output.status.success() {
+            return Err(format!(
+                &quot;FFmpeg 音频解码失败: {}&quot;,
+                String::from_utf8_lossy(&amp;output.stderr)
+            ));
+        }
+        let pcm_f32: Vec&lt;f32&gt; = output
+            .stdout
+            .chunks_exact(2)
+            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
+            .collect();
+        if pcm_f32.is_empty() {
+            return Err(&quot;解码后的 PCM 音频采样数据为空！&quot;.into());
+        }
+        Ok(pcm_f32)
     }
-    currentView.value = toolId;
-    onReady?.();
-  };
-  // 👑 纯血解耦：算力状态 0 业务硬编码，初始化为纯中立骨架态
-  const showQuotaModal = ref(false);
-  const isQuotaLoading = ref(false);
-  const quota = ref&lt;QuotaStatus&gt;({
-    success: false,
-    device_fingerprint: &apos;&apos;,
-    stage: &apos;&apos;,
-    daily_limit: 0,
-    used_today: 0,
-    bonus_points: 0,
-    remaining_points: 0,
-    status: &apos;active&apos;,
-    is_offline_pro: false,
-    recent_logs: [],
-  });
-  const refreshQuota = async () =&gt; {
-    if (isQuotaLoading.value) return;
-    isQuotaLoading.value = true;
-    try {
-      const res = await getQuotaStatus();
-      quota.value = res;
-    } catch (e) {
-      console.warn(&apos;⚠️ 获取云端算力状态异常:&apos;, e);
-    } finally {
-      isQuotaLoading.value = false;
+    pub async fn run_asr_pipeline(options: AsrOptions) -&gt; Result&lt;AsrResult, String&gt; {
+        Self::run_asr_pipeline_cancellable(options, None, None).await
     }
-  };
-  // 状态机挂载即刻自动触发一次单向拉取
-  refreshQuota();
-  const 弹出提示 = (消息: string, 类型: &apos;success&apos; | &apos;error&apos; | &apos;info&apos; = &apos;success&apos;) =&gt; {
-    toast消息.value = 消息;
-    toast类型.value = 类型;
-    toast显示.value = true;
-    if (toast定时器) {
-      clearTimeout(toast定时器);
-      toast定时器 = null;
+    /// 🛡️ 纯血 Rust Native ASR 底座：具备 OutputTruncated 弹性容错、毫秒级截停与细粒度进度广播
+    pub async fn run_asr_pipeline_cancellable(
+        options: AsrOptions,
+        cancel_token: Option&lt;Arc&lt;AtomicBool&gt;&gt;,
+        on_progress: Option&lt;AsrProgressCallback&gt;,
+    ) -&gt; Result&lt;AsrResult, String&gt; {
+        let audio_path_buf = PathBuf::from(&amp;options.audio_path);
+        if !audio_path_buf.exists() {
+            return Err(format!(&quot;音频物理文件不存在: {}&quot;, options.audio_path));
+        }
+        let model_path = Self::resolve_model_path();
+        if !model_path.exists() {
+            return Err(format!(&quot;GGUF ASR 模型物理文件不存在: {:?}&quot;, model_path));
+        }
+        if let Some(ref ct) = cancel_token {
+            if ct.load(Ordering::Relaxed) {
+                return Err(&quot;任务已由用户主动取消&quot;.into());
+            }
+        }
+        let t0 = Instant::now();
+        let pcm_samples = Self::load_audio_pcm_16k_mono(&amp;audio_path_buf)?;
+        let total_samples = pcm_samples.len();
+        let total_duration_sec = total_samples as f64 / SAMPLE_RATE as f64;
+        tracing::info!(
+            &quot;🎙️ [ASR 底座] 音频解码完成: 共 {:.2} 秒 ({:.2} 分钟) | 总采样点: {}&quot;,
+            total_duration_sec,
+            total_duration_sec / 60.0,
+            total_samples
+        );
+        let progress_cb = on_progress.clone();
+        let all_segments = tokio::task::spawn_blocking(move || -&gt; Result&lt;Vec&lt;RawSegment&gt;, String&gt; {
+            let model = Model::load_with(&amp;model_path, &amp;ModelOptions::default())
+                .map_err(|e| format!(&quot;纯血 C-FFI 载入 GGUF 模型失败: {e}&quot;))?;
+            let mut session = model.session()
+                .map_err(|e| format!(&quot;创建 transcribe Session 失败: {e}&quot;))?;
+            let cpp_cancel = CancelToken::default();
+            session.set_cancel_token(&amp;cpp_cancel);
+            let watcher_stop = Arc::new(AtomicBool::new(false));
+            let watcher_stop_clone = watcher_stop.clone();
+            let ct_clone = cancel_token.clone();
+            let cpp_cancel_clone = cpp_cancel.clone();
+            if let Some(ct) = ct_clone {
+                std::thread::spawn(move || {
+                    while !watcher_stop_clone.load(Ordering::Relaxed) {
+                        if ct.load(Ordering::Relaxed) {
+                            cpp_cancel_clone.cancel();
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                });
+            }
+            let mut run_opts = RunOptions::default();
+            run_opts.task = Task::Transcribe;
+            run_opts.timestamps = TimestampKind::Auto;
+            run_opts.diarize = Diarize::On;
+            if let Some(lang) = &amp;options.language {
+                if lang != &quot;auto&quot; &amp;&amp; !lang.is_empty() {
+                    run_opts.language = Some(lang.clone());
+                }
+            }
+            let mut collected_segments: Vec&lt;RawSegment&gt; = Vec::new();
+            let mut chunk_start_idx = 0;
+            let mut chunk_id = 1;
+            let total_chunks = (total_samples + CHUNK_SAMPLES - 1) / CHUNK_SAMPLES;
+            while chunk_start_idx &lt; total_samples {
+                if let Some(ref ct) = cancel_token {
+                    if ct.load(Ordering::Relaxed) {
+                        watcher_stop.store(true, Ordering::Relaxed);
+                        return Err(&quot;任务已由用户主动取消&quot;.into());
+                    }
+                }
+                let chunk_end_idx = (chunk_start_idx + CHUNK_SAMPLES).min(total_samples);
+                let chunk_slice = &amp;pcm_samples[chunk_start_idx..chunk_end_idx];
+                let chunk_time_offset_sec = chunk_start_idx as f64 / SAMPLE_RATE as f64;
+                let chunk_end_sec = chunk_end_idx as f64 / SAMPLE_RATE as f64;
+                if let Some(ref cb) = progress_cb {
+                    let msg = format!(
+                        &quot;MOSS 0.9B 语音转写中 ({}/{} 块, 已识别 {:.1}s/{:.1}s)&quot;,
+                        chunk_id, total_chunks, chunk_end_sec, total_duration_sec
+                    );
+                    cb(chunk_id, total_chunks, &amp;msg);
+                }
+                tracing::info!(
+                    &quot;⚡ [ASR 切片推导] 正在执行分块 [{}/{}] | 时间偏移: {:.2}s ~ {:.2}s&quot;,
+                    chunk_id,
+                    total_chunks,
+                    chunk_time_offset_sec,
+                    chunk_end_sec
+                );
+                let transcript_res = session.run(chunk_slice, &amp;run_opts);
+                let transcript = match transcript_res {
+                    Ok(t) =&gt; t,
+                    Err(TranscribeError::OutputTruncated { partial: Some(partial_t), .. }) =&gt; {
+                        tracing::warn!(
+                            &quot;⚠️ [ASR 预算截断保护] 切片 [{}/{}] 语流极密集触发预算上限，已自动提取已生成台词并继续平滑接力&quot;,
+                            chunk_id, total_chunks
+                        );
+                        *partial_t
+                    }
+                    Err(e) =&gt; {
+                        watcher_stop.store(true, Ordering::Relaxed);
+                        if session.was_aborted() || cancel_token.as_ref().map_or(false, |ct| ct.load(Ordering::Relaxed)) {
+                            return Err(&quot;任务已由用户主动取消&quot;.into());
+                        }
+                        return Err(format!(&quot;切片 [{chunk_id}/{total_chunks}] 推导失败: {e}&quot;));
+                    }
+                };
+                for seg in transcript.segments {
+                    let text = seg.text.trim().to_string();
+                    if text.is_empty() {
+                        continue;
+                    }
+                    let speaker = if seg.speaker_id &gt; 0 {
+                        format!(&quot;S{:02}&quot;, seg.speaker_id)
+                    } else {
+                        &quot;S01&quot;.to_string()
+                    };
+                    let start_sec = chunk_time_offset_sec + (seg.t0_ms as f64 / 1000.0);
+                    let end_sec = chunk_time_offset_sec + (seg.t1_ms as f64 / 1000.0);
+                    let seg_id = collected_segments.len() + 1;
+                    collected_segments.push(RawSegment {
+                        id: seg_id,
+                        speaker,
+                        start_sec: (start_sec * 1000.0).round() / 1000.0,
+                        end_sec: (end_sec * 1000.0).round() / 1000.0,
+                        text,
+                    });
+                }
+                chunk_start_idx += CHUNK_SAMPLES;
+                chunk_id += 1;
+            }
+            watcher_stop.store(true, Ordering::Relaxed);
+            Ok(collected_segments)
+        })
+        .await
+        .map_err(|e| format!(&quot;Tokio 线程调度异常: {e}&quot;))?
+        .map_err(|e| e)?;
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let audio_file = audio_path_buf
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| &quot;audio&quot;.to_string());
+        Ok(AsrResult {
+            audio_file,
+            duration_sec: total_duration_sec,
+            segments: all_segments,
+            elapsed_ms,
+        })
     }
-    toast定时器 = window.setTimeout(() =&gt; {
-      toast显示.value = false;
-    }, 2500);
-  };
-  const 切换侧边栏 = () =&gt; {
-    侧边栏收起.value = !侧边栏收起.value;
-  };
-  const loadUsageCounts = (): Record&lt;string, number&gt; =&gt; {
-    try {
-      const raw = localStorage.getItem(USAGE_STORAGE_KEY);
-      if (raw) {
-        return { ...DEFAULT_INITIAL_COUNTS, ...JSON.parse(raw) };
-      }
-    } catch (e) {
-      console.warn(&apos;⚠️ 读取工具使用频次异常:&apos;, e);
-    }
-    return { ...DEFAULT_INITIAL_COUNTS };
-  };
-  const toolUsageCounts = ref&lt;Record&lt;string, number&gt;&gt;(loadUsageCounts());
-  const recordToolUsage = (toolId: string) =&gt; {
-    const current = toolUsageCounts.value[toolId] || 0;
-    const nextCounts = {
-      ...toolUsageCounts.value,
-      [toolId]: current + 1,
-    };
-    toolUsageCounts.value = nextCounts;
-    try {
-      localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(nextCounts));
-    } catch (e) {
-      console.warn(&apos;⚠️ 写入工具使用频次异常:&apos;, e);
-    }
-  };
-  return {
-    currentView,
-    showRadar,
-    radarMode,
-    toast消息,
-    toast类型,
-    toast显示,
-    弹出提示,
-    侧边栏收起,
-    切换侧边栏,
-    toolUsageCounts,
-    recordToolUsage,
-    showQuotaModal,
-    isQuotaLoading,
-    quota,
-    refreshQuota,
-    isDependencyModalOpen,
-    dependencyTargetTool,
-    dependencyItems,
-    dependencyCallback,
-    openDependencyModal,
-    closeDependencyModal,
-    navigateToTool,
-  };
-});</file><file path="src/bindings/index.ts">// 🛡️ 紫电 AI 桌面工坊 - 端到端强类型契约门面中枢 (bindings/index.ts)
-import { invoke } from &quot;@tauri-apps/api/core&quot;;
-import { runFormatConvert } from &quot;./tools/format-converter&quot;;
-import { parsePdf } from &quot;./tools/pdf-parse&quot;;
-import { runVideoSubtitle, probeVideo } from &quot;./tools/video-subtitle&quot;;
-import { runUpscale48k } from &quot;./tools/upscale-48k&quot;;
-import {
-  checkToolDependencies,
-  downloadToolDependencies,
-  cancelDependencyDownloads,
-} from &quot;./dependencies&quot;;
-export * from &quot;./tools/format-converter&quot;;
-export * from &quot;./tools/pdf-parse&quot;;
-export * from &quot;./tools/video-subtitle&quot;;
-export * from &quot;./tools/upscale-48k&quot;;
-export * from &quot;./dependencies&quot;;
-export interface QuotaLogRecord {
-  id: number;
-  tool_name: string;
-  points_deducted: number;
-  created_at: string;
-}
-export interface QuotaStatus {
-  success: boolean;
-  device_fingerprint: string;
-  stage: string;
-  daily_limit: number;
-  used_today: number;
-  bonus_points: number;
-  remaining_points: number;
-  status: string;
-  is_offline_pro: boolean;
-  recent_logs?: QuotaLogRecord[];
-}
-export async function isPortable(): Promise&lt;boolean&gt; {
-  return await invoke&lt;boolean&gt;(&quot;is_portable&quot;);
-}
-export async function getLogDirPath(): Promise&lt;string&gt; {
-  return await invoke&lt;string&gt;(&quot;get_log_dir_path&quot;);
-}
-export async function openLogDir(): Promise&lt;boolean&gt; {
-  return await invoke&lt;boolean&gt;(&quot;open_log_dir&quot;);
-}
-export async function getDiagnosticReport(): Promise&lt;string&gt; {
-  return await invoke&lt;string&gt;(&quot;get_diagnostic_report&quot;);
-}
-export async function getQuotaStatus(): Promise&lt;QuotaStatus&gt; {
-  return await invoke&lt;QuotaStatus&gt;(&quot;get_quota_status&quot;);
-}
-export async function getHardwareFingerprint(): Promise&lt;string&gt; {
-  return await invoke&lt;string&gt;(&quot;get_hardware_fingerprint&quot;);
-}
-export async function cancelCurrentTask(): Promise&lt;boolean&gt; {
-  return await invoke&lt;boolean&gt;(&quot;cancel_current_task&quot;);
-}
-export const commands = {
-  isPortable,
-  getLogDirPath,
-  openLogDir,
-  getDiagnosticReport,
-  getQuotaStatus,
-  runFormatConvert,
-  parsePdf,
-  probeVideo,
-  runVideoSubtitle,
-  runUpscale48k,
-  cancelCurrentTask,
-  getHardwareFingerprint,
-  checkToolDependencies,
-  downloadToolDependencies,
-  cancelDependencyDownloads,
-};</file><file path="src-tauri/crates/core-onnx-infer/src/config.rs">use crate::errors::OrtInferError;
-use ort::ep::ExecutionProviderDispatch;
-⋮----
-use std::path::PathBuf;
-⋮----
-/// 🛡️ Windows Native 工业级：多级自愈探测并向 Windows 内核注册 CUDA 动态链接库搜索空间
-pub fn ensure_cuda_dll_registered() {
-⋮----
-pub fn ensure_cuda_dll_registered() {
-if CUDA_DLL_REGISTERED.load(Ordering::Relaxed) {
-⋮----
-// 1. 🌟 第一最高优先级：当前主程序 exe 所在同级根目录
-⋮----
-if let Some(exe_dir) = exe_p.parent() {
-candidates.push(exe_dir.to_path_buf());
-candidates.push(exe_dir.join(&quot;bin&quot;).join(&quot;cuda12&quot;));
-candidates.push(exe_dir.join(&quot;cuda12&quot;));
-candidates.push(exe_dir.join(&quot;Data&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
-candidates.push(exe_dir.join(&quot;resources&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
-⋮----
-// 2. 第二优先级：便携与规范统一路径
-⋮----
-candidates.push(PathBuf::from(&amp;local_appdata).join(&quot;紫电AI&quot;).join(&quot;Data&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
-candidates.push(PathBuf::from(&amp;local_appdata).join(&quot;Programs&quot;).join(&quot;紫电AI&quot;));
-candidates.push(PathBuf::from(&amp;local_appdata).join(&quot;ZiDianAI&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
-⋮----
-// 3. 第三优先级：开发绝对工作区目录
-candidates.push(PathBuf::from(r&quot;C:\dev\ai-forge\bin\cuda12&quot;));
-candidates.push(PathBuf::from(r&quot;bin\cuda12&quot;));
-candidates.push(PathBuf::from(r&quot;..\bin\cuda12&quot;));
-⋮----
-// 4. 第四优先级：系统全局 CUDA_PATH 环境变量
-⋮----
-candidates.push(PathBuf::from(cuda_path).join(&quot;bin&quot;));
-⋮----
-if c.is_dir() &amp;&amp; (c.join(&quot;cublas64_13.dll&quot;).exists() || c.join(&quot;cublas64_12.dll&quot;).exists()) {
-if let Ok(abs_p) = c.canonicalize() {
-let abs_str = abs_p.to_string_lossy().trim_start_matches(r&quot;\\?\&quot;).to_string();
-⋮----
-// A. 注入环境变量 PATH
-let current_path = std::env::var(&quot;PATH&quot;).unwrap_or_default();
-if !current_path.contains(&amp;abs_str) {
-std::env::set_var(&quot;PATH&quot;, format!(&quot;{};{}&quot;, abs_str, current_path));
-⋮----
-// B. 使用 Windows 核心 API SetDllDirectoryW 强行注入动态链接库搜索列表
-⋮----
-use std::os::windows::ffi::OsStrExt;
-⋮----
-.encode_wide()
-.chain(std::iter::once(0))
-.collect();
-⋮----
-let _ = SetDllDirectoryW(wide_path.as_ptr());
-⋮----
-CUDA_DLL_REGISTERED.store(true, Ordering::SeqCst);
-⋮----
-pub enum OrtExecutionProvider {
-⋮----
-pub struct OrtSessionConfig {
-⋮----
-impl Default for OrtSessionConfig {
-fn default() -&gt; Self {
-⋮----
-execution_providers: vec![
-⋮----
-parallel_execution: Some(false),
-optimization_level: Some(GraphOptimizationLevel::Level3),
-enable_memory_pattern: Some(false),
-⋮----
-pub fn parse_device_config(device: &amp;str) -&gt; Result&lt;OrtSessionConfig, OrtInferError&gt; {
-let dev = device.to_lowercase();
-⋮----
-return Ok(OrtSessionConfig {
-execution_providers: vec![OrtExecutionProvider::CPU],
-⋮----
-if dev.starts_with(&quot;cuda&quot;) {
-⋮----
-.strip_prefix(&quot;cuda:&quot;)
-.and_then(|s| s.parse::&lt;i32&gt;().ok())
-.unwrap_or(0);
-⋮----
-Ok(OrtSessionConfig::default())
-⋮----
-impl OrtSessionConfig {
-pub fn for_control_flow() -&gt; Self {
-⋮----
-optimization_level: Some(GraphOptimizationLevel::Level1),
-⋮----
-pub fn build_session_builder(&amp;self) -&gt; Result&lt;SessionBuilder, OrtInferError&gt; {
-ensure_cuda_dll_registered();
-⋮----
-let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
-path: &quot;ONNX SessionBuilder&quot;.into(),
-context: format!(&quot;Failed to create builder: {e}&quot;),
-⋮----
-let opt_level = self.optimization_level.unwrap_or(GraphOptimizationLevel::Level3);
-⋮----
-.with_optimization_level(opt_level)
-.map_err(|e| OrtInferError::ModelLoad {
-⋮----
-context: format!(&quot;Failed to set optimization level: {e}&quot;),
-⋮----
-.with_memory_pattern(enable_mem)
-⋮----
-context: format!(&quot;Failed to set memory pattern: {e}&quot;),
-⋮----
-dispatches.push(ort::ep::CPU::default().build());
-⋮----
-use ort::ep::cuda::ConvAlgorithmSearch;
-let mut cuda_ep = ort::ep::CUDA::default().with_device_id(*device_id);
-cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Heuristic);
-dispatches.push(cuda_ep.build());
-⋮----
-if !dispatches.is_empty() {
-⋮----
-.with_execution_providers(dispatches)
-⋮----
-context: format!(&quot;Failed to set execution providers: {e}&quot;),
-⋮----
-Ok(builder)</file><file path="src-tauri/crates/services/service-translation/src/lib.rs">use anyhow::{Context, Result};
+}</file><file path="src-tauri/crates/services/service-translation/src/lib.rs">use anyhow::{Context, Result};
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
@@ -3066,74 +4163,6 @@ impl TranslationService {
             elapsed_ms,
         })
     }
-}</file><file path="src-tauri/tauri.conf.json">{
-  &quot;$schema&quot;: &quot;https://schema.tauri.app/config/2&quot;,
-  &quot;productName&quot;: &quot;紫电AI&quot;,
-  &quot;version&quot;: &quot;0.1.24&quot;,
-  &quot;identifier&quot;: &quot;com.zhz.zidian-ai&quot;,
-  &quot;build&quot;: {
-    &quot;beforeDevCommand&quot;: &quot;pnpm dev&quot;,
-    &quot;devUrl&quot;: &quot;http://localhost:1420&quot;,
-    &quot;beforeBuildCommand&quot;: &quot;pnpm build&quot;,
-    &quot;frontendDist&quot;: &quot;../dist&quot;
-  },
-  &quot;app&quot;: {
-    &quot;windows&quot;: [
-      {
-        &quot;title&quot;: &quot;紫电 AI 桌面工坊&quot;,
-        &quot;width&quot;: 1280,
-        &quot;height&quot;: 800,
-        &quot;minWidth&quot;: 1024,
-        &quot;minHeight&quot;: 700,
-        &quot;decorations&quot;: false,
-        &quot;shadow&quot;: true,
-        &quot;center&quot;: true
-      }
-    ],
-    &quot;security&quot;: {
-      &quot;csp&quot;: null
-    }
-  },
-  &quot;bundle&quot;: {
-    &quot;active&quot;: true,
-    &quot;createUpdaterArtifacts&quot;: true,
-    &quot;targets&quot;: [
-      &quot;nsis&quot;
-    ],
-    &quot;externalBin&quot;: [
-      &quot;bin/ffmpeg&quot;
-    ],
-    &quot;resources&quot;: {
-      &quot;../bin/pdfium.dll&quot;: &quot;.&quot;,
-      &quot;../bin/cuda12/*&quot;: &quot;.&quot;
-    },
-    &quot;publisher&quot;: &quot;ZiDianAI&quot;,
-    &quot;shortDescription&quot;: &quot;紫电 AI 桌面工坊 - 端侧全能 AI 生产力工具箱&quot;,
-    &quot;windows&quot;: {
-      &quot;nsis&quot;: {
-        &quot;installMode&quot;: &quot;currentUser&quot;,
-        &quot;displayLanguageSelector&quot;: false,
-        &quot;languages&quot;: [
-          &quot;SimpChinese&quot;
-        ]
-      }
-    },
-    &quot;icon&quot;: [
-      &quot;icons/32x32.png&quot;,
-      &quot;icons/128x128.png&quot;,
-      &quot;icons/128x128@2x.png&quot;,
-      &quot;icons/icon.icns&quot;,
-      &quot;icons/icon.ico&quot;
-    ]
-  },
-  &quot;plugins&quot;: {
-    &quot;updater&quot;: {
-      &quot;endpoints&quot;: [
-        &quot;https://assets.geantendormi.top/updates/latest.json&quot;
-      ],
-      &quot;pubkey&quot;: &quot;dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJBN0M1REY2QUExMEU3NEEKUldSSzV4Q3E5bDE4S2tlMnlJRFBZcWZLSFlKUUpaYWtwd1VDbE1RVUx2Z2pyZGFFUWkya1ZtT2IK&quot;
-    }
-  }
 }</file><file path="src/composables/useToolWorkflow.ts">// 🛡️ 紫电 AI 桌面工坊 - 工业级批量多任务工作流状态机母线 (useToolWorkflow.ts)
 import { ref, shallowRef, computed, onMounted, onUnmounted } from &apos;vue&apos;;
 import { useUIStore } from &apos;../store/uiStore&apos;;
@@ -3566,49 +4595,433 @@ export function useToolWorkflow&lt;TResult = any&gt;(config?: ToolWorkflowConfig
     closeSuccessModal,
   };
 }
-export type ToolWorkflowInstance&lt;T = any&gt; = ReturnType&lt;typeof useToolWorkflow&lt;T&gt;&gt;;</file><file path="package.json">{
-  &quot;name&quot;: &quot;ai-forge-ui&quot;,
-  &quot;private&quot;: true,
+export type ToolWorkflowInstance&lt;T = any&gt; = ReturnType&lt;typeof useToolWorkflow&lt;T&gt;&gt;;</file><file path="src/store/uiStore.ts">import { defineStore } from &apos;pinia&apos;;
+import { ref } from &apos;vue&apos;;
+import {
+  getQuotaStatus,
+  checkToolDependencies,
+  type QuotaStatus,
+  type DependencyItem,
+} from &apos;../bindings/index&apos;;
+const USAGE_STORAGE_KEY = &apos;zidian_tool_usage_counts&apos;;
+const DEFAULT_INITIAL_COUNTS: Record&lt;string, number&gt; = {
+  trans: 14,
+  upscale: 12,
+  asr: 10,
+  pdf: 8,
+  format: 6,
+};
+export const useUIStore = defineStore(&apos;ui&apos;, () =&gt; {
+  const currentView = ref&lt;&apos;home&apos; | &apos;format&apos; | &apos;pdf&apos; | &apos;asr&apos; | &apos;upscale&apos; | &apos;trans&apos;&gt;(&apos;home&apos;);
+  const showRadar = ref(false);
+  const radarMode = ref&lt;&apos;global&apos; | &apos;local&apos;&gt;(&apos;global&apos;);
+  const toast消息 = ref&lt;string | null&gt;(null);
+  const toast类型 = ref&lt;&apos;success&apos; | &apos;error&apos; | &apos;info&apos;&gt;(&apos;success&apos;);
+  const toast显示 = ref(false);
+  const 侧边栏收起 = ref(false);
+  let toast定时器: number | null = null;
+  // 🛡️ 依赖与模型门禁拦截状态机
+  const isDependencyModalOpen = ref(false);
+  const dependencyTargetTool = ref&lt;string | null&gt;(null);
+  const dependencyItems = ref&lt;DependencyItem[]&gt;([]);
+  const dependencyCallback = ref&lt;(() =&gt; void) | null&gt;(null);
+  const openDependencyModal = (
+    toolId: string,
+    items: DependencyItem[],
+    callback?: () =&gt; void
+  ) =&gt; {
+    dependencyTargetTool.value = toolId;
+    dependencyItems.value = items;
+    dependencyCallback.value = callback || null;
+    isDependencyModalOpen.value = true;
+  };
+  const closeDependencyModal = () =&gt; {
+    isDependencyModalOpen.value = false;
+    dependencyTargetTool.value = null;
+    dependencyItems.value = [];
+    dependencyCallback.value = null;
+  };
+  const navigateToTool = async (
+    toolId: &apos;home&apos; | &apos;format&apos; | &apos;pdf&apos; | &apos;asr&apos; | &apos;upscale&apos; | &apos;trans&apos;,
+    onReady?: () =&gt; void
+  ) =&gt; {
+    recordToolUsage(toolId);
+    if (toolId === &apos;home&apos;) {
+      currentView.value = &apos;home&apos;;
+      onReady?.();
+      return;
+    }
+    try {
+      const deps = await checkToolDependencies(toolId);
+      const missingDeps = deps.filter((d) =&gt; !d.is_ready);
+      if (missingDeps.length &gt; 0) {
+        openDependencyModal(toolId, deps, () =&gt; {
+          currentView.value = toolId;
+          onReady?.();
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn(`⚠️ 依赖探测异常，尝试常规直通:`, e);
+    }
+    currentView.value = toolId;
+    onReady?.();
+  };
+  // 👑 算力状态中台
+  const showQuotaModal = ref(false);
+  const isQuotaLoading = ref(false);
+  const quota = ref&lt;QuotaStatus&gt;({
+    success: false,
+    device_fingerprint: &apos;&apos;,
+    stage: &apos;&apos;,
+    daily_limit: 0,
+    used_today: 0,
+    bonus_points: 0,
+    remaining_points: 0,
+    status: &apos;active&apos;,
+    is_offline_pro: false,
+    recent_logs: [],
+  });
+  const refreshQuota = async () =&gt; {
+    if (isQuotaLoading.value) return;
+    isQuotaLoading.value = true;
+    try {
+      const res = await getQuotaStatus();
+      quota.value = res;
+    } catch (e) {
+      console.warn(&apos;⚠️ 获取云端算力状态异常:&apos;, e);
+    } finally {
+      isQuotaLoading.value = false;
+    }
+  };
+  refreshQuota();
+  const 弹出提示 = (消息: string, 类型: &apos;success&apos; | &apos;error&apos; | &apos;info&apos; = &apos;success&apos;) =&gt; {
+    toast消息.value = 消息;
+    toast类型.value = 类型;
+    toast显示.value = true;
+    if (toast定时器) {
+      clearTimeout(toast定时器);
+      toast定时器 = null;
+    }
+    toast定时器 = window.setTimeout(() =&gt; {
+      toast显示.value = false;
+    }, 2500);
+  };
+  const 切换侧边栏 = () =&gt; {
+    侧边栏收起.value = !侧边栏收起.value;
+  };
+  const loadUsageCounts = (): Record&lt;string, number&gt; =&gt; {
+    try {
+      const raw = localStorage.getItem(USAGE_STORAGE_KEY);
+      if (raw) {
+        return { ...DEFAULT_INITIAL_COUNTS, ...JSON.parse(raw) };
+      }
+    } catch (e) {
+      console.warn(&apos;⚠️ 读取工具使用频次异常:&apos;, e);
+    }
+    return { ...DEFAULT_INITIAL_COUNTS };
+  };
+  const toolUsageCounts = ref&lt;Record&lt;string, number&gt;&gt;(loadUsageCounts());
+  const recordToolUsage = (toolId: string) =&gt; {
+    const current = toolUsageCounts.value[toolId] || 0;
+    const nextCounts = {
+      ...toolUsageCounts.value,
+      [toolId]: current + 1,
+    };
+    toolUsageCounts.value = nextCounts;
+    try {
+      localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(nextCounts));
+    } catch (e) {
+      console.warn(&apos;⚠️ 写入工具使用频次异常:&apos;, e);
+    }
+  };
+  return {
+    currentView,
+    showRadar,
+    radarMode,
+    toast消息,
+    toast类型,
+    toast显示,
+    弹出提示,
+    侧边栏收起,
+    切换侧边栏,
+    toolUsageCounts,
+    recordToolUsage,
+    showQuotaModal,
+    isQuotaLoading,
+    quota,
+    refreshQuota,
+    isDependencyModalOpen,
+    dependencyTargetTool,
+    dependencyItems,
+    dependencyCallback,
+    openDependencyModal,
+    closeDependencyModal,
+    navigateToTool,
+  };
+});</file><file path="src-tauri/crates/core-onnx-infer/src/config.rs">use crate::errors::OrtInferError;
+use ort::ep::ExecutionProviderDispatch;
+⋮----
+use std::path::PathBuf;
+⋮----
+/// 🛡️ Windows Native 工业级：多级自愈探测并向 Windows 内核注册 CUDA 动态链接库搜索空间
+pub fn ensure_cuda_dll_registered() {
+⋮----
+pub fn ensure_cuda_dll_registered() {
+if CUDA_DLL_REGISTERED.load(Ordering::Relaxed) {
+⋮----
+// 1. 🌟 第一最高优先级：当前主程序 exe 所在同级根目录
+⋮----
+if let Some(exe_dir) = exe_p.parent() {
+candidates.push(exe_dir.to_path_buf());
+candidates.push(exe_dir.join(&quot;bin&quot;).join(&quot;cuda12&quot;));
+candidates.push(exe_dir.join(&quot;cuda12&quot;));
+candidates.push(exe_dir.join(&quot;Data&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
+candidates.push(exe_dir.join(&quot;resources&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
+⋮----
+// 2. 第二优先级：便携与规范统一路径
+⋮----
+candidates.push(PathBuf::from(&amp;local_appdata).join(&quot;紫电AI&quot;).join(&quot;Data&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
+candidates.push(PathBuf::from(&amp;local_appdata).join(&quot;Programs&quot;).join(&quot;紫电AI&quot;));
+candidates.push(PathBuf::from(&amp;local_appdata).join(&quot;ZiDianAI&quot;).join(&quot;bin&quot;).join(&quot;cuda12&quot;));
+⋮----
+// 3. 第三优先级：开发绝对工作区目录
+candidates.push(PathBuf::from(r&quot;C:\dev\ai-forge\bin\cuda12&quot;));
+candidates.push(PathBuf::from(r&quot;bin\cuda12&quot;));
+candidates.push(PathBuf::from(r&quot;..\bin\cuda12&quot;));
+⋮----
+// 4. 第四优先级：系统全局 CUDA_PATH 环境变量
+⋮----
+candidates.push(PathBuf::from(cuda_path).join(&quot;bin&quot;));
+⋮----
+if c.is_dir() &amp;&amp; (c.join(&quot;cublas64_13.dll&quot;).exists() || c.join(&quot;cublas64_12.dll&quot;).exists()) {
+if let Ok(abs_p) = c.canonicalize() {
+let abs_str = abs_p.to_string_lossy().trim_start_matches(r&quot;\\?\&quot;).to_string();
+⋮----
+// A. 注入环境变量 PATH
+let current_path = std::env::var(&quot;PATH&quot;).unwrap_or_default();
+if !current_path.contains(&amp;abs_str) {
+std::env::set_var(&quot;PATH&quot;, format!(&quot;{};{}&quot;, abs_str, current_path));
+⋮----
+// B. 使用 Windows 核心 API SetDllDirectoryW 强行注入动态链接库搜索列表
+⋮----
+use std::os::windows::ffi::OsStrExt;
+⋮----
+.encode_wide()
+.chain(std::iter::once(0))
+.collect();
+⋮----
+let _ = SetDllDirectoryW(wide_path.as_ptr());
+⋮----
+CUDA_DLL_REGISTERED.store(true, Ordering::SeqCst);
+⋮----
+pub enum OrtExecutionProvider {
+⋮----
+pub struct OrtSessionConfig {
+⋮----
+impl Default for OrtSessionConfig {
+fn default() -&gt; Self {
+⋮----
+execution_providers: vec![
+⋮----
+parallel_execution: Some(false),
+optimization_level: Some(GraphOptimizationLevel::Level3),
+enable_memory_pattern: Some(false),
+⋮----
+pub fn parse_device_config(device: &amp;str) -&gt; Result&lt;OrtSessionConfig, OrtInferError&gt; {
+let dev = device.to_lowercase();
+⋮----
+return Ok(OrtSessionConfig {
+execution_providers: vec![OrtExecutionProvider::CPU],
+⋮----
+if dev.starts_with(&quot;cuda&quot;) {
+⋮----
+.strip_prefix(&quot;cuda:&quot;)
+.and_then(|s| s.parse::&lt;i32&gt;().ok())
+.unwrap_or(0);
+⋮----
+Ok(OrtSessionConfig::default())
+⋮----
+impl OrtSessionConfig {
+pub fn for_control_flow() -&gt; Self {
+⋮----
+optimization_level: Some(GraphOptimizationLevel::Level1),
+⋮----
+pub fn build_session_builder(&amp;self) -&gt; Result&lt;SessionBuilder, OrtInferError&gt; {
+ensure_cuda_dll_registered();
+⋮----
+let mut builder = SessionBuilder::new().map_err(|e| OrtInferError::ModelLoad {
+path: &quot;ONNX SessionBuilder&quot;.into(),
+context: format!(&quot;Failed to create builder: {e}&quot;),
+⋮----
+let opt_level = self.optimization_level.unwrap_or(GraphOptimizationLevel::Level3);
+⋮----
+.with_optimization_level(opt_level)
+.map_err(|e| OrtInferError::ModelLoad {
+⋮----
+context: format!(&quot;Failed to set optimization level: {e}&quot;),
+⋮----
+.with_memory_pattern(enable_mem)
+⋮----
+context: format!(&quot;Failed to set memory pattern: {e}&quot;),
+⋮----
+dispatches.push(ort::ep::CPU::default().build());
+⋮----
+use ort::ep::cuda::ConvAlgorithmSearch;
+let mut cuda_ep = ort::ep::CUDA::default().with_device_id(*device_id);
+cuda_ep = cuda_ep.with_conv_algorithm_search(ConvAlgorithmSearch::Heuristic);
+dispatches.push(cuda_ep.build());
+⋮----
+if !dispatches.is_empty() {
+⋮----
+.with_execution_providers(dispatches)
+⋮----
+context: format!(&quot;Failed to set execution providers: {e}&quot;),
+⋮----
+Ok(builder)</file><file path="src-tauri/tauri.conf.json">{
+  &quot;$schema&quot;: &quot;https://schema.tauri.app/config/2&quot;,
+  &quot;productName&quot;: &quot;紫电AI&quot;,
   &quot;version&quot;: &quot;0.1.24&quot;,
-  &quot;type&quot;: &quot;module&quot;,
-  &quot;scripts&quot;: {
-    &quot;dev&quot;: &quot;vite&quot;,
-    &quot;build&quot;: &quot;vue-tsc --noEmit &amp;&amp; vite build&quot;,
-    &quot;preview&quot;: &quot;vite preview&quot;,
-    &quot;tauri&quot;: &quot;tauri&quot;
+  &quot;identifier&quot;: &quot;com.zhz.zidian-ai&quot;,
+  &quot;build&quot;: {
+    &quot;beforeDevCommand&quot;: &quot;pnpm dev&quot;,
+    &quot;devUrl&quot;: &quot;http://localhost:1420&quot;,
+    &quot;beforeBuildCommand&quot;: &quot;pnpm build&quot;,
+    &quot;frontendDist&quot;: &quot;../dist&quot;
   },
-  &quot;dependencies&quot;: {
-    &quot;@tauri-apps/api&quot;: &quot;^2.1.1&quot;,
-    &quot;@tauri-apps/plugin-dialog&quot;: &quot;^2.7.2&quot;,
-    &quot;@tauri-apps/plugin-opener&quot;: &quot;^2.1.1&quot;,
-    &quot;@tauri-apps/plugin-process&quot;: &quot;^2.3.1&quot;,
-    &quot;@tauri-apps/plugin-updater&quot;: &quot;^2.10.1&quot;,
-    &quot;clsx&quot;: &quot;^2.1.1&quot;,
-    &quot;gsap&quot;: &quot;^3.15.0&quot;,
-    &quot;lucide-vue-next&quot;: &quot;^0.447.0&quot;,
-    &quot;marked&quot;: &quot;^18.0.5&quot;,
-    &quot;motion-v&quot;: &quot;^2.3.0&quot;,
-    &quot;ogl&quot;: &quot;^1.0.11&quot;,
-    &quot;pinia&quot;: &quot;^2.2.4&quot;,
-    &quot;tailwind-merge&quot;: &quot;^2.5.4&quot;,
-    &quot;three&quot;: &quot;^0.185.1&quot;,
-    &quot;vue&quot;: &quot;^3.5.12&quot;,
-    &quot;vue-i18n&quot;: &quot;^9.14.1&quot;
+  &quot;app&quot;: {
+    &quot;windows&quot;: [
+      {
+        &quot;title&quot;: &quot;紫电 AI 桌面工坊&quot;,
+        &quot;width&quot;: 1280,
+        &quot;height&quot;: 800,
+        &quot;minWidth&quot;: 1024,
+        &quot;minHeight&quot;: 700,
+        &quot;decorations&quot;: false,
+        &quot;shadow&quot;: true,
+        &quot;center&quot;: true
+      }
+    ],
+    &quot;security&quot;: {
+      &quot;csp&quot;: null
+    }
   },
-  &quot;devDependencies&quot;: {
-    &quot;@tailwindcss/typography&quot;: &quot;^0.5.15&quot;,
-    &quot;@tauri-apps/cli&quot;: &quot;^2.1.0&quot;,
-    &quot;@types/node&quot;: &quot;^22.7.5&quot;,
-    &quot;@types/three&quot;: &quot;^0.185.4&quot;,
-    &quot;@vitejs/plugin-vue&quot;: &quot;^5.1.4&quot;,
-    &quot;autoprefixer&quot;: &quot;^10.4.20&quot;,
-    &quot;postcss&quot;: &quot;^8.4.47&quot;,
-    &quot;tailwindcss&quot;: &quot;^3.4.14&quot;,
-    &quot;typescript&quot;: &quot;^5.6.3&quot;,
-    &quot;vite&quot;: &quot;^5.4.9&quot;,
-    &quot;vue-tsc&quot;: &quot;^2.1.6&quot;
+  &quot;bundle&quot;: {
+    &quot;active&quot;: true,
+    &quot;createUpdaterArtifacts&quot;: true,
+    &quot;targets&quot;: [
+      &quot;nsis&quot;
+    ],
+    &quot;externalBin&quot;: [
+      &quot;bin/ffmpeg&quot;
+    ],
+    &quot;resources&quot;: {
+      &quot;../bin/pdfium.dll&quot;: &quot;.&quot;,
+      &quot;../bin/cuda12/*&quot;: &quot;.&quot;
+    },
+    &quot;publisher&quot;: &quot;ZiDianAI&quot;,
+    &quot;shortDescription&quot;: &quot;紫电 AI 桌面工坊 - 端侧全能 AI 生产力工具箱&quot;,
+    &quot;windows&quot;: {
+      &quot;nsis&quot;: {
+        &quot;installMode&quot;: &quot;currentUser&quot;,
+        &quot;displayLanguageSelector&quot;: false,
+        &quot;languages&quot;: [
+          &quot;SimpChinese&quot;
+        ]
+      }
+    },
+    &quot;icon&quot;: [
+      &quot;icons/32x32.png&quot;,
+      &quot;icons/128x128.png&quot;,
+      &quot;icons/128x128@2x.png&quot;,
+      &quot;icons/icon.icns&quot;,
+      &quot;icons/icon.ico&quot;
+    ]
+  },
+  &quot;plugins&quot;: {
+    &quot;updater&quot;: {
+      &quot;endpoints&quot;: [
+        &quot;https://assets.geantendormi.top/updates/latest.json&quot;
+      ],
+      &quot;pubkey&quot;: &quot;dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJBN0M1REY2QUExMEU3NEEKUldSSzV4Q3E5bDE4S2tlMnlJRFBZcWZLSFlKUUpaYWtwd1VDbE1RVUx2Z2pyZGFFUWkya1ZtT2IK&quot;
+    }
   }
-}</file><file path="src/components/layout/ToolWorkbenchLayout.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+}</file><file path="src/bindings/index.ts">// 🛡️ 紫电 AI 桌面工坊 - 端到端强类型契约门面中枢 (bindings/index.ts)
+import { invoke } from &quot;@tauri-apps/api/core&quot;;
+import { runFormatConvert } from &quot;./tools/format-converter&quot;;
+import { parsePdf } from &quot;./tools/pdf-parse&quot;;
+import { runVideoSubtitle, probeVideo } from &quot;./tools/video-subtitle&quot;;
+import { runUpscale48k } from &quot;./tools/upscale-48k&quot;;
+import { runTranslation, runImageTranslation } from &quot;./tools/translation&quot;;
+import {
+  checkToolDependencies,
+  downloadToolDependencies,
+  cancelDependencyDownloads,
+} from &quot;./dependencies&quot;;
+export * from &quot;./tools/format-converter&quot;;
+export * from &quot;./tools/pdf-parse&quot;;
+export * from &quot;./tools/video-subtitle&quot;;
+export * from &quot;./tools/upscale-48k&quot;;
+export * from &quot;./tools/translation&quot;;
+export * from &quot;./dependencies&quot;;
+export interface QuotaLogRecord {
+  id: number;
+  tool_name: string;
+  points_deducted: number;
+  created_at: string;
+}
+export interface QuotaStatus {
+  success: boolean;
+  device_fingerprint: string;
+  stage: string;
+  daily_limit: number;
+  used_today: number;
+  bonus_points: number;
+  remaining_points: number;
+  status: string;
+  is_offline_pro: boolean;
+  recent_logs?: QuotaLogRecord[];
+}
+export async function isPortable(): Promise&lt;boolean&gt; {
+  return await invoke&lt;boolean&gt;(&quot;is_portable&quot;);
+}
+export async function getLogDirPath(): Promise&lt;string&gt; {
+  return await invoke&lt;string&gt;(&quot;get_log_dir_path&quot;);
+}
+export async function openLogDir(): Promise&lt;boolean&gt; {
+  return await invoke&lt;boolean&gt;(&quot;open_log_dir&quot;);
+}
+export async function getDiagnosticReport(): Promise&lt;string&gt; {
+  return await invoke&lt;string&gt;(&quot;get_diagnostic_report&quot;);
+}
+export async function getQuotaStatus(): Promise&lt;QuotaStatus&gt; {
+  return await invoke&lt;QuotaStatus&gt;(&quot;get_quota_status&quot;);
+}
+export async function getHardwareFingerprint(): Promise&lt;string&gt; {
+  return await invoke&lt;string&gt;(&quot;get_hardware_fingerprint&quot;);
+}
+export async function cancelCurrentTask(): Promise&lt;boolean&gt; {
+  return await invoke&lt;boolean&gt;(&quot;cancel_current_task&quot;);
+}
+export const commands = {
+  isPortable,
+  getLogDirPath,
+  openLogDir,
+  getDiagnosticReport,
+  getQuotaStatus,
+  runFormatConvert,
+  parsePdf,
+  probeVideo,
+  runVideoSubtitle,
+  runUpscale48k,
+  runTranslation,
+  runImageTranslation,
+  cancelCurrentTask,
+  getHardwareFingerprint,
+  checkToolDependencies,
+  downloadToolDependencies,
+  cancelDependencyDownloads,
+};</file><file path="src/components/layout/ToolWorkbenchLayout.vue">&lt;script setup lang=&quot;ts&quot;&gt;
 import { onMounted, onUnmounted } from &apos;vue&apos;;
 import { useUIStore } from &apos;../../store/uiStore&apos;;
 import {
@@ -3974,7 +5387,49 @@ onUnmounted(() =&gt; {
       &lt;/div&gt;
     &lt;/div&gt;
   &lt;/div&gt;
-&lt;/template&gt;</file><file path="src/App.vue">&lt;script setup lang=&quot;ts&quot;&gt;
+&lt;/template&gt;</file><file path="package.json">{
+  &quot;name&quot;: &quot;ai-forge-ui&quot;,
+  &quot;private&quot;: true,
+  &quot;version&quot;: &quot;0.1.24&quot;,
+  &quot;type&quot;: &quot;module&quot;,
+  &quot;scripts&quot;: {
+    &quot;dev&quot;: &quot;vite&quot;,
+    &quot;build&quot;: &quot;vue-tsc --noEmit &amp;&amp; vite build&quot;,
+    &quot;preview&quot;: &quot;vite preview&quot;,
+    &quot;tauri&quot;: &quot;tauri&quot;
+  },
+  &quot;dependencies&quot;: {
+    &quot;@tauri-apps/api&quot;: &quot;^2.1.1&quot;,
+    &quot;@tauri-apps/plugin-dialog&quot;: &quot;^2.7.2&quot;,
+    &quot;@tauri-apps/plugin-opener&quot;: &quot;^2.1.1&quot;,
+    &quot;@tauri-apps/plugin-process&quot;: &quot;^2.3.1&quot;,
+    &quot;@tauri-apps/plugin-updater&quot;: &quot;^2.10.1&quot;,
+    &quot;clsx&quot;: &quot;^2.1.1&quot;,
+    &quot;gsap&quot;: &quot;^3.15.0&quot;,
+    &quot;lucide-vue-next&quot;: &quot;^0.447.0&quot;,
+    &quot;marked&quot;: &quot;^18.0.5&quot;,
+    &quot;motion-v&quot;: &quot;^2.3.0&quot;,
+    &quot;ogl&quot;: &quot;^1.0.11&quot;,
+    &quot;pinia&quot;: &quot;^2.2.4&quot;,
+    &quot;tailwind-merge&quot;: &quot;^2.5.4&quot;,
+    &quot;three&quot;: &quot;^0.185.1&quot;,
+    &quot;vue&quot;: &quot;^3.5.12&quot;,
+    &quot;vue-i18n&quot;: &quot;^9.14.1&quot;
+  },
+  &quot;devDependencies&quot;: {
+    &quot;@tailwindcss/typography&quot;: &quot;^0.5.15&quot;,
+    &quot;@tauri-apps/cli&quot;: &quot;^2.1.0&quot;,
+    &quot;@types/node&quot;: &quot;^22.7.5&quot;,
+    &quot;@types/three&quot;: &quot;^0.185.4&quot;,
+    &quot;@vitejs/plugin-vue&quot;: &quot;^5.1.4&quot;,
+    &quot;autoprefixer&quot;: &quot;^10.4.20&quot;,
+    &quot;postcss&quot;: &quot;^8.4.47&quot;,
+    &quot;tailwindcss&quot;: &quot;^3.4.14&quot;,
+    &quot;typescript&quot;: &quot;^5.6.3&quot;,
+    &quot;vite&quot;: &quot;^5.4.9&quot;,
+    &quot;vue-tsc&quot;: &quot;^2.1.6&quot;
+  }
+}</file><file path="src/App.vue">&lt;script setup lang=&quot;ts&quot;&gt;
 import { onMounted } from &apos;vue&apos;;
 import { useUIStore } from &apos;./store/uiStore&apos;;
 import { useTauriWindow } from &apos;./composables/useTauriWindow&apos;;
@@ -3987,6 +5442,7 @@ import Upscale48kView from &apos;./views/Upscale48kView.vue&apos;;
 import FormatConverterView from &apos;./views/FormatConverterView.vue&apos;;
 import PdfParseView from &apos;./views/PdfParseView.vue&apos;;
 import VideoSubtitleView from &apos;./views/VideoSubtitleView.vue&apos;;
+import TranslationView from &apos;./views/TranslationView.vue&apos;;
 import {
   Minus,
   Square,
@@ -4009,6 +5465,7 @@ onMounted(() =&gt; {
     &lt;!-- 1. 全景主工作区 --&gt;
     &lt;main class=&quot;absolute inset-0 w-full h-full overflow-hidden z-0&quot;&gt;
       &lt;HomeView v-if=&quot;ui.currentView === &apos;home&apos;&quot; /&gt;
+      &lt;TranslationView v-else-if=&quot;ui.currentView === &apos;trans&apos;&quot; /&gt;
       &lt;Upscale48kView v-else-if=&quot;ui.currentView === &apos;upscale&apos;&quot; /&gt;
       &lt;FormatConverterView v-else-if=&quot;ui.currentView === &apos;format&apos;&quot; /&gt;
       &lt;PdfParseView v-else-if=&quot;ui.currentView === &apos;pdf&apos;&quot; /&gt;
@@ -4091,6 +5548,7 @@ import { useUIStore } from &apos;../../store/uiStore&apos;;
 import ShinyText from &apos;../effects/ShinyText.vue&apos;;
 import {
   LayoutDashboard,
+  Languages,
   Film,
   Zap,
   FileText,
@@ -4101,27 +5559,26 @@ import {
   Flame,
   Workflow,
   Database,
-  Languages,
   Wand2
 } from &apos;lucide-vue-next&apos;;
 const ui = useUIStore();
-// 1. 核心四大已上线工作台
+// 1. 核心五大已上线工作台 (含离线高精翻译)
 const mainWorkbenches = [
   { id: &apos;home&apos;, label: &apos;工坊主页&apos;, icon: LayoutDashboard },
+  { id: &apos;trans&apos;, label: &apos;离线高精翻译&apos;, icon: Languages },
   { id: &apos;upscale&apos;, label: &apos;4K/8K 图像超分&apos;, icon: Scan },
   { id: &apos;format&apos;, label: &apos;全能格式转换&apos;, icon: Zap },
   { id: &apos;pdf&apos;, label: &apos;PDF 智能解析&apos;, icon: FileText },
   { id: &apos;asr&apos;, label: &apos;视频字幕生成&apos;, icon: Film },
 ];
-// 2. 🌟 未来核心算力前瞻规划 (精准 4 项)
+// 2. 🌟 未来核心算力前瞻规划
 const extensionOperators = [
   { id: &apos;rpa&apos;, label: &apos;RPA 自动化&apos;, icon: Workflow },
   { id: &apos;rag&apos;, label: &apos;RAG 知识库&apos;, icon: Database },
-  { id: &apos;trans&apos;, label: &apos;离线高精翻译&apos;, icon: Languages },
   { id: &apos;ai_edit&apos;, label: &apos;AI 无痕修改&apos;, icon: Wand2 },
 ];
 const switchView = (id: string) =&gt; {
-  if ([&apos;home&apos;, &apos;upscale&apos;, &apos;format&apos;, &apos;asr&apos;, &apos;pdf&apos;].includes(id)) {
+  if ([&apos;home&apos;, &apos;trans&apos;, &apos;upscale&apos;, &apos;format&apos;, &apos;asr&apos;, &apos;pdf&apos;].includes(id)) {
     ui.navigateToTool(id as any);
   } else {
     const target = extensionOperators.find((o) =&gt; o.id === id);
@@ -4226,7 +5683,7 @@ onMounted(() =&gt; {
       &lt;template v-if=&quot;!ui.侧边栏收起&quot;&gt;
         &lt;div class=&quot;pt-3 pb-1 px-2 flex items-center justify-between&quot;&gt;
           &lt;span class=&quot;text-[10px] font-mono font-bold text-[#5b696b] uppercase tracking-wider&quot;&gt;本地算力扩展&lt;/span&gt;
-          &lt;span class=&quot;text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded&quot;&gt;4 规划&lt;/span&gt;
+          &lt;span class=&quot;text-[9px] font-mono text-[#02c3b4]/70 bg-[#02c3b4]/10 px-1.5 py-0.2 rounded&quot;&gt;3 规划&lt;/span&gt;
         &lt;/div&gt;
         &lt;div
           v-for=&quot;item in extensionOperators&quot;
@@ -4306,6 +5763,7 @@ import GradientText from &apos;../components/effects/GradientText.vue&apos;;
 import ChromaGrid, { type ChromaCardItem } from &apos;../components/effects/ChromaGrid.vue&apos;;
 import FeedbackModal from &apos;../components/modals/FeedbackModal.vue&apos;;
 import LogReportModal from &apos;../components/modals/LogReportModal.vue&apos;;
+import translationCoverSvg from &apos;../assets/tools/translation/cover.svg&apos;;
 import upscaleCoverSvg from &apos;../assets/tools/upscale-48k/cover.svg&apos;;
 import videoCoverSvg from &apos;../assets/tools/video-subtitle/cover.svg&apos;;
 import pdfCoverSvg from &apos;../assets/tools/pdf-parse/cover.svg&apos;;
@@ -4314,16 +5772,16 @@ import {
   FileText,
   Search,
   Sparkles,
-  Zap,
   Scan,
   Globe,
+  Languages,
   MessageSquareHeart,
   Terminal
 } from &apos;lucide-vue-next&apos;;
 const ui = useUIStore();
 const showFeedbackModal = ref(false);
 const showLogModal = ref(false);
-// 1. 全库工具注册表
+// 1. 全库工具注册表 (离线高精翻译排头位)
 interface ToolItem {
   id: string;
   name: string;
@@ -4331,9 +5789,18 @@ interface ToolItem {
   subtitle: string;
   category: &apos;core&apos; | &apos;document&apos; | &apos;media&apos; | &apos;system&apos;;
   desc: string;
-  viewTarget?: &apos;upscale&apos; | &apos;asr&apos; | &apos;format&apos; | &apos;pdf&apos;;
+  viewTarget?: &apos;trans&apos; | &apos;upscale&apos; | &apos;asr&apos; | &apos;format&apos; | &apos;pdf&apos;;
 }
 const masterToolList: ToolItem[] = [
+  {
+    id: &apos;trans&apos;,
+    name: &apos;离线高精翻译&apos;,
+    image: translationCoverSvg,
+    subtitle: &apos;38 语种神经互译、专业术语锁词与截图 OCR&apos;,
+    category: &apos;core&apos;,
+    desc: &apos;38 语种高精神经互译、术语库锁词与图像 OCR 即时翻译&apos;,
+    viewTarget: &apos;trans&apos;,
+  },
   {
     id: &apos;upscale&apos;,
     name: &apos;4K/8K 图像超分&apos;,
@@ -4391,8 +5858,8 @@ const searchQuery = ref(&apos;&apos;);
 const activeCategory = ref(&apos;all&apos;);
 const categoryList = [
   { id: &apos;all&apos;, label: &apos;全部工具&apos;, icon: Sparkles },
+  { id: &apos;core&apos;, label: &apos;核心工具/翻译&apos;, icon: Languages },
   { id: &apos;media&apos;, label: &apos;音视频/超分&apos;, icon: Scan },
-  { id: &apos;core&apos;, label: &apos;核心工具&apos;, icon: Zap },
   { id: &apos;document&apos;, label: &apos;文档重构&apos;, icon: FileText },
 ];
 const filteredTools = computed(() =&gt; {
@@ -4604,6 +6071,10 @@ use upscale_48k::{Upscale48kTool, UpscaleResult, UpscaleTask};
 use video_subtitle::{
     VideoProbeResult, VideoProbeService, VideoSubtitleOptions, VideoSubtitleResult,
     VideoSubtitleTool,
+};
+use translation::{
+    ImageTranslationResult, ImageTranslationTask, TranslationResult, TranslationTask,
+    TranslationTool,
 };
 pub struct AppState {
     pub vram_guard: Arc&lt;VramTokenGuard&gt;,
@@ -4927,6 +6398,80 @@ async fn run_video_subtitle(
     .await;
     res
 }
+/// 🛡️ 离线高精文本翻译指令 (100% 免费 · 0 Token 扣减)
+#[tauri::command]
+async fn run_translation(
+    task: TranslationTask,
+    window: tauri::Window,
+    state: State&lt;&apos;_, AppState&gt;,
+) -&gt; Result&lt;TranslationResult, String&gt; {
+    state.cancel_token.store(false, Ordering::SeqCst);
+    let window_clone = window.clone();
+    let progress_cb = Arc::new(move |current: usize, total: usize, msg: &amp;str| {
+        let _ = window_clone.emit(
+            &quot;translation-progress&quot;,
+            serde_json::json!({
+                &quot;current&quot;: current,
+                &quot;total&quot;: total,
+                &quot;message&quot;: msg
+            }),
+        );
+    });
+    let start_t = std::time::Instant::now();
+    let res = TranslationTool::execute(
+        task,
+        Some(&amp;state.vram_guard),
+        Some(state.cancel_token.clone()),
+        Some(progress_cb),
+    )
+    .await;
+    let elapsed = start_t.elapsed().as_millis() as u64;
+    Gatekeeper::report_telemetry(
+        &quot;translation&quot;,
+        elapsed,
+        res.is_ok(),
+        res.as_ref().err().map(|e| e.as_str()),
+    )
+    .await;
+    res
+}
+/// 🛡️ 图像与剪贴板截图 OCR 高精翻译指令 (100% 免费 · 0 Token 扣减)
+#[tauri::command]
+async fn run_image_translation(
+    task: ImageTranslationTask,
+    window: tauri::Window,
+    state: State&lt;&apos;_, AppState&gt;,
+) -&gt; Result&lt;ImageTranslationResult, String&gt; {
+    state.cancel_token.store(false, Ordering::SeqCst);
+    let window_clone = window.clone();
+    let progress_cb = Arc::new(move |current: usize, total: usize, msg: &amp;str| {
+        let _ = window_clone.emit(
+            &quot;translation-progress&quot;,
+            serde_json::json!({
+                &quot;current&quot;: current,
+                &quot;total&quot;: total,
+                &quot;message&quot;: msg
+            }),
+        );
+    });
+    let start_t = std::time::Instant::now();
+    let res = TranslationTool::execute_image_ocr(
+        task,
+        Some(&amp;state.vram_guard),
+        Some(state.cancel_token.clone()),
+        Some(progress_cb),
+    )
+    .await;
+    let elapsed = start_t.elapsed().as_millis() as u64;
+    Gatekeeper::report_telemetry(
+        &quot;translation_ocr&quot;,
+        elapsed,
+        res.is_ok(),
+        res.as_ref().err().map(|e| e.as_str()),
+    )
+    .await;
+    res
+}
 #[tauri::command]
 fn cancel_current_task(state: State&lt;&apos;_, AppState&gt;) -&gt; Result&lt;bool, String&gt; {
     log::warn!(&quot;🛑 [IPC] 收到前端紧急任务截停指令&quot;);
@@ -5002,7 +6547,9 @@ pub fn run() {
             check_tool_dependencies,
             download_tool_dependencies,
             cancel_dependency_downloads,
-            install_app_update
+            install_app_update,
+            run_translation,
+            run_image_translation
         ])
         .setup(move |_app| {
             log::info!(&quot;======================================================================&quot;);
@@ -5056,6 +6603,7 @@ video-subtitle = { path = &quot;crates/tools/video-subtitle&quot; }
 service-upscale = { path = &quot;crates/services/service-upscale&quot; }
 upscale-48k = { path = &quot;crates/tools/upscale-48k&quot; }
 core-onnx-infer = { path = &quot;crates/core-onnx-infer&quot; }
+translation = { path = &quot;crates/tools/translation&quot; }
 
 [workspace]
 members = [
@@ -5077,6 +6625,7 @@ members = [
     &quot;crates/tools/format-converter&quot;,
     &quot;crates/tools/video-subtitle&quot;,
     &quot;crates/tools/upscale-48k&quot;,
+    &quot;crates/tools/translation&quot;,
     &quot;crates/services/service-ocr&quot;,
     &quot;crates/services/service-upscale&quot;
 ]

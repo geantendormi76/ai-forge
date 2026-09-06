@@ -1,0 +1,92 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 10000000
+  },
+  "output": {
+    "filePath": "c/repomix-output-AGENT.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "compress": false,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 30,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 50
+    },
+    "patterns": [
+      { "pattern": "c/HANDOFF_AGENT.md", "compress": false },
+      { "pattern": "src/views/ChatAgent.vue", "compress": false },
+      { "pattern": "src/components/agent/**", "compress": false },
+      { "pattern": "src/components/artifacts/**", "compress": false },
+      { "pattern": "src/components/settings/**", "compress": false },
+      { "pattern": "src/composables/useAgentSession.ts", "compress": false },
+      { "pattern": "src/bindings/agent.ts", "compress": false },
+      { "pattern": "src-tauri/src/agent/**", "compress": false },
+      { "pattern": "src-tauri/src/agent_bridge.rs", "compress": false },
+      { "pattern": "src-tauri/src/lib.rs", "compress": false },
+      { "pattern": "src-tauri/crates/services/*/src/lib.rs", "compress": true },
+      { "pattern": "src-tauri/crates/core-*/src/lib.rs", "compress": true },
+      { "pattern": "src-tauri/crates/shared-contracts/**", "compress": true }
+    ]
+  },
+  "include": [
+    "c/HANDOFF_AGENT.md",
+    "package.json",
+    "vite.config.ts",
+    "src/style.css",
+    "src/App.vue",
+    "src/main.ts",
+    "src/bindings/agent.ts",
+    "src/bindings/index.ts",
+    "src/store/uiStore.ts",
+    "src/composables/useAgentSession.ts",
+    "src/views/ChatAgent.vue",
+    "src/components/agent/**",
+    "src/components/artifacts/**",
+    "src/components/settings/**",
+    "src-tauri/Cargo.toml",
+    "src-tauri/tauri.conf.json",
+    "src-tauri/src/agent/**",
+    "src-tauri/src/agent_bridge.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/crates/shared-contracts/**",
+    "src-tauri/crates/services/*/src/lib.rs",
+    "src-tauri/crates/services/*/Cargo.toml",
+    "src-tauri/crates/core-*/src/lib.rs",
+    "src-tauri/crates/core-*/Cargo.toml",
+    ".pi/extensions/**"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "src-tauri/target/**",
+      "**/.venv/**",
+      "**/__pycache__/**",
+      "**/*.onnx",
+      "**/*.gguf",
+      "**/*.bin",
+      "**/*.pdiparams",
+      "**/*.pdmodel",
+      "**/*.pdf",
+      "**/*.dll",
+      "**/*.exe",
+      "**/*.zip",
+      "test/**",
+      "data/**",
+      "**/*.sqlite3*",
+      "dist/**",
+      "deploy/website/**",
+      "src/assets/**"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  }
+}

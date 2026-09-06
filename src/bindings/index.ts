@@ -10,6 +10,11 @@ import {
   downloadToolDependencies,
   cancelDependencyDownloads,
 } from "./dependencies";
+import {
+  sendAgentPrompt,
+  abortAgentTask,
+  listenAgentEvents,
+} from "./agent";
 
 export * from "./tools/format-converter";
 export * from "./tools/pdf-parse";
@@ -17,6 +22,7 @@ export * from "./tools/video-subtitle";
 export * from "./tools/upscale-48k";
 export * from "./tools/translation";
 export * from "./dependencies";
+export * from "./agent";
 
 export interface QuotaLogRecord {
   id: number;
@@ -84,4 +90,7 @@ export const commands = {
   checkToolDependencies,
   downloadToolDependencies,
   cancelDependencyDownloads,
+  sendAgentPrompt,
+  abortAgentTask,
+  listenAgentEvents,
 };

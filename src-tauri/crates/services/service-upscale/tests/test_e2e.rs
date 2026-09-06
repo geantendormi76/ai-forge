@@ -1,4 +1,4 @@
-use ort::ep::ExecutionProvider;
+use core_onnx_infer::config::ensure_cuda_dll_registered;
 use service_upscale::{RealESRGANModel, UpscaleService, UpscaleTask};
 use std::path::Path;
 use std::time::Instant;
@@ -9,13 +9,15 @@ async fn test_upscale_whitebox_diagnostics() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("warn,service_upscale=info")),
+                .unwrap_or_else(|_| EnvFilter::new("info,ort=warn,core_onnx_infer=info,service_upscale=info")),
         )
         .try_init();
 
-    let is_cuda_avail = ort::ep::CUDA::default().is_available().unwrap_or(false);
+    // 🛡️ 节点 0: 必须在任何 ORT 接口调用前，第一优先级完成 CUDA 动态库寻址注册
+    ensure_cuda_dll_registered();
+
     println!("\n======================================================================");
-    println!("⚡ ort::ep::CUDA::default().is_available() = {}", is_cuda_avail);
+    println!("🚀 [8K 超分 GPU 满血白盒测试点火启动]");
 
     let model_path = UpscaleService::resolve_default_model_path();
     let t_load = Instant::now();
@@ -26,7 +28,7 @@ async fn test_upscale_whitebox_diagnostics() {
     let t_inf = Instant::now();
     let out = model.forward_tile(&dummy_img).expect("单块推理失败");
     let inf_ms = t_inf.elapsed().as_secs_f64() * 1000.0;
-    println!("✅ 单块推理完成 (尺寸: {}x{}), 纯推理耗时: {:.2} ms", out.width(), out.height(), inf_ms);
+    println!("✅ 单块 GPU 硬件推演完成 (尺寸: {}x{}), 耗时: {:.2} ms", out.width(), out.height(), inf_ms);
     println!("======================================================================\n");
 
     let in_path = Path::new(r"C:\dev\ai-forge\test\input\service-upscale\1.png");
@@ -46,6 +48,6 @@ async fn test_upscale_whitebox_diagnostics() {
         }))
         .await
         .expect("任务执行失败");
-        println!("🎉 任务完成，总耗时: {} ms ({:.2} s)", res.elapsed_ms, res.elapsed_ms as f64 / 1000.0);
+        println!("🎉 真实物理图像任务完成，端到端总耗时: {} ms ({:.2} s)", res.elapsed_ms, res.elapsed_ms as f64 / 1000.0);
     }
 }

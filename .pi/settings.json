@@ -1,0 +1,4 @@
+{
+  "defaultProvider": "local",
+  "defaultModel": "Qwen3-8B-LoRA-abliteration-IQ3_XXS"
+}

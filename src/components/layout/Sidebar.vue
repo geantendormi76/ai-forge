@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/uiStore';
 import ShinyText from '../effects/ShinyText.vue';
 import {
   LayoutDashboard,
+  Bot,
   Languages,
   Film,
   Zap,
@@ -20,9 +21,10 @@ import {
 
 const ui = useUIStore();
 
-// 1. 核心五大已上线工作台 (含离线高精翻译)
+// 1. 核心工作台矩阵 (全血智能体排头挂载)
 const mainWorkbenches = [
   { id: 'home', label: '工坊主页', icon: LayoutDashboard },
+  { id: 'agent', label: '紫电智能体', icon: Bot, tag: '8B' },
   { id: 'trans', label: '离线高精翻译', icon: Languages },
   { id: 'upscale', label: '4K/8K 图像超分', icon: Scan },
   { id: 'format', label: '全能格式转换', icon: Zap },
@@ -38,7 +40,7 @@ const extensionOperators = [
 ];
 
 const switchView = (id: string) => {
-  if (['home', 'trans', 'upscale', 'format', 'asr', 'pdf'].includes(id)) {
+  if (['home', 'agent', 'trans', 'upscale', 'format', 'asr', 'pdf'].includes(id)) {
     ui.navigateToTool(id as any);
   } else {
     const target = extensionOperators.find((o) => o.id === id);
@@ -122,22 +124,40 @@ onMounted(() => {
         :class="[
           ui.侧边栏收起 ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5',
           ui.currentView === item.id
-            ? 'bg-white/[0.08] border-[#02c3b4]/40 text-white font-bold shadow-[0_4px_20px_rgba(2,195,180,0.15)]'
-            : 'border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
+            ? item.id === 'agent'
+              ? 'bg-gradient-to-r from-[#bc05ff]/20 to-[#02c3b4]/20 border-[#bc05ff]/60 text-white font-bold shadow-[0_4px_24px_rgba(188,5,255,0.25)]'
+              : 'bg-white/[0.08] border-[#02c3b4]/40 text-white font-bold shadow-[0_4px_20px_rgba(2,195,180,0.15)]'
+            : item.id === 'agent'
+              ? 'border-[#bc05ff]/20 bg-[#bc05ff]/5 text-[#e0b0ff] hover:bg-[#bc05ff]/15 hover:text-white font-semibold'
+              : 'border-transparent text-[#8b999b] hover:bg-white/[0.04] hover:text-[#f2f2ef] font-medium'
         ]"
       >
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2.5 min-w-0">
           <component
             :is="item.icon"
             :size="17"
-            :class="ui.currentView === item.id ? 'text-[#02c3b4] stroke-[2.5]' : 'text-[#8b999b] group-hover:text-white stroke-[2]'"
+            :class="[
+              ui.currentView === item.id
+                ? item.id === 'agent' ? 'text-[#ff7bf5] stroke-[2.5]' : 'text-[#02c3b4] stroke-[2.5]'
+                : item.id === 'agent' ? 'text-[#e0b0ff] stroke-[2.2]' : 'text-[#8b999b] group-hover:text-white stroke-[2]'
+            ]"
           />
           <span v-if="!ui.侧边栏收起" class="text-[13px] tracking-wide truncate">{{ item.label }}</span>
         </div>
-        <span
-          v-if="!ui.侧边栏收起 && ui.currentView === item.id"
-          class="w-1.5 h-1.5 rounded-full bg-[#02c3b4] shadow-[0_0_8px_#02c3b4]"
-        />
+
+        <div v-if="!ui.侧边栏收起" class="flex items-center gap-1.5 shrink-0">
+          <span
+            v-if="item.tag && ui.currentView !== item.id"
+            class="text-[9px] font-mono font-bold bg-gradient-to-r from-[#bc05ff]/30 to-[#02c3b4]/30 text-[#e0b0ff] border border-[#bc05ff]/30 px-1.5 py-0.2 rounded-full"
+          >
+            {{ item.tag }}
+          </span>
+          <span
+            v-if="ui.currentView === item.id"
+            class="w-1.5 h-1.5 rounded-full"
+            :class="item.id === 'agent' ? 'bg-[#ff7bf5] shadow-[0_0_8px_#ff7bf5]' : 'bg-[#02c3b4] shadow-[0_0_8px_#02c3b4]'"
+          />
+        </div>
 
         <div
           v-if="ui.侧边栏收起"
@@ -192,7 +212,6 @@ onMounted(() => {
             <span class="text-[#ffb74d]">已用 {{ ui.quota.used_today }} Tokens</span>
           </div>
         </div>
-
         <div v-else class="flex flex-col items-center justify-center py-1 text-[#02c3b4]">
           <Flame :size="16" class="fill-[#02c3b4]" />
           <span class="text-[9px] font-mono font-bold mt-0.5 text-white">{{ ui.quota.remaining_points }}</span>

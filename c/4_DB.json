@@ -43,12 +43,6 @@
     "src-tauri/src/**",
     "src-tauri/crates/**/Cargo.toml",
     "src-tauri/crates/**/src/lib.rs",
-    "src-tauri/crates/core-security/**",
-    "src-tauri/crates/core-models-download/**",
-    "src-tauri/crates/core-onnx-infer/**",
-    "src-tauri/crates/shared-contracts/**",
-    "src-tauri/crates/services/service-upscale/**",
-    "src-tauri/crates/tools/upscale-48k/**",
     "package.json",
     "vite.config.ts",
     "index.html",
@@ -60,7 +54,13 @@
     "src/store/**",
     "src/composables/**",
     "src/components/modals/**",
-    "deploy/cloudflare/**"
+    "deploy/cloudflare/**",
+    // =========================================================
+    // 🛡️ 2. [10 大底层算法 Services：外科手术式仅提取 lib.rs 门面契约]
+    // 彻底告别内部海量数学矩阵与私有算法，只提取公共 API 说明书！
+    // =========================================================
+    "src-tauri/crates/services/*/src/lib.rs",
+    "src-tauri/crates/services/*/Cargo.toml"
   ],
   "ignore": {
     "useGitignore": true,
@@ -84,8 +84,7 @@
       "dist/**",
       "deploy/website/**",
       "src/views/**",
-      "src/assets/**",
-      "src/components/effects/**"
+      "src/assets/**"
     ]
   },
   "security": {

@@ -107,23 +107,33 @@ impl ModelManager {
         fallback
     }
 
+    /// 🛡️ 纯血 CUDA 12 动态库目录智能寻址 (优先 C:\dev\bin\cuda12)
     pub fn resolve_cuda_runtime_dir() -> PathBuf {
+        // 1. 便携模式
         if let Some(portable_cuda) = PortableEngine::resolve_data_path("bin/cuda12") {
             let _ = std::fs::create_dir_all(&portable_cuda);
             return portable_cuda;
         }
 
-        if Path::new("bin").join("cuda12").join("cublas64_13.dll").exists() {
+        // 2. 全局公共共享开发库 (C:\dev\bin\cuda12)
+        let shared_dev = PathBuf::from(r"C:\dev\bin\cuda12");
+        if shared_dev.join("cublas64_12.dll").exists() {
+            return shared_dev;
+        }
+
+        // 3. 项目相对目录
+        if Path::new("bin").join("cuda12").join("cublas64_12.dll").exists() {
             if let Ok(abs) = Path::new("bin").join("cuda12").canonicalize() {
                 return abs;
             }
         }
 
+        // 4. 当前运行程序目录逐级向上扫描
         if let Ok(exe_path) = std::env::current_exe() {
             let mut current = exe_path.parent();
             while let Some(p) = current {
                 let candidate = p.join("bin").join("cuda12");
-                if candidate.join("cublas64_13.dll").exists() {
+                if candidate.join("cublas64_12.dll").exists() {
                     if let Ok(abs) = candidate.canonicalize() {
                         return abs;
                     }
@@ -132,6 +142,7 @@ impl ModelManager {
             }
         }
 
+        // 5. LocalAppData 安装目录
         if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
             let base = PathBuf::from(&local_appdata);
             let modern_target = base.join("紫电AI").join("Data").join("bin").join("cuda12");
@@ -173,16 +184,13 @@ impl ModelManager {
         Ok(hex::encode(hasher.finalize()))
     }
 
-    /// 🛡️ 毫秒级依赖极速状态探测（仅进行 0.001ms 文件元信息 stat 校验，绝不阻塞 UI 路由导航）
     pub async fn get_tool_dependencies(base_dir: &Path, tool_id: &str) -> Vec<DependencyItem> {
         let specs = get_tool_manifest_specs(tool_id);
         let mut result = Vec::with_capacity(specs.len());
-
         for mut item in specs {
             let full_path = base_dir.join(&item.relative_path);
             let is_ready = if full_path.exists() {
                 if let Ok(meta) = fs::metadata(&full_path).await {
-                    // 仅对比文件大小是否匹配，0.001ms 瞬时完成
                     meta.len() == item.size_bytes
                 } else {
                     false
@@ -190,11 +198,9 @@ impl ModelManager {
             } else {
                 false
             };
-
             item.is_ready = is_ready;
             result.push(item);
         }
-
         result
     }
 
@@ -224,6 +230,7 @@ impl ModelManager {
                 on_progress(item.size_bytes, item.size_bytes, "complete");
                 return Ok(target_path.to_path_buf());
             }
+
             on_progress(item.size_bytes, item.size_bytes, "verifying");
             let actual_hash = Self::compute_sha256(target_path).await.unwrap_or_default();
             if actual_hash.eq_ignore_ascii_case(&item.sha256) {

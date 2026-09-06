@@ -1,11 +1,10 @@
-// 🛡️ 紫电 AI 桌面工坊最高安全红线：自适应 Windows Manifest 合并与 ORT 测试沙箱自愈脚本
+// 🛡️ 紫电 AI 桌面工坊最高安全红线：自适应 Windows Manifest 合并与 ORT 纯血 CUDA 12 自愈脚本
 use std::fs;
 use std::path::Path;
 use tauri_build::WindowsAttributes;
 
 fn main() {
     let mut attributes = tauri_build::Attributes::new();
-
     #[cfg(target_os = "windows")]
     {
         // 🔬 [自愈防线] 拦截 Tauri 默认注入清单机制，阻断 mt.exe LNK1327 链接错误
@@ -13,18 +12,15 @@ fn main() {
             WindowsAttributes::new_without_app_manifest()
         );
         embed_manifest_for_all();
-        自愈投影_onnxruntime_dll();
+        自愈投影_cuda12_dll();
     }
-
     tauri_build::try_build(attributes).expect("failed to run tauri-build");
 }
 
 #[cfg(target_os = "windows")]
 fn embed_manifest_for_all() {
-    // 🛡️ 动态在临时 OUT_DIR 目录下生成符合 Common Controls v6 标准的应用清单 XML 文件
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let manifest_path = Path::new(&out_dir).join("windows-app-manifest.xml");
-
     fs::write(&manifest_path, r#"
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <dependency>
@@ -49,62 +45,29 @@ fn embed_manifest_for_all() {
     }
 }
 
-/// 自动在 AppData 中寻找 ort 缓存的合规 DLL 并将其顺次投影至运行目标目录
-/// 彻底解决因 System32 路径劫持导致的 STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139) 闪退
+/// 🛡️ 直接从 bin/cuda12 黄金目录同步全部官方认证动态库至构建沙盒，根除 AppData 污染
 #[cfg(target_os = "windows")]
-fn 自愈投影_onnxruntime_dll() {
-    let local_appdata = match std::env::var("LOCALAPPDATA") {
-        Ok(val) => val,
-        _ => return,
-    };
+fn 自愈投影_cuda12_dll() {
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let manifest_path = Path::new(&manifest_dir);
+        let root_bin = manifest_path.parent().unwrap_or(manifest_path).join("bin").join("cuda12");
+        let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+        let target_dir = manifest_path.join("target").join(&profile);
+        let deps_dir = target_dir.join("deps");
 
-    let pyke_cache_path = Path::new(&local_appdata)
-        .join("ort.pyke.io")
-        .join("dfbin")
-        .join("x86_64-pc-windows-msvc");
-
-    if !pyke_cache_path.exists() {
-        return;
-    }
-
-    if let Some(src_dll) = find_dll_recursive(&pyke_cache_path) {
-        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-            let target_dir = Path::new(&manifest_dir).join("target").join(&profile);
-            let deps_dir = target_dir.join("deps");
-
-            if target_dir.exists() {
-                let _ = fs::create_dir_all(&deps_dir);
-                let target_main_dll = target_dir.join("onnxruntime.dll");
-                let _ = fs::copy(&src_dll, &target_main_dll);
-
-                let target_deps_dll = deps_dir.join("onnxruntime.dll");
-                let _ = fs::copy(&src_dll, &target_deps_dll);
-
-                println!(
-                    "cargo:warning=[自愈工坊] 已成功自动将 AppData 物理缓存的 ONNX 动态库投影至构建沙盒: {:?}",
-                    target_deps_dll
-                );
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn find_dll_recursive(dir: &Path) -> Option<std::path::PathBuf> {
-    if dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.is_dir() {
-                    if let Some(found) = find_dll_recursive(&p) {
-                        return Some(found);
+        if root_bin.exists() && target_dir.exists() {
+            let _ = fs::create_dir_all(&deps_dir);
+            if let Ok(entries) = fs::read_dir(&root_bin) {
+                for entry in entries.flatten() {
+                    let src = entry.path();
+                    if src.is_file() && src.extension().map_or(false, |ext| ext == "dll") {
+                        let fname = entry.file_name();
+                        let _ = fs::copy(&src, target_dir.join(&fname));
+                        let _ = fs::copy(&src, deps_dir.join(&fname));
                     }
-                } else if p.is_file() && p.file_name().and_then(|s| s.to_str()) == Some("onnxruntime.dll") {
-                    return Some(p);
                 }
             }
+            println!("cargo:warning=[自愈工坊] 已成功将 bin/cuda12 官方黄金库全量同步至构建沙盒");
         }
     }
-    None
 }

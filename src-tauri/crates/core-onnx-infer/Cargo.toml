@@ -14,8 +14,9 @@ directml = ["ort/directml"]
 coreml = ["ort/coreml"]
 
 [dependencies]
-ort = { version = "2.0.0-rc.9", features = ["cuda"] }
+ort = { version = "2.0.0-rc.13", default-features = false, features = ["load-dynamic", "cuda", "std", "ndarray", "tracing", "api-20"] }
 ndarray = "0.15"
 thiserror = "2"
 tracing = "0.1"
 log = "0.4"
+zip = { version = "2.2", default-features = false, features = ["deflate", "lzma"] }

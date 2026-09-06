@@ -1,3 +1,8 @@
+pub mod agent;
+pub mod agent_bridge;
+pub mod logging;
+
+use agent::model_hub::{GgufModelHub, GgufModelInfo};
 use core_models_download::{DependencyItem, DependencyProgressPayload, ModelManager};
 use core_security::{
     gatekeeper::{Gatekeeper, QuotaStatus},
@@ -28,13 +33,16 @@ pub struct AppState {
     pub cancel_token: Arc<AtomicBool>,
 }
 
+pub struct AgentSessionManager {
+    pub bridge: tokio::sync::Mutex<Option<agent_bridge::AgentBridge>>,
+}
+
 fn clean_path_str(p: &Path) -> String {
     p.to_string_lossy()
         .trim_start_matches(r"\\?\")
         .to_string()
 }
 
-/// 解析日志物理根目录
 pub fn resolve_log_dir_path() -> PathBuf {
     if let Some(portable_logs) = PortableEngine::resolve_data_path("logs") {
         let _ = std::fs::create_dir_all(&portable_logs);
@@ -83,7 +91,6 @@ fn get_diagnostic_report() -> Result<String, String> {
     lines.push(format!("• 操作系统: {} ({})", std::env::consts::OS, std::env::consts::ARCH));
     lines.push(format!("• 运行模式: {}", if PortableEngine::is_portable() { "便携免安装模式 (./Data)" } else { "标准模式 (%LOCALAPPDATA%)" }));
     lines.push(format!("• 日志物理目录: {}", clean_path_str(&resolve_log_dir_path())));
-
     #[cfg(target_os = "windows")]
     {
         let nvcuda = Path::new(r"C:\Windows\System32\nvcuda.dll").exists();
@@ -91,43 +98,10 @@ fn get_diagnostic_report() -> Result<String, String> {
         lines.push(format!("• NVIDIA 显卡驱动: {}", if nvcuda { "✅ 正常 (nvcuda.dll 在线)" } else { "❌ 缺失/未检测到独显" }));
         lines.push(format!("• 微软 VC++ 运行库: {}", if vcruntime { "✅ 正常" } else { "⚠️ 缺失" }));
     }
-
     let base_dir = ModelManager::resolve_models_base_dir();
     lines.push(format!("• 模型物理基准区: {}", clean_path_str(&base_dir)));
-
     let cuda_runtime = ModelManager::resolve_cuda_runtime_dir();
     lines.push(format!("• CUDA 动态库目录: {}", clean_path_str(&cuda_runtime)));
-    lines.push("--------------------------------------------------".to_string());
-
-    lines.push("📜 【最近 40 行运行流水日志】:".to_string());
-    let log_dir = resolve_log_dir_path();
-    let mut log_files: Vec<PathBuf> = std::fs::read_dir(&log_dir)
-        .ok()
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.is_file() && p.extension().map_or(false, |ext| ext == "log"))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    log_files.sort_by_key(|p| p.metadata().and_then(|m| m.modified()).ok());
-
-    if let Some(latest_log) = log_files.last() {
-        if let Ok(content) = std::fs::read_to_string(latest_log) {
-            let log_lines: Vec<&str> = content.lines().collect();
-            let start_idx = log_lines.len().saturating_sub(40);
-            for l in &log_lines[start_idx..] {
-                lines.push(format!("  {}", l));
-            }
-        } else {
-            lines.push("  (暂无流水日志内容)".to_string());
-        }
-    } else {
-        lines.push("  (当前尚未生成日志文件)".to_string());
-    }
-
     lines.push("==================================================".to_string());
     Ok(lines.join("\n"))
 }
@@ -184,24 +158,17 @@ async fn download_tool_dependencies(
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
     let base_dir = ModelManager::resolve_models_base_dir();
-    log::info!("🌐 [依赖下载] 开始拉取依赖: '{}', 落盘目录: {}", tool_id, clean_path_str(&base_dir));
     let deps = ModelManager::get_tool_dependencies(&base_dir, &tool_id).await;
     state.cancel_token.store(false, Ordering::SeqCst);
     for item in deps {
-        if item.is_ready {
-            continue;
-        }
+        if item.is_ready { continue; }
         let target_path = base_dir.join(&item.relative_path);
         let window_clone = window.clone();
         let tool_id_clone = tool_id.clone();
         let item_id = item.id.clone();
         let item_name = item.name.clone();
         let progress_cb = move |downloaded: u64, total: u64, phase: &str| {
-            let percent = if total > 0 {
-                ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32
-            } else {
-                0
-            };
+            let percent = if total > 0 { ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32 } else { 0 };
             let payload = DependencyProgressPayload {
                 tool_id: tool_id_clone.clone(),
                 item_id: item_id.clone(),
@@ -213,21 +180,14 @@ async fn download_tool_dependencies(
             };
             let _ = window_clone.emit("dependency-download-progress", payload);
         };
-        ModelManager::download_dependency_file(
-            &target_path,
-            &item,
-            state.cancel_token.clone(),
-            progress_cb,
-        )
-        .await
-        .map_err(|e| format!("下载依赖 [{}] 失败: {}", item.name, e))?;
+        ModelManager::download_dependency_file(&target_path, &item, state.cancel_token.clone(), progress_cb).await
+            .map_err(|e| format!("下载依赖 [{}] 失败: {}", item.name, e))?;
     }
     Ok(true)
 }
 
 #[tauri::command]
 fn cancel_dependency_downloads(state: State<'_, AppState>) -> Result<bool, String> {
-    log::warn!("🛑 [依赖下载] 收到前端紧急取消指令");
     state.cancel_token.store(true, Ordering::SeqCst);
     Ok(true)
 }
@@ -243,7 +203,6 @@ async fn run_upscale_48k(
     window: tauri::Window,
     state: State<'_, AppState>,
 ) -> Result<UpscaleResult, String> {
-    log::info!("🚀 [4K/8K 超分] 收到前端请求: 源图像='{}'", task.input_path);
     if task.model_path.is_none() {
         let base_dir = ModelManager::resolve_models_base_dir();
         let candidate = base_dir.join("service-upscale").join("RealESRGAN_x4plus.onnx");
@@ -254,26 +213,9 @@ async fn run_upscale_48k(
     Gatekeeper::check_permission_tokens("upscale-48k", 10).await?;
     let window_clone = window.clone();
     let progress_cb = move |current: usize, total: usize, msg: &str| {
-        let _ = window_clone.emit(
-            "upscale-progress",
-            serde_json::json!({
-                "current": current,
-                "total": total,
-                "message": msg
-            }),
-        );
+        let _ = window_clone.emit("upscale-progress", serde_json::json!({ "current": current, "total": total, "message": msg }));
     };
-    let start_t = std::time::Instant::now();
-    let res = Upscale48kTool::execute(task, state.vram_guard.clone(), Some(progress_cb)).await;
-    let elapsed = start_t.elapsed().as_millis() as u64;
-    Gatekeeper::report_telemetry(
-        "upscale-48k",
-        elapsed,
-        res.is_ok(),
-        res.as_ref().err().map(|e| e.as_str()),
-    )
-    .await;
-    res
+    Upscale48kTool::execute(task, state.vram_guard.clone(), Some(progress_cb)).await
 }
 
 #[tauri::command]
@@ -282,43 +224,18 @@ async fn parse_pdf(
     window: tauri::Window,
     state: State<'_, AppState>,
 ) -> Result<PdfParseResult, String> {
-    log::info!("🚀 [PDF 解析] 收到解析请求: 文件='{}'", file_path);
     Gatekeeper::check_permission_tokens("pdf-parse", 2).await?;
     let window_clone = window.clone();
     let progress_cb = move |current: usize, total: usize, msg: &str| {
-        let _ = window_clone.emit(
-            "pdf-parse-progress",
-            serde_json::json!({
-                "current": current,
-                "total": total,
-                "message": msg
-            }),
-        );
+        let _ = window_clone.emit("pdf-parse-progress", serde_json::json!({ "current": current, "total": total, "message": msg }));
     };
     let pdf_input_path = Path::new(&file_path);
     let target_out_dir = pdf_input_path.parent().unwrap_or_else(|| Path::new("."));
-    let start_t = std::time::Instant::now();
-    let res = PdfParseService::run_parse(
-        &file_path,
-        target_out_dir,
-        Some(&state.vram_guard),
-        Some(progress_cb),
-    )
-    .await;
-    let elapsed = start_t.elapsed().as_millis() as u64;
-    Gatekeeper::report_telemetry(
-        "pdf-parse",
-        elapsed,
-        res.is_ok(),
-        res.as_ref().err().map(|e| e.as_str()),
-    )
-    .await;
-    res
+    PdfParseService::run_parse(&file_path, target_out_dir, Some(&state.vram_guard), Some(progress_cb)).await
 }
 
 #[tauri::command]
 async fn probe_video(video_path: String) -> Result<VideoProbeResult, String> {
-    log::info!("🔍 [视频探测] 探测视频元信息: '{}'", video_path);
     let path = std::path::Path::new(&video_path);
     VideoProbeService::probe(path).await
 }
@@ -329,45 +246,14 @@ async fn run_video_subtitle(
     window: tauri::Window,
     state: State<'_, AppState>,
 ) -> Result<VideoSubtitleResult, String> {
-    log::info!("🚀 [视频字幕] 收到任务: 视频='{}'", options.video_path);
-    let video_p = Path::new(&options.video_path);
-    let probe_info = VideoProbeService::probe(video_p).await.ok();
-    let duration_sec = probe_info.map(|p| p.duration_sec).unwrap_or(180.0);
-    let minutes = (duration_sec / 60.0).ceil() as u32;
-    let tokens_needed = (minutes * 3).max(3);
-    Gatekeeper::check_permission_tokens("video-subtitle", tokens_needed).await?;
     state.cancel_token.store(false, Ordering::SeqCst);
     let window_clone = window.clone();
     let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
-        let _ = window_clone.emit(
-            "video-subtitle-progress",
-            serde_json::json!({
-                "current": current,
-                "total": total,
-                "message": msg
-            }),
-        );
+        let _ = window_clone.emit("video-subtitle-progress", serde_json::json!({ "current": current, "total": total, "message": msg }));
     });
-    let start_t = std::time::Instant::now();
-    let res = VideoSubtitleTool::run_pipeline_with_progress(
-        options,
-        Some(&state.vram_guard),
-        state.cancel_token.clone(),
-        Some(progress_cb),
-    )
-    .await;
-    let elapsed = start_t.elapsed().as_millis() as u64;
-    Gatekeeper::report_telemetry(
-        "video-subtitle",
-        elapsed,
-        res.is_ok(),
-        res.as_ref().err().map(|e| e.as_str()),
-    )
-    .await;
-    res
+    VideoSubtitleTool::run_pipeline_with_progress(options, Some(&state.vram_guard), state.cancel_token.clone(), Some(progress_cb)).await
 }
 
-/// 🛡️ 离线高精文本翻译指令 (100% 免费 · 0 Token 扣减)
 #[tauri::command]
 async fn run_translation(
     task: TranslationTask,
@@ -377,35 +263,11 @@ async fn run_translation(
     state.cancel_token.store(false, Ordering::SeqCst);
     let window_clone = window.clone();
     let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
-        let _ = window_clone.emit(
-            "translation-progress",
-            serde_json::json!({
-                "current": current,
-                "total": total,
-                "message": msg
-            }),
-        );
+        let _ = window_clone.emit("translation-progress", serde_json::json!({ "current": current, "total": total, "message": msg }));
     });
-    let start_t = std::time::Instant::now();
-    let res = TranslationTool::execute(
-        task,
-        Some(&state.vram_guard),
-        Some(state.cancel_token.clone()),
-        Some(progress_cb),
-    )
-    .await;
-    let elapsed = start_t.elapsed().as_millis() as u64;
-    Gatekeeper::report_telemetry(
-        "translation",
-        elapsed,
-        res.is_ok(),
-        res.as_ref().err().map(|e| e.as_str()),
-    )
-    .await;
-    res
+    TranslationTool::execute(task, Some(&state.vram_guard), Some(state.cancel_token.clone()), Some(progress_cb)).await
 }
 
-/// 🛡️ 图像与剪贴板截图 OCR 高精翻译指令 (100% 免费 · 0 Token 扣减)
 #[tauri::command]
 async fn run_image_translation(
     task: ImageTranslationTask,
@@ -415,37 +277,13 @@ async fn run_image_translation(
     state.cancel_token.store(false, Ordering::SeqCst);
     let window_clone = window.clone();
     let progress_cb = Arc::new(move |current: usize, total: usize, msg: &str| {
-        let _ = window_clone.emit(
-            "translation-progress",
-            serde_json::json!({
-                "current": current,
-                "total": total,
-                "message": msg
-            }),
-        );
+        let _ = window_clone.emit("translation-progress", serde_json::json!({ "current": current, "total": total, "message": msg }));
     });
-    let start_t = std::time::Instant::now();
-    let res = TranslationTool::execute_image_ocr(
-        task,
-        Some(&state.vram_guard),
-        Some(state.cancel_token.clone()),
-        Some(progress_cb),
-    )
-    .await;
-    let elapsed = start_t.elapsed().as_millis() as u64;
-    Gatekeeper::report_telemetry(
-        "translation_ocr",
-        elapsed,
-        res.is_ok(),
-        res.as_ref().err().map(|e| e.as_str()),
-    )
-    .await;
-    res
+    TranslationTool::execute_image_ocr(task, Some(&state.vram_guard), Some(state.cancel_token.clone()), Some(progress_cb)).await
 }
 
 #[tauri::command]
 fn cancel_current_task(state: State<'_, AppState>) -> Result<bool, String> {
-    log::warn!("🛑 [IPC] 收到前端紧急任务截停指令");
     state.cancel_token.store(true, Ordering::SeqCst);
     Ok(true)
 }
@@ -466,10 +304,115 @@ async fn run_format_convert(
     task: FormatConvertTask,
     window: tauri::Window,
 ) -> Result<FormatConvertResult, String> {
-    log::info!("🚀 [格式转换] 启动转换: 源文件='{}', 目标格式='{}'", task.input_path, task.target_format);
     let res = FormatConvertService::convert(&task);
     let _ = window.emit("format-convert-finished", &res);
     Ok(res)
+}
+
+/// 扫描本地所有 GGUF 模型资产及视觉眼球配对情况
+#[tauri::command]
+fn get_local_gguf_models() -> Result<Vec<GgufModelInfo>, String> {
+    let active_id = GgufModelHub::get_current_active_model_id();
+    Ok(GgufModelHub::scan_local_models(Some(&active_id)))
+}
+
+/// 一键热拔插切换主脑模型并秒级重载推理引擎
+#[tauri::command]
+async fn switch_gguf_model(
+    model_id: String,
+    agent_mgr: State<'_, AgentSessionManager>,
+) -> Result<GgufModelInfo, String> {
+    log::info!("🔄 [ModelHub] 收到一键热拔插切换主脑请求: {}", model_id);
+    let target = GgufModelHub::switch_active_model(&model_id)?;
+
+    // 1. 重启后台 llama-server.exe
+    let model_p = PathBuf::from(&target.file_path);
+    let mm_p = target.mmproj_path.as_ref().map(PathBuf::from);
+    agent::llm_server::LlmServer::restart_with_model(&model_p, mm_p.as_deref())?;
+
+    // 2. 释放旧的桥接进程，下一次用户提问时自动绑定新模型
+    let mut guard = agent_mgr.bridge.lock().await;
+    if let Some(ref bridge) = *guard {
+        let _ = bridge.abort().await;
+    }
+    *guard = None;
+
+    log::info!("🎉 [ModelHub] 成功热拔插切换至新模型: {}", target.id);
+    Ok(target)
+}
+
+/// 辅助函数：拉起新的 Pi Bridge 实例并监听事件
+async fn spawn_fresh_bridge(
+    vram_guard: Arc<VramTokenGuard>,
+    window: &tauri::Window,
+) -> Result<agent_bridge::AgentBridge, String> {
+    let ext_path = std::path::PathBuf::from(r"C:\dev\ai-forge\.pi\extensions\ai_forge_suite.ts");
+    let (bridge, mut rx) = agent_bridge::AgentBridge::spawn(
+        vram_guard,
+        Some(&ext_path),
+        None,
+    )
+    .await
+    .map_err(|e| format!("启动智能体引擎失败: {e}"))?;
+
+    let win_clone = window.clone();
+    tokio::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            let _ = win_clone.emit("agent-event", &event);
+        }
+    });
+
+    Ok(bridge)
+}
+
+#[tauri::command]
+async fn send_agent_prompt(
+    prompt: String,
+    window: tauri::Window,
+    state: State<'_, AppState>,
+    agent_mgr: State<'_, AgentSessionManager>,
+) -> Result<bool, String> {
+    log::info!("🤖 [Agent] 收到用户智能体任务: {}", prompt);
+    let mut guard = agent_mgr.bridge.lock().await;
+
+    // 1. 若当前没有桥接，立即拉起新进程
+    if guard.is_none() {
+        let fresh_bridge = spawn_fresh_bridge(state.vram_guard.clone(), &window).await?;
+        *guard = Some(fresh_bridge);
+    }
+
+    // 2. 尝试向当前进程发送，若遭遇死管道则自动秒级自愈重启
+    let mut retry_needed = false;
+    if let Some(ref bridge) = *guard {
+        if let Err(e) = bridge.send_prompt(&prompt, None).await {
+            log::warn!("⚠️ [Agent] 检测到原有管道已失效 ({e}), 正在自动自愈重启 Pi 引擎...");
+            retry_needed = true;
+        }
+    }
+
+    // 3. 自愈流程：销毁旧实例，拉起全新进程重试下发
+    if retry_needed {
+        *guard = None;
+        let fresh_bridge = spawn_fresh_bridge(state.vram_guard.clone(), &window).await?;
+        fresh_bridge.send_prompt(&prompt, None).await.map_err(|e| format!("重连后下发任务依然失败: {e}"))?;
+        *guard = Some(fresh_bridge);
+        log::info!("✅ [Agent] Pi 引擎已成功自愈重连，任务已顺利下发！");
+    }
+
+    Ok(true)
+}
+
+#[tauri::command]
+async fn abort_agent_task(
+    agent_mgr: State<'_, AgentSessionManager>,
+) -> Result<bool, String> {
+    log::warn!("🛑 [Agent] 收到前端紧急截停智能体指令");
+    let mut guard = agent_mgr.bridge.lock().await;
+    if let Some(ref bridge) = *guard {
+        let _ = bridge.abort().await;
+    }
+    *guard = None;
+    Ok(true)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -487,6 +430,13 @@ pub fn run() {
         output_dir,
         cancel_token: Arc::new(AtomicBool::new(false)),
     };
+
+    let agent_session_manager = AgentSessionManager {
+        bridge: tokio::sync::Mutex::new(None),
+    };
+
+    agent::tool_server::ToolRpcServer::start(app_state.vram_guard.clone());
+    agent::llm_server::LlmServer::start();
 
     let log_plugin = LogBuilder::new()
         .level(log::LevelFilter::Info)
@@ -509,6 +459,7 @@ pub fn run() {
         .plugin(log_plugin)
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
+        .manage(agent_session_manager)
         .invoke_handler(tauri::generate_handler![
             is_portable,
             get_quota_status,
@@ -527,14 +478,13 @@ pub fn run() {
             cancel_dependency_downloads,
             install_app_update,
             run_translation,
-            run_image_translation
+            run_image_translation,
+            send_agent_prompt,
+            abort_agent_task,
+            get_local_gguf_models,
+            switch_gguf_model
         ])
         .setup(move |_app| {
-            log::info!("======================================================================");
-            log::info!("🚀 [紫电 AI] 工业级桌面工坊已点火启动 (生产黑匣子日志已就绪)");
-            log::info!("📁 [日志物理目录] {}", clean_path_str(&logs_dir));
-            log::info!("🖥️ [系统环境] OS: {} | Arch: {}", std::env::consts::OS, std::env::consts::ARCH);
-            log::info!("======================================================================\n");
             Ok(())
         })
         .run(tauri::generate_context!())

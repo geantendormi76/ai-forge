@@ -2,162 +2,172 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    color-scheme: dark;
-    --bg: #20292b;
-    --panel: rgba(24, 32, 34, 0.78);
-    --panel-card: rgba(255, 255, 255, 0.03);
-    --panel-card-hover: rgba(255, 255, 255, 0.06);
-    --ink: #f5f5f3;
-    --muted: #8b999b;
-    --quiet: #5b696b;
-    --line: rgba(255, 255, 255, 0.08);
-    --line-strong: rgba(255, 255, 255, 0.18);
-    --white: #f2f2ef;
-    --black: #141b1c;
-    --zidian-gold: #DCA54C;
-    --zidian-purple: #bc05ff;
-    --aegis-nav-height: 45px;
-  }
+/* 🛡️ 紫电 AI (ai-forge) - 1:1 官方冷白纸面温润设计系统 (Studio Paper Theme) */
+:root {
+  --bg: #f7f6f3;
+  --bg-panel: #fcfbf9;
+  --bg-hover: #f0eeea;
+  --bg-selected: #fff0e6;
+  --border: #e4e1da;
+  --text: #1c1a17;
+  --text-muted: #57534a;
+  --text-dim: #746f66;
+  --accent: #1764e8;
+  --accent-hover: #0f51c6;
+  --accent-contrast: #ffffff;
+  --user-bg: #1c1a17;
+  --user-fg: #faf9f7;
+  --assistant-bg: #ffffff;
+  --tool-bg: #1c1a17;
+  --tool-fg: #c9c5bb;
+  --tool-border: #33302a;
+  --bg-subtle: rgba(28, 26, 23, 0.035);
+  --accent-soft: #edf4ff;
+  --accent-soft-border: #cce0ff;
+  --accent-chip-bg: #fbeee0;
+  --accent-chip-fg: #8b5e2c;
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.09);
+  --success-border: rgba(21, 128, 61, 0.32);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.3);
+  --warning: #a16207;
+  --warning-soft: rgba(161, 98, 7, 0.09);
+  --warning-border: rgba(161, 98, 7, 0.32);
+  --grid-line: #ece9e2;
+  --selection: #fed7aa;
+  --thinking-bg: #fbfaf8;
+  --thinking-border: #d6d3cd;
+  --chat-font-scale: 1;
+  --chat-content-max-width: 760px;
+}
 
-  * {
-    box-sizing: border-box;
-  }
+html.dark {
+  --bg: #141210;
+  --bg-panel: #1c1a17;
+  --bg-hover: #26231f;
+  --bg-selected: #3a2a1f;
+  --border: #33302a;
+  --text: #faf9f7;
+  --text-muted: #a19d92;
+  --text-dim: #8f8a81;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-contrast: #1c1a17;
+  --user-bg: #2a2620;
+  --user-fg: #faf9f7;
+  --assistant-bg: #1c1a17;
+  --tool-bg: #0f0e0c;
+  --tool-fg: #c9c5bb;
+  --tool-border: #33302a;
+  --bg-subtle: rgba(255, 255, 255, 0.04);
+  --accent-soft: rgba(59, 130, 246, 0.16);
+  --accent-soft-border: rgba(59, 130, 246, 0.38);
+  --grid-line: #2a2620;
+  --selection: rgba(59, 130, 246, 0.38);
+  --thinking-bg: #1a1815;
+  --thinking-border: #4a453c;
+}
 
-  html,
-  body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background-color: var(--bg);
-    color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    text-rendering: geometricPrecision;
-    -webkit-font-smoothing: antialiased;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  overscroll-behavior: none;
+  user-select: none;
 }
 
 #app {
-  height: 100vh;
-  width: 100vw;
-  background-color: var(--bg);
+  height: 100%;
+  width: 100%;
 }
 
-/* 滚动条深空青碳微调 */
-.custom-scrollbar::-webkit-scrollbar {
+::selection {
+  background: var(--selection);
+}
+
+/* 纸面网格与四角校准 Tick */
+.chat-grid-bg {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.28;
+}
+
+.chat-corner-tick {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  opacity: 0.35;
+  z-index: 0;
+}
+.chat-corner-tick-tl {
+  top: 10px;
+  left: 10px;
+  border-left: 2px solid var(--accent);
+  border-top: 2px solid var(--accent);
+}
+.chat-corner-tick-tr {
+  top: 10px;
+  right: 10px;
+  border-right: 2px solid var(--accent);
+  border-top: 2px solid var(--accent);
+}
+.chat-corner-tick-bl {
+  bottom: 10px;
+  left: 10px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.chat-corner-tick-br {
+  bottom: 10px;
+  right: 10px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+
+/* 吐字光标 */
+.stream-caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: -2px;
+  animation: blink 0.9s step-start infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* 极简自定义滚动条 */
+::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-
-.custom-scrollbar::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #2f3b3e;
-  border-radius: 6px;
+::-webkit-scrollbar-thumb {
+  background: #d6d3cd;
+  border-radius: 4px;
 }
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #415054;
+html.dark ::-webkit-scrollbar-thumb {
+  background: #4a453c;
 }
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* 霓虹微发光与动效 */
-.glow-border {
-  border: 1px solid var(--line);
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
-}
-
-.glow-border:hover {
-  border-color: var(--line-strong);
-}
-
-/* Markdown 结构渲染排版暗黑适配层 */
-@layer components {
-  .markdown-content h1 {
-    font-size: 1.5rem !important;
-    font-weight: 800 !important;
-    color: var(--white) !important;
-    margin-top: 1.25rem !important;
-    margin-bottom: 0.75rem !important;
-  }
-  .markdown-content h2 {
-    font-size: 1.35rem !important;
-    font-weight: 700 !important;
-    color: var(--white) !important;
-    margin-top: 1.1rem !important;
-    margin-bottom: 0.6rem !important;
-  }
-  .markdown-content h3 {
-    font-size: 1.15rem !important;
-    font-weight: 600 !important;
-    color: var(--white) !important;
-    margin-top: 0.9rem !important;
-    margin-bottom: 0.5rem !important;
-  }
-  .markdown-content ul {
-    list-style-type: disc !important;
-    padding-left: 1.5rem !important;
-    margin-top: 0.6rem !important;
-    margin-bottom: 0.6rem !important;
-    color: var(--muted) !important;
-  }
-  .markdown-content ol {
-    list-style-type: decimal !important;
-    padding-left: 1.5rem !important;
-    margin-top: 0.6rem !important;
-    margin-bottom: 0.6rem !important;
-    color: var(--muted) !important;
-  }
-  .markdown-content li {
-    margin-bottom: 0.35rem !important;
-    line-height: 1.6 !important;
-  }
-  .markdown-content strong {
-    color: var(--white) !important;
-    font-weight: 700 !important;
-    margin-left: 0.15em !important;
-    margin-right: 0.15em !important;
-  }
-  .markdown-content p {
-    margin-bottom: 0.75rem !important;
-    line-height: 1.7 !important;
-    color: #b1b0aa !important;
-  }
-  .markdown-content code {
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    color: #f43f5e !important;
-    background-color: rgba(244, 63, 94, 0.1) !important;
-    padding: 0.15rem 0.35rem !important;
-    border-radius: 0.375rem !important;
-    font-family: Consolas, Monaco, monospace !important;
-    margin-left: 0.2em !important;
-    margin-right: 0.2em !important;
-  }
-  .markdown-content pre {
-    background-color: #141b1c !important;
-    border: 1px solid var(--line) !important;
-    border-radius: 0.75rem !important;
-    padding: 1rem !important;
-    margin: 0.75rem 0 !important;
-    overflow-x: auto !important;
-  }
-  .markdown-content pre code {
-    background-color: transparent !important;
-    color: var(--ink) !important;
-    padding: 0 !important;
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
 }
